@@ -3,13 +3,12 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { FileText, Clock, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
-import { createPageUrl } from "@/utils";
 
 export default function RunCard({ run }) {
   const shortTitle = run.query_text?.substring(0, 60) + (run.query_text?.length > 60 ? "..." : "");
   
   return (
-    <Link to={createPageUrl(`Results?id=${run.id}`)}>
+    <Link to={`/results?id=${run.id}`}>
       <Card className="p-4 hover:shadow-md transition-all cursor-pointer border-slate-200 hover:border-slate-300">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
