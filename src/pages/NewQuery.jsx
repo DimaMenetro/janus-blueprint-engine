@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -13,233 +14,270 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import StatusPill from "@/components/janus/StatusPill";
-import { Play, Zap } from "lucide-react";
+import { Play, Zap, Info } from "lucide-react";
+import { EXECUTION_MODES, validateJanusOutput } from "@/components/janus/janusSchema";
 
-const JANUS_PROMPT = `You are the Janus Blueprint Engine. Given a user query, you MUST produce a complete structured analysis following the mandatory pipeline in this EXACT order:
-1. Refresh & Verification
-2. Corpus
-3. Cogito
-4. Animus
-5. Actus
-6. Cross-Domain Synthesis
-7. Blueprint
+function buildPrompt(executionMode, outputMode, refreshEnabled) {
+  const mode = EXECUTION_MODES[executionMode.toUpperCase()];
+  const domains = mode.domains;
+
+  let prompt = `You are the Janus Blueprint Engine (CP-002 v1.5). 
+
+EXECUTION MODE: ${mode.label} (${mode.description})
 
 CRITICAL RULES:
-- Domain skipping is PROHIBITED
-- If something can't be done, declare it as a limitation and continue
-- Output STRICT JSON ONLY - no markdown, no prose, no explanations
-- The JSON must match the exact schema below
+1. Output STRICT JSON ONLY - no markdown, no prose, no explanations
+2. Include ONLY these domains: ${domains.join(", ")}
+3. Follow domain order strictly
+4. If something can't be done, declare it as a limitation and continue
 
-For Tier 0 Refresh (no external tools):
+`;
+
+  // Refresh domain (only if included)
+  if (domains.includes("refresh")) {
+    if (refreshEnabled) {
+      prompt += `
+REFRESH & VERIFICATION (Tier 1 - Limited):
+- mode: "tier1"
+- attempted: true
+- Use add_context_from_internet if absolutely critical
+- Keep web searches minimal to conserve credits
+- would_refresh: list 3-5 items you would verify with unlimited budget
+`;
+    } else {
+      prompt += `
+REFRESH & VERIFICATION (Tier 0 - No External Refresh):
+- mode: "tier0"
 - attempted: false
-- limitations: explicitly state "Not externally refreshed - analysis based on training data only"
+- limitations: "Not externally refreshed - analysis based on training data only"
 - would_refresh: list 3-7 specific things you would verify if tools were available
-
-COGITO RULES:
-- Every claim MUST have an ID (C1, C2, etc.) and a tag: Established, Contested, or Speculative
-- Include depends_on links when claims build on other claims
-
-ACTUS CONFIDENCE INHERITANCE RULES:
-- Every recommendation MUST reference depends_on_claims
-- inherited_confidence MUST equal the LOWEST confidence among dependent claims
-  (Speculative < Contested < Established)
-- probability MUST match inherited_confidence:
-  * Established → high or medium
-  * Contested → medium or low
-  * Speculative → low
-
-SYNTHESIS RULE:
-- Must happen AFTER all four domains
-- Keep it structural and constraint-driven, no metaphors
-
-OUTPUT SCHEMA (JSON only, no deviations):
-{
-  "refresh": {
-    "mode": "tier0",
-    "attempted": false,
-    "limitations": "string",
-    "would_refresh": ["string", ...]
-  },
-  "corpus": {
-    "constraints": ["string", ...],
-    "feasibility_notes": ["string", ...]
-  },
-  "cogito": {
-    "claims": [
-      { "id": "C1", "tag": "Established|Contested|Speculative", "text": "string", "depends_on": ["C0", ...] }
-    ],
-    "reasoning_map": ["string", ...]
-  },
-  "animus": {
-    "boundary_checks": ["string", ...],
-    "disallowed_moves": ["string", ...],
-    "safety_notes": ["string", ...]
-  },
-  "actus": {
-    "recommendations": [
-      {
-        "id": "A1",
-        "text": "string",
-        "depends_on_claims": ["C1", "C2", ...],
-        "inherited_confidence": "Established|Contested|Speculative",
-        "probability": "low|medium|high",
-        "failure_modes": ["string", ...],
-        "next_actions": ["string", ...]
-      }
-    ]
-  },
-  "synthesis": {
-    "key_takeaways": ["string", ...],
-    "constraint_collisions": ["string", ...],
-    "limitation_foreground": "string"
-  },
-  "blueprint": {
-    "goal": "string",
-    "assumptions": ["string", ...],
-    "steps": [
-      {
-        "step": 1,
-        "title": "string",
-        "instructions": "string",
-        "inputs": ["string", ...],
-        "outputs": ["string", ...],
-        "validation": "string",
-        "depends_on_steps": [0, ...]
-      }
-    ],
-    "success_criteria": ["string", ...],
-    "risk_register": [
-      { "risk": "string", "impact": "low|med|high", "mitigation": "string" }
-    ]
+`;
+    }
   }
-}
+
+  // Corpus (always required)
+  prompt += `
+CORPUS:
+- constraints: list real-world limitations, resource constraints, dependencies
+- feasibility_notes: practical considerations
+
+`;
+
+  // Cogito (always required)
+  prompt += `
+COGITO (Claims & Reasoning):
+- Every claim MUST have:
+  * id: "C1", "C2", etc.
+  * tag: MUST be exactly one of: "Established", "Contested", "Speculative"
+  * text: the claim statement
+  * depends_on: array of claim IDs this builds on (can be empty)
+- reasoning_map: logical flow as strings
+
+`;
+
+  // Animus
+  if (domains.includes("animus")) {
+    prompt += `
+ANIMUS (Boundaries & Safety):
+- boundary_checks: ethical/legal/safety boundaries
+- disallowed_moves: prohibited actions
+- safety_notes: risk mitigations
+
+`;
+  }
+
+  // Actus
+  if (domains.includes("actus")) {
+    prompt += `
+ACTUS (Recommendations):
+CONFIDENCE INHERITANCE RULE (CRITICAL):
+- Every recommendation MUST reference depends_on_claims (array of claim IDs)
+- inherited_confidence MUST equal the LOWEST confidence tag among those claims
+  * If any dependent claim is "Speculative" → inherited_confidence = "Speculative"
+  * If no Speculative but has "Contested" → inherited_confidence = "Contested"  
+  * If all are "Established" → inherited_confidence = "Established"
+- probability: "low" | "medium" | "high" (matches confidence level)
+- failure_modes: potential failure scenarios
+- next_actions: concrete next steps
+
+`;
+  }
+
+  // Synthesis
+  if (domains.includes("synthesis")) {
+    prompt += `
+SYNTHESIS (Cross-Domain):
+- key_takeaways: structural insights from all domains
+- constraint_collisions: conflicting requirements
+- limitation_foreground: overall limitations
+
+`;
+  }
+
+  // Blueprint (always required)
+  prompt += `
+BLUEPRINT:
+- goal: clear objective
+- assumptions: foundational assumptions
+- steps: sequential actions with:
+  * step: number
+  * title: short title
+  * instructions: detailed what/how
+  * inputs: required inputs
+  * outputs: expected outputs
+  * validation: how to verify success
+  * depends_on_steps: prerequisite step numbers
+- success_criteria: measurable outcomes
+- risk_register: {risk, impact: "low"|"med"|"high", mitigation}
+
+OUTPUT MODE: ${outputMode}
 
 USER QUERY:
 `;
 
-function generateMarkdown(data) {
-  let md = "# Janus Blueprint Engine Output\n\n";
-  
-  md += "## 1. Refresh & Verification\n\n";
-  md += `**Mode:** ${data.refresh?.mode || "tier0"}\n`;
-  md += `**Attempted:** ${data.refresh?.attempted ? "Yes" : "No"}\n`;
-  md += `**Limitations:** ${data.refresh?.limitations || "N/A"}\n\n`;
-  if (data.refresh?.would_refresh?.length) {
-    md += "**Would Verify:**\n";
-    data.refresh.would_refresh.forEach(item => md += `- ${item}\n`);
-  }
-  md += "\n";
+  return prompt;
+}
 
-  md += "## 2. Corpus\n\n";
-  if (data.corpus?.constraints?.length) {
-    md += "**Constraints:**\n";
-    data.corpus.constraints.forEach((c, i) => md += `${i + 1}. ${c}\n`);
-  }
-  if (data.corpus?.feasibility_notes?.length) {
-    md += "\n**Feasibility Notes:**\n";
-    data.corpus.feasibility_notes.forEach(n => md += `- ${n}\n`);
-  }
-  md += "\n";
+function generateMarkdown(data, executionMode) {
+  const mode = EXECUTION_MODES[executionMode.toUpperCase()];
+  const domains = mode.domains;
 
-  md += "## 3. Cogito\n\n";
-  if (data.cogito?.claims?.length) {
-    md += "**Claims:**\n\n";
-    data.cogito.claims.forEach(claim => {
-      md += `### ${claim.id} [${claim.tag}]\n`;
-      md += `${claim.text}\n`;
-      if (claim.depends_on?.length) {
-        md += `*Depends on: ${claim.depends_on.join(", ")}*\n`;
-      }
-      md += "\n";
-    });
-  }
-  if (data.cogito?.reasoning_map?.length) {
-    md += "**Reasoning Map:**\n";
-    data.cogito.reasoning_map.forEach(r => md += `- ${r}\n`);
-  }
-  md += "\n";
+  let md = `# Janus Blueprint Engine Output\n\n**Mode:** ${mode.label}\n\n`;
 
-  md += "## 4. Animus\n\n";
-  if (data.animus?.boundary_checks?.length) {
-    md += "**Boundary Checks:**\n";
-    data.animus.boundary_checks.forEach(b => md += `- ${b}\n`);
-  }
-  if (data.animus?.disallowed_moves?.length) {
-    md += "\n**Disallowed Moves:**\n";
-    data.animus.disallowed_moves.forEach(d => md += `- ⛔ ${d}\n`);
-  }
-  if (data.animus?.safety_notes?.length) {
-    md += "\n**Safety Notes:**\n";
-    data.animus.safety_notes.forEach(s => md += `- ⚠️ ${s}\n`);
-  }
-  md += "\n";
-
-  md += "## 5. Actus\n\n";
-  if (data.actus?.recommendations?.length) {
-    md += "**Recommendations:**\n\n";
-    data.actus.recommendations.forEach(rec => {
-      md += `### ${rec.id} [${rec.inherited_confidence}] - ${rec.probability} probability\n`;
-      md += `${rec.text}\n\n`;
-      md += `*Based on: ${rec.depends_on_claims?.join(", ") || "N/A"}*\n\n`;
-      if (rec.failure_modes?.length) {
-        md += "**Failure Modes:**\n";
-        rec.failure_modes.forEach(f => md += `- ${f}\n`);
-      }
-      if (rec.next_actions?.length) {
-        md += "\n**Next Actions:**\n";
-        rec.next_actions.forEach(a => md += `- ${a}\n`);
-      }
-      md += "\n";
-    });
-  }
-
-  md += "## 6. Cross-Domain Synthesis\n\n";
-  if (data.synthesis?.key_takeaways?.length) {
-    md += "**Key Takeaways:**\n";
-    data.synthesis.key_takeaways.forEach((t, i) => md += `${i + 1}. ${t}\n`);
-  }
-  if (data.synthesis?.constraint_collisions?.length) {
-    md += "\n**Constraint Collisions:**\n";
-    data.synthesis.constraint_collisions.forEach(c => md += `- ⚠️ ${c}\n`);
-  }
-  if (data.synthesis?.limitation_foreground) {
-    md += `\n**Limitations:** ${data.synthesis.limitation_foreground}\n`;
-  }
-  md += "\n";
-
-  md += "## 7. Blueprint\n\n";
-  if (data.blueprint?.goal) {
-    md += `**Goal:** ${data.blueprint.goal}\n\n`;
-  }
-  if (data.blueprint?.assumptions?.length) {
-    md += "**Assumptions:**\n";
-    data.blueprint.assumptions.forEach(a => md += `- ${a}\n`);
+  if (domains.includes("refresh") && data.refresh) {
+    md += "## 1. Refresh & Verification\n\n";
+    md += `**Mode:** ${data.refresh?.mode || "tier0"}\n`;
+    md += `**Attempted:** ${data.refresh?.attempted ? "Yes" : "No"}\n`;
+    md += `**Limitations:** ${data.refresh?.limitations || "N/A"}\n\n`;
+    if (data.refresh?.would_refresh?.length) {
+      md += "**Would Verify:**\n";
+      data.refresh.would_refresh.forEach(item => md += `- ${item}\n`);
+    }
     md += "\n";
   }
-  if (data.blueprint?.steps?.length) {
-    md += "### Steps\n\n";
-    data.blueprint.steps.forEach(step => {
-      md += `#### Step ${step.step}: ${step.title}\n`;
-      md += `${step.instructions}\n\n`;
-      if (step.inputs?.length) md += `**Inputs:** ${step.inputs.join(", ")}\n`;
-      if (step.outputs?.length) md += `**Outputs:** ${step.outputs.join(", ")}\n`;
-      if (step.validation) md += `**Validation:** ${step.validation}\n`;
-      if (step.depends_on_steps?.length) md += `*Depends on: Steps ${step.depends_on_steps.join(", ")}*\n`;
-      md += "\n";
-    });
-  }
-  if (data.blueprint?.success_criteria?.length) {
-    md += "### Success Criteria\n";
-    data.blueprint.success_criteria.forEach(c => md += `- ✅ ${c}\n`);
+
+  if (data.corpus) {
+    md += "## Corpus\n\n";
+    if (data.corpus?.constraints?.length) {
+      md += "**Constraints:**\n";
+      data.corpus.constraints.forEach((c, i) => md += `${i + 1}. ${c}\n`);
+    }
+    if (data.corpus?.feasibility_notes?.length) {
+      md += "\n**Feasibility Notes:**\n";
+      data.corpus.feasibility_notes.forEach(n => md += `- ${n}\n`);
+    }
     md += "\n";
   }
-  if (data.blueprint?.risk_register?.length) {
-    md += "### Risk Register\n\n";
-    md += "| Risk | Impact | Mitigation |\n";
-    md += "|------|--------|------------|\n";
-    data.blueprint.risk_register.forEach(r => {
-      md += `| ${r.risk} | ${r.impact} | ${r.mitigation} |\n`;
-    });
+
+  if (data.cogito) {
+    md += "## Cogito\n\n";
+    if (data.cogito?.claims?.length) {
+      md += "**Claims:**\n\n";
+      data.cogito.claims.forEach(claim => {
+        md += `### ${claim.id} [${claim.tag}]\n`;
+        md += `${claim.text}\n`;
+        if (claim.depends_on?.length) {
+          md += `*Depends on: ${claim.depends_on.join(", ")}*\n`;
+        }
+        md += "\n";
+      });
+    }
+    if (data.cogito?.reasoning_map?.length) {
+      md += "**Reasoning Map:**\n";
+      data.cogito.reasoning_map.forEach(r => md += `- ${r}\n`);
+    }
+    md += "\n";
+  }
+
+  if (domains.includes("animus") && data.animus) {
+    md += "## Animus\n\n";
+    if (data.animus?.boundary_checks?.length) {
+      md += "**Boundary Checks:**\n";
+      data.animus.boundary_checks.forEach(b => md += `- ${b}\n`);
+    }
+    if (data.animus?.disallowed_moves?.length) {
+      md += "\n**Disallowed Moves:**\n";
+      data.animus.disallowed_moves.forEach(d => md += `- ⛔ ${d}\n`);
+    }
+    if (data.animus?.safety_notes?.length) {
+      md += "\n**Safety Notes:**\n";
+      data.animus.safety_notes.forEach(s => md += `- ⚠️ ${s}\n`);
+    }
+    md += "\n";
+  }
+
+  if (domains.includes("actus") && data.actus) {
+    md += "## Actus\n\n";
+    if (data.actus?.recommendations?.length) {
+      md += "**Recommendations:**\n\n";
+      data.actus.recommendations.forEach(rec => {
+        md += `### ${rec.id} [${rec.inherited_confidence}] - ${rec.probability} probability\n`;
+        md += `${rec.text}\n\n`;
+        md += `*Based on: ${rec.depends_on_claims?.join(", ") || "N/A"}*\n\n`;
+        if (rec.failure_modes?.length) {
+          md += "**Failure Modes:**\n";
+          rec.failure_modes.forEach(f => md += `- ${f}\n`);
+        }
+        if (rec.next_actions?.length) {
+          md += "\n**Next Actions:**\n";
+          rec.next_actions.forEach(a => md += `- ${a}\n`);
+        }
+        md += "\n";
+      });
+    }
+  }
+
+  if (domains.includes("synthesis") && data.synthesis) {
+    md += "## Cross-Domain Synthesis\n\n";
+    if (data.synthesis?.key_takeaways?.length) {
+      md += "**Key Takeaways:**\n";
+      data.synthesis.key_takeaways.forEach((t, i) => md += `${i + 1}. ${t}\n`);
+    }
+    if (data.synthesis?.constraint_collisions?.length) {
+      md += "\n**Constraint Collisions:**\n";
+      data.synthesis.constraint_collisions.forEach(c => md += `- ⚠️ ${c}\n`);
+    }
+    if (data.synthesis?.limitation_foreground) {
+      md += `\n**Limitations:** ${data.synthesis.limitation_foreground}\n`;
+    }
+    md += "\n";
+  }
+
+  if (data.blueprint) {
+    md += "## Blueprint\n\n";
+    if (data.blueprint?.goal) {
+      md += `**Goal:** ${data.blueprint.goal}\n\n`;
+    }
+    if (data.blueprint?.assumptions?.length) {
+      md += "**Assumptions:**\n";
+      data.blueprint.assumptions.forEach(a => md += `- ${a}\n`);
+      md += "\n";
+    }
+    if (data.blueprint?.steps?.length) {
+      md += "### Steps\n\n";
+      data.blueprint.steps.forEach(step => {
+        md += `#### Step ${step.step}: ${step.title}\n`;
+        md += `${step.instructions}\n\n`;
+        if (step.inputs?.length) md += `**Inputs:** ${step.inputs.join(", ")}\n`;
+        if (step.outputs?.length) md += `**Outputs:** ${step.outputs.join(", ")}\n`;
+        if (step.validation) md += `**Validation:** ${step.validation}\n`;
+        if (step.depends_on_steps?.length) md += `*Depends on: Steps ${step.depends_on_steps.join(", ")}*\n`;
+        md += "\n";
+      });
+    }
+    if (data.blueprint?.success_criteria?.length) {
+      md += "### Success Criteria\n";
+      data.blueprint.success_criteria.forEach(c => md += `- ✅ ${c}\n`);
+      md += "\n";
+    }
+    if (data.blueprint?.risk_register?.length) {
+      md += "### Risk Register\n\n";
+      md += "| Risk | Impact | Mitigation |\n";
+      md += "|------|--------|------------|\n";
+      data.blueprint.risk_register.forEach(r => {
+        md += `| ${r.risk} | ${r.impact} | ${r.mitigation} |\n`;
+      });
+    }
   }
 
   return md;
@@ -248,8 +286,9 @@ function generateMarkdown(data) {
 export default function NewQuery() {
   const navigate = useNavigate();
   const [queryText, setQueryText] = useState("");
+  const [executionMode, setExecutionMode] = useState("standard");
   const [outputMode, setOutputMode] = useState("Blueprint");
-  const [refreshMode, setRefreshMode] = useState(false);
+  const [refreshEnabled, setRefreshEnabled] = useState(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -259,22 +298,18 @@ export default function NewQuery() {
     setStatus("running");
     setErrorMessage("");
 
-    const fullPrompt = JANUS_PROMPT + queryText + `\n\nOutput Mode: ${outputMode}\n\nRespond with ONLY valid JSON, no other text.`;
+    const mode = EXECUTION_MODES[executionMode.toUpperCase()];
+    const fullPrompt = buildPrompt(executionMode, outputMode, refreshEnabled) + queryText;
 
     const result = await base44.integrations.Core.InvokeLLM({
       prompt: fullPrompt,
+      add_context_from_internet: refreshEnabled && mode.domains.includes("refresh"),
       response_json_schema: {
         type: "object",
-        properties: {
-          refresh: { type: "object" },
-          corpus: { type: "object" },
-          cogito: { type: "object" },
-          animus: { type: "object" },
-          actus: { type: "object" },
-          synthesis: { type: "object" },
-          blueprint: { type: "object" }
-        },
-        required: ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"]
+        properties: Object.fromEntries(
+          mode.domains.map(d => [d, { type: "object" }])
+        ),
+        required: mode.domains
       }
     });
 
@@ -284,48 +319,78 @@ export default function NewQuery() {
     let rawJsonString;
 
     if (typeof result === "string") {
-      rawJsonString = result;
-      const jsonMatch = result.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      try {
+        const jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error("No JSON found in response");
+        }
+        parsedData = JSON.parse(jsonMatch[0]);
+        rawJsonString = jsonMatch[0];
+      } catch (e) {
+        await base44.entities.Run.create({
+          query_text: queryText,
+          execution_mode: executionMode,
+          output_mode: outputMode,
+          refresh_enabled: refreshEnabled,
+          status: "failed",
+          error_message: "Failed to parse JSON from LLM response",
+          raw_json: result
+        });
         setStatus("failed");
-        setErrorMessage("VALIDATION FAILED: No valid JSON found in response.\n\nRaw output:\n" + result);
+        setErrorMessage("PARSE ERROR: Could not extract valid JSON.\n\n" + result);
         return;
       }
-      parsedData = JSON.parse(jsonMatch[0]);
     } else {
       parsedData = result;
       rawJsonString = JSON.stringify(result, null, 2);
     }
 
-    const requiredSections = ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"];
-    const missingSections = requiredSections.filter(s => !parsedData[s]);
+    // Validate against schema
+    const validation = validateJanusOutput(parsedData, mode.domains);
 
-    if (missingSections.length > 0) {
+    if (!validation.valid) {
+      const run = await base44.entities.Run.create({
+        query_text: queryText,
+        execution_mode: executionMode,
+        output_mode: outputMode,
+        refresh_enabled: refreshEnabled,
+        status: "failed",
+        validation_errors: validation.errors,
+        error_message: validation.errors.join("\n"),
+        raw_json: rawJsonString
+      });
       setStatus("failed");
-      setErrorMessage(`VALIDATION FAILED: Missing required sections: ${missingSections.join(", ")}\n\nRaw output:\n${rawJsonString}`);
+      setErrorMessage("VALIDATION FAILED:\n\n" + validation.errors.join("\n") + "\n\nRaw JSON:\n" + rawJsonString);
+      navigate(`/results?id=${run.id}`);
       return;
     }
 
-    const renderMd = generateMarkdown(parsedData);
+    const renderMd = generateMarkdown(parsedData, executionMode);
 
-    const run = await base44.entities.Run.create({
+    const runData = {
       query_text: queryText,
+      execution_mode: executionMode,
       output_mode: outputMode,
+      refresh_enabled: refreshEnabled,
       status: "completed",
-      refresh: parsedData.refresh,
-      corpus: parsedData.corpus,
-      cogito: parsedData.cogito,
-      animus: parsedData.animus,
-      actus: parsedData.actus,
-      synthesis: parsedData.synthesis,
-      blueprint: parsedData.blueprint,
       raw_json: rawJsonString,
       render_md: renderMd
+    };
+
+    // Add domains that were generated
+    mode.domains.forEach(domain => {
+      if (parsedData[domain]) {
+        runData[domain] = parsedData[domain];
+      }
     });
+
+    const run = await base44.entities.Run.create(runData);
 
     setStatus("completed");
     navigate(`/results?id=${run.id}`);
   };
+
+  const showRefreshToggle = executionMode === "full";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -355,6 +420,25 @@ export default function NewQuery() {
               />
             </div>
 
+            <div>
+              <Label className="text-sm font-medium text-slate-700 mb-3 block">
+                Execution Mode
+              </Label>
+              <RadioGroup value={executionMode} onValueChange={setExecutionMode}>
+                <div className="space-y-3">
+                  {Object.values(EXECUTION_MODES).map(mode => (
+                    <div key={mode.id} className="flex items-center space-x-3 border border-slate-200 rounded-lg p-3 hover:bg-slate-50">
+                      <RadioGroupItem value={mode.id} id={mode.id} />
+                      <label htmlFor={mode.id} className="flex-1 cursor-pointer">
+                        <div className="font-medium text-slate-900">{mode.label}</div>
+                        <div className="text-xs text-slate-500">{mode.description}</div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </RadioGroup>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <Label htmlFor="output-mode" className="text-sm font-medium text-slate-700 mb-2 block">
@@ -373,15 +457,23 @@ export default function NewQuery() {
                 </Select>
               </div>
 
-              <div>
-                <Label className="text-sm font-medium text-slate-700 mb-2 block">
-                  Refresh Mode
-                </Label>
-                <div className="flex items-center justify-between h-10 px-3 border border-slate-200 rounded-md bg-slate-50">
-                  <span className="text-sm text-slate-600">Tier 0: No external refresh</span>
-                  <Switch checked={refreshMode} onCheckedChange={setRefreshMode} disabled />
+              {showRefreshToggle && (
+                <div>
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">
+                    External Refresh
+                  </Label>
+                  <div className="flex items-center justify-between h-10 px-3 border border-slate-200 rounded-md bg-slate-50">
+                    <span className="text-sm text-slate-600">Use credits for web search</span>
+                    <Switch checked={refreshEnabled} onCheckedChange={setRefreshEnabled} />
+                  </div>
+                  {refreshEnabled && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <Info className="w-3 h-3" />
+                      Limited refresh to conserve credits
+                    </p>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
