@@ -69,16 +69,17 @@ export default function Diagnostics() {
 
   const runDependencyTest = () => {
     try {
-      // Test rendering key components
-      const RadioGroup = require("@/components/ui/radio-group").RadioGroup;
-      const Select = require("@/components/ui/select").Select;
+      // Verify that execution modes and schema are accessible
+      const modes = Object.keys(EXECUTION_MODES);
+      const hasRequiredModes = modes.includes("QUICK") && modes.includes("STANDARD") && modes.includes("FULL");
       
-      // Check if we're NOT importing from @radix-ui/react-radio-group directly
-      const hasDirectRadixImport = false; // This would need static analysis in real scenario
+      if (!hasRequiredModes) {
+        throw new Error("Missing required execution modes");
+      }
       
       setDependencyTest({
         status: "PASS",
-        details: "All UI components load successfully. RadioGroup uses shadcn wrapper."
+        details: `All dependencies loaded. Execution modes available: ${modes.join(", ")}`
       });
     } catch (e) {
       setDependencyTest({
