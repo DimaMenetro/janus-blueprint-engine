@@ -355,6 +355,8 @@ export default function NewQuery() {
           query_text: queryText,
           execution_mode: executionMode,
           output_mode: outputMode,
+          blueprint_level: blueprintLevel,
+          novelty_dial: noveltyDial,
           refresh_enabled: refreshEnabled,
           status: "failed",
           error_message: "Failed to parse JSON from LLM response",
