@@ -13,6 +13,7 @@ export default function Layout({ children }) {
   const navItems = [
     { path: "/new-query", label: "New Query", icon: Plus },
     { path: "/history", label: "History", icon: History },
+    { path: "/diagnostics", label: "Diagnostics", icon: Zap },
   ];
 
   // Log navigation events

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import StatusPill from "@/components/janus/StatusPill";
-import { Play, Zap, Info } from "lucide-react";
+import { Play, Zap, Info, Wrench } from "lucide-react";
 import { EXECUTION_MODES, validateJanusOutput } from "@/components/janus/janusSchema";
 
 function buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) {
@@ -545,7 +545,15 @@ export default function NewQuery() {
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-              <StatusPill status={status} />
+              <div className="flex items-center gap-3">
+                <StatusPill status={status} />
+                <Link to="/diagnostics">
+                  <Button variant="ghost" size="sm">
+                    <Wrench className="w-3 h-3 mr-1" />
+                    Diagnostics
+                  </Button>
+                </Link>
+              </div>
               <Button
                 onClick={handleExecute}
                 disabled={!queryText.trim() || status === "running" || status === "validating"}
