@@ -1,17 +1,10 @@
-export const pagesConfig = {
-	Pages: {
-		"NewQuery": {
-			route: "/new-query",
-			title: "New Query"
-		},
-		"Results": {
-			route: "/results",
-			title: "Results"
-		},
-		"History": {
-			route: "/history",
-			title: "History"
-		}
-	},
-	mainPage: "NewQuery"
+import __Layout from './Layout.jsx';
+
+
+export const PAGES = {
 }
+
+export const pagesConfig = {
+    Pages: PAGES,
+    Layout: __Layout,
+};
