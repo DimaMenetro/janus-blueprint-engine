@@ -8,12 +8,13 @@ import __Layout from './Layout.jsx';
 export const PAGES = {
     "History": History,
     "NewQuery": NewQuery,
+    "new-query": NewQuery,
     "Results": Results,
     "Diagnostics": Diagnostics,
 }
 
 export const pagesConfig = {
-    mainPage: "NewQuery",
+    mainPage: "new-query",
     Pages: PAGES,
     Layout: __Layout,
 };
