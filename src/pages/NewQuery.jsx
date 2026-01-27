@@ -433,6 +433,10 @@ export default function NewQuery() {
             </h1>
           </div>
           <p className="text-slate-500 text-sm">CP-002 v1.5</p>
+          <div className="mt-3 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200 font-mono text-xs text-slate-600">
+            <div><strong>Route:</strong> {window.location.pathname}</div>
+            <div><strong>Registered:</strong> /new-query, /history, /results, /diagnostics</div>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
