@@ -233,7 +233,7 @@ export default function Results() {
               )}
               {availableTabs.includes("blueprint") && (
                 <TabsContent value="blueprint" className="m-0">
-                  <BlueprintTab data={run.blueprint} />
+                  <BlueprintTab data={run.blueprint} blueprintLevel={run.blueprint_level} />
                 </TabsContent>
               )}
               <TabsContent value="export" className="m-0">

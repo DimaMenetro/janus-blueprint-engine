@@ -17,19 +17,22 @@ import StatusPill from "@/components/janus/StatusPill";
 import { Play, Zap, Info } from "lucide-react";
 import { EXECUTION_MODES, validateJanusOutput } from "@/components/janus/janusSchema";
 
-function buildPrompt(executionMode, outputMode, refreshEnabled) {
+function buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) {
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
   const domains = mode.domains;
 
   let prompt = `You are the Janus Blueprint Engine (CP-002 v1.5). 
 
 EXECUTION MODE: ${mode.label} (${mode.description})
+BLUEPRINT LEVEL: ${blueprintLevel}
+NOVELTY DIAL: ${noveltyDial}
 
 CRITICAL RULES:
 1. Output STRICT JSON ONLY - no markdown, no prose, no explanations
 2. Include ONLY these domains: ${domains.join(", ")}
 3. Follow domain order strictly
 4. If something can't be done, declare it as a limitation and continue
+5. High novelty MUST still obey Corpus constraints and Animus disallowed moves
 
 `;
 
@@ -65,12 +68,15 @@ CORPUS:
 
   // Cogito (always required)
   prompt += `
-COGITO (Claims & Reasoning):
+COGITO (Claims & Reasoning with Evidence Discipline):
 - Every claim MUST have:
   * id: "C1", "C2", etc.
   * tag: MUST be exactly one of: "Established", "Contested", "Speculative"
   * text: the claim statement
   * depends_on: array of claim IDs this builds on (can be empty)
+  * why_believed: what makes this claim credible (evidence, logic, precedent)
+  * falsifiable_by: what evidence would prove this claim wrong
+  * verify_later: what should be verified/tested when possible
 - reasoning_map: logical flow as strings
 
 `;
@@ -115,10 +121,18 @@ SYNTHESIS (Cross-Domain):
   }
 
   // Blueprint (always required)
+  const requireAlternatives = executionMode === "full" && noveltyDial === "high";
+  
   prompt += `
-BLUEPRINT:
+BLUEPRINT (Level ${blueprintLevel}, Novelty: ${noveltyDial}):
 - goal: clear objective
 - assumptions: foundational assumptions
+${requireAlternatives ? `- alternative_approaches: REQUIRED - list 3+ alternative approaches with:
+  * name: approach name
+  * pros: advantages (2-4 items)
+  * cons: disadvantages (2-4 items)
+  * why_not_chosen: reason for not selecting this approach
+` : ""}
 - steps: sequential actions with:
   * step: number
   * title: short title
@@ -127,6 +141,14 @@ BLUEPRINT:
   * outputs: expected outputs
   * validation: how to verify success
   * depends_on_steps: prerequisite step numbers
+${blueprintLevel !== "L1" ? `  * time_estimate: realistic time estimate (e.g., "2-3 hours", "1-2 weeks")
+  * effort_level: "low" | "medium" | "high"
+` : ""}
+${blueprintLevel === "L2" || blueprintLevel === "L3" ? `  * substeps: array of {substep: string, details: string} breaking down the step
+` : ""}
+${blueprintLevel === "L3" ? `  * checklist: array of completion checklist items
+  * acceptance_tests: array of tests to verify the step worked
+` : ""}
 - success_criteria: measurable outcomes
 - risk_register: {risk, impact: "low"|"med"|"high", mitigation}
 
@@ -288,6 +310,8 @@ export default function NewQuery() {
   const [queryText, setQueryText] = useState("");
   const [executionMode, setExecutionMode] = useState("standard");
   const [outputMode, setOutputMode] = useState("Blueprint");
+  const [blueprintLevel, setBlueprintLevel] = useState("L2");
+  const [noveltyDial, setNoveltyDial] = useState("medium");
   const [refreshEnabled, setRefreshEnabled] = useState(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -299,7 +323,7 @@ export default function NewQuery() {
     setErrorMessage("");
 
     const mode = EXECUTION_MODES[executionMode.toUpperCase()];
-    const fullPrompt = buildPrompt(executionMode, outputMode, refreshEnabled) + queryText;
+    const fullPrompt = buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) + queryText;
 
     const result = await base44.integrations.Core.InvokeLLM({
       prompt: fullPrompt,
@@ -353,6 +377,8 @@ export default function NewQuery() {
         query_text: queryText,
         execution_mode: executionMode,
         output_mode: outputMode,
+        blueprint_level: blueprintLevel,
+        novelty_dial: noveltyDial,
         refresh_enabled: refreshEnabled,
         status: "failed",
         validation_errors: validation.errors,
@@ -371,6 +397,8 @@ export default function NewQuery() {
       query_text: queryText,
       execution_mode: executionMode,
       output_mode: outputMode,
+      blueprint_level: blueprintLevel,
+      novelty_dial: noveltyDial,
       refresh_enabled: refreshEnabled,
       status: "completed",
       raw_json: rawJsonString,
@@ -453,6 +481,38 @@ export default function NewQuery() {
                     <SelectItem value="Research Plan">Research Plan</SelectItem>
                     <SelectItem value="Product Spec">Product Spec</SelectItem>
                     <SelectItem value="Technical Architecture">Technical Architecture</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="blueprint-level" className="text-sm font-medium text-slate-700 mb-2 block">
+                  Blueprint Level
+                </Label>
+                <Select value={blueprintLevel} onValueChange={setBlueprintLevel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="L1">L1 - Simple (3-7 steps)</SelectItem>
+                    <SelectItem value="L2">L2 - Detailed (substeps, estimates)</SelectItem>
+                    <SelectItem value="L3">L3 - Complete (checklists, tests)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="novelty-dial" className="text-sm font-medium text-slate-700 mb-2 block">
+                  Novelty Level
+                </Label>
+                <Select value={noveltyDial} onValueChange={setNoveltyDial}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low - Conservative</SelectItem>
+                    <SelectItem value="medium">Medium - Balanced</SelectItem>
+                    <SelectItem value="high">High - Innovative</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

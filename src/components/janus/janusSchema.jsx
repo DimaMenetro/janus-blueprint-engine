@@ -29,9 +29,12 @@ export const JANUS_SCHEMA = {
               id: { type: "string" },
               tag: { type: "string", enum: ["Established", "Contested", "Speculative"] },
               text: { type: "string" },
-              depends_on: { type: "array", items: { type: "string" } }
+              depends_on: { type: "array", items: { type: "string" } },
+              why_believed: { type: "string" },
+              falsifiable_by: { type: "string" },
+              verify_later: { type: "string" }
             },
-            required: ["id", "tag", "text"]
+            required: ["id", "tag", "text", "why_believed", "falsifiable_by", "verify_later"]
           }
         },
         reasoning_map: { type: "array", items: { type: "string" } }
@@ -79,6 +82,18 @@ export const JANUS_SCHEMA = {
       properties: {
         goal: { type: "string" },
         assumptions: { type: "array", items: { type: "string" } },
+        alternative_approaches: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              pros: { type: "array", items: { type: "string" } },
+              cons: { type: "array", items: { type: "string" } },
+              why_not_chosen: { type: "string" }
+            }
+          }
+        },
         steps: {
           type: "array",
           items: {
@@ -90,7 +105,21 @@ export const JANUS_SCHEMA = {
               inputs: { type: "array", items: { type: "string" } },
               outputs: { type: "array", items: { type: "string" } },
               validation: { type: "string" },
-              depends_on_steps: { type: "array", items: { type: "number" } }
+              depends_on_steps: { type: "array", items: { type: "number" } },
+              time_estimate: { type: "string" },
+              effort_level: { type: "string" },
+              substeps: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    substep: { type: "string" },
+                    details: { type: "string" }
+                  }
+                }
+              },
+              checklist: { type: "array", items: { type: "string" } },
+              acceptance_tests: { type: "array", items: { type: "string" } }
             },
             required: ["step", "title", "instructions"]
           }
