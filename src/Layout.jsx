@@ -1,3 +1,4 @@
+import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Zap, Plus, History } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,22 @@ export default function Layout({ children }) {
     { path: "/new-query", label: "New Query", icon: Plus },
     { path: "/history", label: "History", icon: History },
   ];
+
+  // Log navigation events
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const { navigationLogger } = require('@/components/diagnostics/NavigationLogger');
+        const prevPath = sessionStorage.getItem('prevPath') || '';
+        if (prevPath !== location.pathname) {
+          navigationLogger.log(prevPath, location.pathname);
+          sessionStorage.setItem('prevPath', location.pathname);
+        }
+      } catch (e) {
+        // Navigation logger not critical
+      }
+    }
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-slate-50">
