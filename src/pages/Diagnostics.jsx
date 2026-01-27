@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { navigationLogger } from "@/components/diagnostics/NavigationLogger";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
+import UIButtonAudit from "@/components/diagnostics/UIButtonAudit";
 
 const STATUS = {
   PASS: { icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", label: "PASS" },
@@ -446,6 +447,11 @@ export default function Diagnostics() {
               </div>
             )}
           </div>
+        </Card>
+
+        {/* UI Button Audit */}
+        <Card className="p-6 mb-6">
+          <UIButtonAudit navigate={navigate} />
         </Card>
 
         {/* Navigation Log */}

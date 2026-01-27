@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, History as HistoryIcon, Zap } from "lucide-react";
+import { Plus, Search, History as HistoryIcon, Zap, Wrench } from "lucide-react";
 import RunCard from "@/components/janus/RunCard";
 
 export default function History() {
@@ -34,12 +34,20 @@ export default function History() {
               Run History
             </h1>
           </div>
-          <Link to="/new-query">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              New Query
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link to="/diagnostics">
+              <Button variant="outline">
+                <Wrench className="w-4 h-4 mr-2" />
+                Diagnostics
+              </Button>
+            </Link>
+            <Link to="/new-query">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                New Query
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <div className="relative mb-6">
