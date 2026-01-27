@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Zap, Plus, History } from "lucide-react";
+import { Zap, Plus, History, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function Layout({ children }) {

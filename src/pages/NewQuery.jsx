@@ -425,6 +425,9 @@ export default function NewQuery() {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="max-w-4xl mx-auto px-6 py-12">
+        <div className="mb-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-700 font-mono">
+          <span className="font-semibold">New Query route mounted ✅</span> | Path: {window.location.pathname}
+        </div>
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <Zap className="w-8 h-8 text-slate-900" />
