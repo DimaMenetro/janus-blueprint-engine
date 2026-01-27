@@ -293,6 +293,33 @@ export default function Diagnostics() {
           </div>
         </div>
 
+        {/* Regression Test */}
+        <Card className="p-6 mb-6">
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">Regression Test - Navigation</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {ROUTES.map(route => (
+              <Button
+                key={route.path}
+                onClick={() => {
+                  const beforePath = window.location.pathname;
+                  navigate(route.path);
+                  setTimeout(() => {
+                    const afterPath = window.location.pathname;
+                    const success = afterPath === route.path;
+                    console.log(`Navigation ${beforePath} → ${route.path}: ${success ? 'PASS' : 'FAIL'}`);
+                  }, 100);
+                }}
+                variant="outline"
+                className="flex flex-col items-center gap-1 h-auto py-3"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span className="text-xs font-mono">{route.path}</span>
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500">Current: <span className="font-mono">{location.pathname}</span></p>
+        </Card>
+
         {/* Route Tests */}
         <Card className="p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
