@@ -325,17 +325,35 @@ export default function NewQuery() {
     const mode = EXECUTION_MODES[executionMode.toUpperCase()];
     const fullPrompt = buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) + queryText;
 
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: fullPrompt,
-      add_context_from_internet: refreshEnabled && mode.domains.includes("refresh"),
-      response_json_schema: {
-        type: "object",
-        properties: Object.fromEntries(
-          mode.domains.map(d => [d, { type: "object" }])
-        ),
-        required: mode.domains
-      }
-    });
+    let result;
+    try {
+      result = await base44.integrations.Core.InvokeLLM({
+        prompt: fullPrompt,
+        add_context_from_internet: refreshEnabled && mode.domains.includes("refresh"),
+        response_json_schema: {
+          type: "object",
+          properties: Object.fromEntries(
+            mode.domains.map(d => [d, { type: "object" }])
+          ),
+          required: mode.domains
+        }
+      });
+    } catch (err) {
+      await base44.entities.Run.create({
+        query_text: queryText,
+        execution_mode: executionMode,
+        output_mode: outputMode,
+        blueprint_level: blueprintLevel,
+        novelty_dial: noveltyDial,
+        refresh_enabled: refreshEnabled,
+        status: "failed",
+        error_message: `LLM call failed: ${err.message || err}`,
+        raw_json: JSON.stringify(err)
+      });
+      setStatus("failed");
+      setErrorMessage(`LLM ERROR: ${err.message || err}`);
+      return;
+    }
 
     setStatus("validating");
 
