@@ -327,16 +327,19 @@ export default function NewQuery() {
 
     let result;
     try {
+      // Build detailed schema with proper structure for each domain
+      const responseSchema = {
+        type: "object",
+        properties: Object.fromEntries(
+          mode.domains.map(d => [d, JANUS_SCHEMA.properties[d]])
+        ),
+        required: mode.domains
+      };
+
       result = await base44.integrations.Core.InvokeLLM({
         prompt: fullPrompt,
         add_context_from_internet: refreshEnabled && mode.domains.includes("refresh"),
-        response_json_schema: {
-          type: "object",
-          properties: Object.fromEntries(
-            mode.domains.map(d => [d, { type: "object" }])
-          ),
-          required: mode.domains
-        }
+        response_json_schema: responseSchema
       });
     } catch (err) {
       await base44.entities.Run.create({
