@@ -3,7 +3,7 @@ import { Download, Copy, FileJson, FileText, CheckCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-export default function ExportTab({ rawJson, renderMd }) {
+export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
 
@@ -34,6 +34,39 @@ export default function ExportTab({ rawJson, renderMd }) {
 
   return (
     <div className="space-y-6 p-6">
+      {isAdmin && fullPrompt && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <FileText className="w-6 h-6 text-amber-700" />
+            <div>
+              <h4 className="font-medium text-amber-900">Full Prompt (Admin Only)</h4>
+              <p className="text-sm text-amber-700">Complete prompt sent to LLM - hidden from end users</p>
+            </div>
+          </div>
+          <div className="flex gap-3 mb-4">
+            <Button
+              variant="outline"
+              onClick={() => handleCopy(fullPrompt, "prompt")}
+              className="flex-1"
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Copy Prompt
+            </Button>
+            <Button
+              onClick={() => handleDownload(fullPrompt, "janus-prompt.txt", "text")}
+              className="flex-1"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Download Prompt
+            </Button>
+          </div>
+          <div className="max-h-96 overflow-auto">
+            <pre className="bg-amber-100 rounded-lg p-3 text-xs text-amber-900 whitespace-pre-wrap">
+              {fullPrompt}
+            </pre>
+          </div>
+        </div>
+      )}
       <div className="bg-white border border-slate-200 rounded-lg p-6">
         <div className="flex items-center gap-3 mb-4">
           <FileJson className="w-6 h-6 text-slate-600" />
