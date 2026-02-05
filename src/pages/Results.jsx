@@ -21,6 +21,7 @@ export default function Results() {
   const navigate = useNavigate();
   const [run, setRun] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const loadRun = async () => {
@@ -30,6 +31,14 @@ export default function Results() {
       if (!id) {
         navigate("/new-query");
         return;
+      }
+
+      // Check if current user is admin
+      try {
+        const user = await base44.auth.me();
+        setIsAdmin(user.role === 'admin');
+      } catch {
+        setIsAdmin(false);
       }
 
       const runs = await base44.entities.Run.filter({ id });
@@ -237,7 +246,7 @@ export default function Results() {
                 </TabsContent>
               )}
               <TabsContent value="export" className="m-0">
-                <ExportTab rawJson={run.raw_json} renderMd={run.render_md} />
+                <ExportTab rawJson={run.raw_json} renderMd={run.render_md} fullPrompt={run.full_prompt} isAdmin={isAdmin} />
               </TabsContent>
             </div>
           </Tabs>
