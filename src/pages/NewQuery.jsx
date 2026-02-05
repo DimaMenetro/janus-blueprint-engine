@@ -344,6 +344,7 @@ export default function NewQuery() {
     } catch (err) {
       await base44.entities.Run.create({
         query_text: queryText,
+        full_prompt: fullPrompt,
         execution_mode: executionMode,
         output_mode: outputMode,
         blueprint_level: blueprintLevel,
@@ -374,6 +375,7 @@ export default function NewQuery() {
       } catch (e) {
         await base44.entities.Run.create({
           query_text: queryText,
+          full_prompt: fullPrompt,
           execution_mode: executionMode,
           output_mode: outputMode,
           blueprint_level: blueprintLevel,
@@ -398,6 +400,7 @@ export default function NewQuery() {
     if (!validation.valid) {
       const run = await base44.entities.Run.create({
         query_text: queryText,
+        full_prompt: fullPrompt,
         execution_mode: executionMode,
         output_mode: outputMode,
         blueprint_level: blueprintLevel,
@@ -418,6 +421,7 @@ export default function NewQuery() {
 
     const runData = {
       query_text: queryText,
+      full_prompt: fullPrompt,
       execution_mode: executionMode,
       output_mode: outputMode,
       blueprint_level: blueprintLevel,
