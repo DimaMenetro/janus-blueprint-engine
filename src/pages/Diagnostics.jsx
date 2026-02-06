@@ -275,12 +275,12 @@ export default function Diagnostics() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen p-6">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">System Diagnostics</h1>
-            <p className="text-slate-500">CP-002 v1.5 - Test Suite & Validation</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">System Diagnostics</h1>
+            <p className="text-slate-600 dark:text-slate-300">CP-002 v1.5 - Test Suite & Validation</p>
           </div>
           <div className="flex gap-3">
             <Button onClick={copyDebugReport} variant="outline">

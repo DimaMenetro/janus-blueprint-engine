@@ -53,17 +53,17 @@ export default function Results() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="animate-pulse text-slate-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-slate-600 dark:text-slate-300">Loading...</div>
       </div>
     );
   }
 
   if (!run) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-500 mb-4">Run not found</p>
+          <p className="text-slate-600 dark:text-slate-300 mb-4">Run not found</p>
           <Button onClick={() => navigate("/new-query")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to New Query
@@ -78,7 +78,7 @@ export default function Results() {
   const hasFailed = run.status === "failed";
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen">
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-6">
           <Button variant="ghost" onClick={() => navigate("/history")}>
@@ -88,19 +88,19 @@ export default function Results() {
           <StatusPill status={run.status} />
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6 shadow-sm">
+        <div className="backdrop-blur-xl bg-white/70 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 p-6 mb-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h1 className="text-xl font-semibold text-slate-900 mb-2">
+              <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
                 {run.query_text?.substring(0, 100)}{run.query_text?.length > 100 ? "..." : ""}
               </h1>
-              <div className="flex items-center gap-3 text-sm text-slate-500">
+              <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
                 <span>
-                  Mode: <span className="font-medium text-slate-700">{mode.label}</span>
+                  Mode: <span className="font-medium text-slate-800 dark:text-slate-100">{mode.label}</span>
                 </span>
                 <span>•</span>
                 <span>
-                  Output: <span className="font-medium text-slate-700">{run.output_mode}</span>
+                  Output: <span className="font-medium text-slate-800 dark:text-slate-100">{run.output_mode}</span>
                 </span>
                 {run.refresh_enabled && (
                   <>
@@ -114,12 +114,12 @@ export default function Results() {
         </div>
 
         {hasFailed && run.validation_errors && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+          <div className="backdrop-blur-xl bg-red-100/60 dark:bg-red-900/40 border border-red-300/50 dark:border-red-500/30 rounded-2xl p-6 mb-6 shadow-xl">
             <div className="flex items-start gap-3 mb-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
               <div>
-                <h3 className="text-red-900 font-semibold mb-2">Validation Failed</h3>
-                <p className="text-sm text-red-700 mb-3">
+                <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Validation Failed</h3>
+                <p className="text-sm text-red-800 dark:text-red-300 mb-3">
                   The LLM output did not match the expected schema. See errors below:
                 </p>
                 <ul className="space-y-1">
@@ -145,12 +145,12 @@ export default function Results() {
         )}
 
         {hasFailed && !run.validation_errors && run.error_message && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+          <div className="backdrop-blur-xl bg-red-100/60 dark:bg-red-900/40 border border-red-300/50 dark:border-red-500/30 rounded-2xl p-6 mb-6 shadow-xl">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
               <div>
-                <h3 className="text-red-900 font-semibold mb-2">Execution Failed</h3>
-                <pre className="text-sm text-red-800 whitespace-pre-wrap font-mono bg-red-100 p-4 rounded-lg overflow-auto max-h-96">
+                <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Execution Failed</h3>
+                <pre className="text-sm text-red-800 dark:text-red-200 whitespace-pre-wrap font-mono bg-red-50/60 dark:bg-red-950/40 p-4 rounded-lg overflow-auto max-h-96">
                   {run.error_message}
                 </pre>
               </div>
@@ -160,7 +160,7 @@ export default function Results() {
 
         {!hasFailed && (
           <Tabs defaultValue={availableTabs[0]} className="w-full">
-            <TabsList className="w-full flex flex-wrap h-auto gap-1 bg-slate-100 p-1 rounded-lg mb-6">
+            <TabsList className="w-full flex flex-wrap h-auto gap-1 backdrop-blur-xl bg-white/50 dark:bg-black/30 p-1 rounded-xl mb-6 border border-white/20 dark:border-white/10">
               {availableTabs.includes("refresh") && (
                 <TabsTrigger value="refresh" className="flex items-center gap-1.5 flex-1 min-w-fit">
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -209,7 +209,7 @@ export default function Results() {
               </TabsTrigger>
             </TabsList>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="backdrop-blur-xl bg-white/70 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden">
               {availableTabs.includes("refresh") && (
                 <TabsContent value="refresh" className="m-0">
                   <RefreshTab data={run.refresh} />
