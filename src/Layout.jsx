@@ -38,7 +38,7 @@ export default function Layout({ children }) {
     <ThemeProvider>
       <div className="min-h-screen bg-gradient-to-br from-blue-100 via-pink-50 to-blue-50 dark:from-purple-950 dark:via-red-950 dark:to-purple-900 transition-colors duration-500">
         {/* Liquid Glass Navigation */}
-        <nav className="sticky top-0 z-50 backdrop-blur-2xl bg-white/40 dark:bg-black/20 border-b border-white/20 dark:border-white/10 shadow-lg">
+        <nav className="sticky top-0 z-50 backdrop-blur-2xl bg-white/20 dark:bg-black/20 border-b border-white/20 dark:border-white/10 shadow-lg">
           <div className="max-w-6xl mx-auto px-6">
             <div className="flex items-center justify-between h-14">
               <Link to="/new-query" className="flex items-center gap-2">

@@ -88,7 +88,7 @@ export default function Results() {
           <StatusPill status={run.status} />
         </div>
 
-        <div className="backdrop-blur-xl bg-white/70 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 p-6 mb-6 shadow-2xl">
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 p-6 mb-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
@@ -160,7 +160,7 @@ export default function Results() {
 
         {!hasFailed && (
           <Tabs defaultValue={availableTabs[0]} className="w-full">
-            <TabsList className="w-full flex flex-wrap h-auto gap-1 backdrop-blur-xl bg-white/50 dark:bg-black/30 p-1 rounded-xl mb-6 border border-white/20 dark:border-white/10">
+            <TabsList className="w-full flex flex-wrap h-auto gap-1 backdrop-blur-xl bg-white/25 dark:bg-black/30 p-1 rounded-xl mb-6 border border-white/20 dark:border-white/10">
               {availableTabs.includes("refresh") && (
                 <TabsTrigger value="refresh" className="flex items-center gap-1.5 flex-1 min-w-fit">
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -209,7 +209,7 @@ export default function Results() {
               </TabsTrigger>
             </TabsList>
 
-            <div className="backdrop-blur-xl bg-white/70 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden">
+            <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden">
               {availableTabs.includes("refresh") && (
                 <TabsContent value="refresh" className="m-0">
                   <RefreshTab data={run.refresh} />

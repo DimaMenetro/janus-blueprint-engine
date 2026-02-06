@@ -469,7 +469,7 @@ export default function NewQuery() {
           )}
         </div>
 
-        <div className="backdrop-blur-xl bg-white/70 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 p-6 shadow-2xl">
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 p-6 shadow-2xl">
           <div className="space-y-6">
             <div>
               <Label htmlFor="query" className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-2 block">
@@ -480,7 +480,7 @@ export default function NewQuery() {
                 placeholder="Enter your natural-language query..."
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
-                className="min-h-[160px] text-base resize-none backdrop-blur-sm bg-white/50 dark:bg-black/30 border-white/30 dark:border-white/20 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                className="min-h-[160px] text-base resize-none backdrop-blur-sm bg-white/20 dark:bg-black/30 border-white/30 dark:border-white/20 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
               />
             </div>
 
@@ -491,7 +491,7 @@ export default function NewQuery() {
               <RadioGroup value={executionMode} onValueChange={setExecutionMode}>
                 <div className="space-y-3">
                   {Object.values(EXECUTION_MODES).map(mode => (
-                    <div key={mode.id} className="flex items-center space-x-3 backdrop-blur-md bg-white/40 dark:bg-white/10 border border-white/30 dark:border-white/20 rounded-xl p-3 hover:bg-white/60 dark:hover:bg-white/20 transition-all">
+                    <div key={mode.id} className="flex items-center space-x-3 backdrop-blur-md bg-white/20 dark:bg-white/10 border border-white/30 dark:border-white/20 rounded-xl p-3 hover:bg-white/35 dark:hover:bg-white/20 transition-all">
                       <RadioGroupItem value={mode.id} id={mode.id} />
                       <label htmlFor={mode.id} className="flex-1 cursor-pointer">
                         <div className="font-medium text-slate-900 dark:text-white">{mode.label}</div>

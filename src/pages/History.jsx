@@ -56,7 +56,7 @@ export default function History() {
             placeholder="Search by keyword..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 backdrop-blur-md bg-white/60 dark:bg-black/30 border-white/30 dark:border-white/20 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
+            className="pl-10 backdrop-blur-md bg-white/20 dark:bg-black/30 border-white/30 dark:border-white/20 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
           />
         </div>
 
@@ -67,7 +67,7 @@ export default function History() {
             ))}
           </div>
         ) : filteredRuns.length === 0 ? (
-          <div className="text-center py-16 backdrop-blur-xl bg-white/60 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-xl">
+          <div className="text-center py-16 backdrop-blur-xl bg-white/25 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-xl">
             <Zap className="w-12 h-12 text-blue-300 dark:text-purple-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
               {searchQuery ? "No matching runs found" : "No runs yet"}

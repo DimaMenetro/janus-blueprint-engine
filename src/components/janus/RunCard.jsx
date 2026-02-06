@@ -9,7 +9,7 @@ export default function RunCard({ run }) {
   
   return (
     <Link to={`/results?id=${run.id}`}>
-      <Card className="p-4 hover:shadow-xl transition-all cursor-pointer backdrop-blur-xl bg-white/60 dark:bg-black/30 border-white/30 dark:border-white/20 hover:bg-white/80 dark:hover:bg-black/40">
+      <Card className="p-4 hover:shadow-xl transition-all cursor-pointer backdrop-blur-xl bg-white/25 dark:bg-black/30 border-white/30 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
