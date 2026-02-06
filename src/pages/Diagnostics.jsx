@@ -295,8 +295,8 @@ export default function Diagnostics() {
         </div>
 
         {/* Regression Test */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold text-slate-900 mb-4">Regression Test - Navigation</h2>
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Regression Test - Navigation</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {ROUTES.map(route => (
               <Button
@@ -318,11 +318,11 @@ export default function Diagnostics() {
               </Button>
             ))}
           </div>
-          <p className="text-xs text-slate-500">Current: <span className="font-mono">{location.pathname}</span></p>
-        </Card>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Current: <span className="font-mono">{location.pathname}</span></p>
+        </div>
 
         {/* Route Tests */}
-        <Card className="p-6 mb-6">
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-900">1. Route Existence Tests</h2>
             <Button onClick={runRouteTests} size="sm" variant="outline">
@@ -332,23 +332,23 @@ export default function Diagnostics() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600">Route</th>
-                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600">Name</th>
-                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600">Status</th>
-                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600">Details</th>
-                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600">Action</th>
+                <tr className="border-b border-slate-200 dark:border-slate-700">
+                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300">Route</th>
+                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300">Name</th>
+                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300">Status</th>
+                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300">Details</th>
+                  <th className="text-left py-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {ROUTES.map(route => (
-                  <tr key={route.path} className="border-b border-slate-100">
-                    <td className="py-3 px-3 font-mono text-sm">{route.path}</td>
-                    <td className="py-3 px-3 text-sm text-slate-700">{route.name}</td>
+                  <tr key={route.path} className="border-b border-slate-100 dark:border-slate-700">
+                    <td className="py-3 px-3 font-mono text-sm text-slate-900 dark:text-white">{route.path}</td>
+                    <td className="py-3 px-3 text-sm text-slate-700 dark:text-slate-300">{route.name}</td>
                     <td className="py-3 px-3">
                       <StatusBadge status={routeTests[route.path]?.status || "NOT_RUN"} />
                     </td>
-                    <td className="py-3 px-3 text-sm text-slate-600">
+                    <td className="py-3 px-3 text-sm text-slate-600 dark:text-slate-400">
                       {routeTests[route.path]?.details || "—"}
                     </td>
                     <td className="py-3 px-3">
@@ -366,25 +366,25 @@ export default function Diagnostics() {
               </tbody>
             </table>
           </div>
-        </Card>
+        </div>
 
         {/* Dependency Test */}
-        <Card className="p-6 mb-6">
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-slate-900">2. Dependency / Module Smoke Test</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">2. Dependency / Module Smoke Test</h2>
             <Button onClick={runDependencyTest} size="sm" variant="outline">
               Run Dependency Test
             </Button>
           </div>
           <div className="flex items-start gap-3">
             <StatusBadge status={dependencyTest.status} />
-            <p className="text-sm text-slate-600">{dependencyTest.details || "Not run yet"}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300">{dependencyTest.details || "Not run yet"}</p>
           </div>
-        </Card>
+        </div>
 
         {/* Export Pipeline Test */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold text-slate-900 mb-4">3. Export Pipeline Test</h2>
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">3. Export Pipeline Test</h2>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <Button onClick={createDummyRun} variant="outline">
@@ -405,22 +405,22 @@ export default function Diagnostics() {
             </div>
             <div className="flex items-start gap-3">
               <StatusBadge status={exportTest.status} />
-              <p className="text-sm text-slate-600">{exportTest.details || "Not run yet"}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">{exportTest.details || "Not run yet"}</p>
             </div>
             {dummyRun && (
-              <div className="bg-slate-50 rounded p-3 mt-3">
-                <p className="text-xs font-medium text-slate-600 mb-2">Preview:</p>
-                <pre className="text-xs text-slate-700 overflow-auto max-h-32">
+              <div className="bg-slate-50 dark:bg-slate-800 rounded p-3 mt-3">
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Preview:</p>
+                <pre className="text-xs text-slate-700 dark:text-slate-300 overflow-auto max-h-32">
                   {JSON.stringify(dummyRun, null, 2).substring(0, 500)}...
                 </pre>
               </div>
             )}
           </div>
-        </Card>
+        </div>
 
         {/* Regression Test */}
-        <Card className="p-6 mb-6">
-          <h2 className="text-xl font-semibold text-slate-900 mb-4">
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">
             4. History Regression Test (Manual Navigation)
           </h2>
           <div className="space-y-3">
@@ -430,9 +430,9 @@ export default function Diagnostics() {
             {regressionSteps.length > 0 && (
               <div className="space-y-2 mt-4">
                 {regressionSteps.map(step => (
-                  <div key={step.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded">
+                  <div key={step.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded">
                     <StatusBadge status={step.completed ? "PASS" : "NOT_RUN"} />
-                    <span className="text-sm text-slate-700 flex-1">{step.label}</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">{step.label}</span>
                     {!step.completed && (
                       <Button 
                         size="sm" 
@@ -447,16 +447,16 @@ export default function Diagnostics() {
               </div>
             )}
           </div>
-        </Card>
+        </div>
 
         {/* UI Button Audit */}
-        <Card className="p-6 mb-6">
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
           <UIButtonAudit navigate={navigate} />
-        </Card>
+        </div>
 
         {/* Navigation Log */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold text-slate-900 mb-4">Navigation Event Log</h2>
+        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Navigation Event Log</h2>
           <div className="bg-slate-900 rounded p-4 text-slate-100 font-mono text-xs overflow-auto max-h-64">
             {navLog.length === 0 ? (
               <p className="text-slate-400">No navigation events recorded yet</p>
@@ -472,7 +472,7 @@ export default function Diagnostics() {
               ))
             )}
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );
