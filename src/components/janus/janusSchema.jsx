@@ -163,6 +163,36 @@ export const EXECUTION_MODES = {
   }
 };
 
+function normalizeValue(value, schema, path = "") {
+  // Normalize numbers: accept string numbers like "1" → 1
+  if (schema.type === "number" && typeof value === "string" && !isNaN(value)) {
+    return Number(value);
+  }
+  
+  // Normalize impact values: "medium" → "med"
+  if (schema.enum && schema.enum.includes("med") && value === "medium") {
+    return "med";
+  }
+  
+  // Normalize arrays
+  if (schema.type === "array" && Array.isArray(value) && schema.items) {
+    return value.map((item, idx) => normalizeValue(item, schema.items, `${path}[${idx}]`));
+  }
+  
+  // Normalize objects
+  if (schema.type === "object" && typeof value === "object" && value !== null && schema.properties) {
+    const normalized = { ...value };
+    for (const [key, propSchema] of Object.entries(schema.properties)) {
+      if (key in normalized) {
+        normalized[key] = normalizeValue(normalized[key], propSchema, path ? `${path}.${key}` : key);
+      }
+    }
+    return normalized;
+  }
+  
+  return value;
+}
+
 function validateProperty(value, schema, path = "") {
   const errors = [];
 
@@ -219,6 +249,7 @@ function validateProperty(value, schema, path = "") {
 
 export function validateJanusOutput(data, requiredDomains) {
   const errors = [];
+  const normalized = { ...data };
 
   // Check required domains are present
   for (const domain of requiredDomains) {
@@ -227,16 +258,21 @@ export function validateJanusOutput(data, requiredDomains) {
     }
   }
 
-  // Validate each domain present
+  // Normalize and validate each domain present
   for (const domain of requiredDomains) {
     if (data[domain] && JANUS_SCHEMA.properties[domain]) {
-      const domainErrors = validateProperty(data[domain], JANUS_SCHEMA.properties[domain], domain);
+      // Normalize the data first
+      normalized[domain] = normalizeValue(data[domain], JANUS_SCHEMA.properties[domain], domain);
+      
+      // Then validate the normalized data
+      const domainErrors = validateProperty(normalized[domain], JANUS_SCHEMA.properties[domain], domain);
       errors.push(...domainErrors);
     }
   }
 
   return {
     valid: errors.length === 0,
-    errors
+    errors,
+    normalized // Return normalized data for saving
   };
 }

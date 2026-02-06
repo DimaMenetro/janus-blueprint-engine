@@ -395,7 +395,7 @@ export default function NewQuery() {
       rawJsonString = JSON.stringify(result, null, 2);
     }
 
-    // Validate against schema
+    // Validate against schema (also normalizes data)
     const validation = validateJanusOutput(parsedData, mode.domains);
 
     if (!validation.valid) {
@@ -418,7 +418,9 @@ export default function NewQuery() {
       return;
     }
 
-    const renderMd = generateMarkdown(parsedData, executionMode);
+    // Use normalized data for markdown and storage
+    const normalizedData = validation.normalized;
+    const renderMd = generateMarkdown(normalizedData, executionMode);
 
     const runData = {
       query_text: queryText,
@@ -433,10 +435,10 @@ export default function NewQuery() {
       render_md: renderMd
     };
 
-    // Add domains that were generated
+    // Add normalized domains to storage
     mode.domains.forEach(domain => {
-      if (parsedData[domain]) {
-        runData[domain] = parsedData[domain];
+      if (normalizedData[domain]) {
+        runData[domain] = normalizedData[domain];
       }
     });
 
