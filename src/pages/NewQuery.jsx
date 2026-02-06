@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
 import {
   Select,
   SelectContent,
@@ -488,19 +488,35 @@ export default function NewQuery() {
               <Label className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-3 block">
                 Execution Mode
               </Label>
-              <RadioGroup value={executionMode} onValueChange={setExecutionMode}>
-                <div className="space-y-3">
-                  {Object.values(EXECUTION_MODES).map(mode => (
-                    <div key={mode.id} className="flex items-center space-x-3 backdrop-blur-md bg-white/20 dark:bg-white/10 border border-white/30 dark:border-white/20 rounded-xl p-3 hover:bg-white/35 dark:hover:bg-white/20 transition-all">
-                      <RadioGroupItem value={mode.id} id={mode.id} />
-                      <label htmlFor={mode.id} className="flex-1 cursor-pointer">
-                        <div className="font-medium text-slate-900 dark:text-white">{mode.label}</div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400">{mode.description}</div>
-                      </label>
+              <div className="space-y-3">
+                {Object.values(EXECUTION_MODES).map(mode => (
+                  <div 
+                    key={mode.id} 
+                    onClick={() => setExecutionMode(mode.id)}
+                    className={cn(
+                      "flex items-center space-x-3 backdrop-blur-md rounded-xl p-3 cursor-pointer transition-all",
+                      executionMode === mode.id
+                        ? "bg-blue-500/30 dark:bg-purple-500/30 border-2 border-blue-500 dark:border-purple-400"
+                        : "bg-white/20 dark:bg-white/10 border border-white/30 dark:border-white/20 hover:bg-white/35 dark:hover:bg-white/20"
+                    )}
+                  >
+                    <div className={cn(
+                      "h-4 w-4 rounded-full border-2 flex items-center justify-center transition-all",
+                      executionMode === mode.id
+                        ? "border-blue-600 dark:border-purple-400"
+                        : "border-slate-400 dark:border-slate-500"
+                    )}>
+                      {executionMode === mode.id && (
+                        <div className="h-2 w-2 rounded-full bg-blue-600 dark:bg-purple-400" />
+                      )}
                     </div>
-                  ))}
-                </div>
-              </RadioGroup>
+                    <div className="flex-1">
+                      <div className="font-medium text-slate-900 dark:text-white">{mode.label}</div>
+                      <div className="text-xs text-slate-600 dark:text-slate-400">{mode.description}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
