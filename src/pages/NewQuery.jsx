@@ -448,7 +448,7 @@ export default function NewQuery() {
   const showRefreshToggle = executionMode === "full";
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen">
       <div className="max-w-4xl mx-auto px-6 py-12">
         <div className="mb-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-700 font-mono">
           <span className="font-semibold">New Query route mounted ✅</span> | Path: {window.location.pathname}
@@ -469,10 +469,10 @@ export default function NewQuery() {
           )}
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+        <div className="backdrop-blur-xl bg-white/70 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 p-6 shadow-2xl">
           <div className="space-y-6">
             <div>
-              <Label htmlFor="query" className="text-sm font-medium text-slate-700 mb-2 block">
+              <Label htmlFor="query" className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-2 block">
                 Query
               </Label>
               <Textarea
@@ -480,22 +480,22 @@ export default function NewQuery() {
                 placeholder="Enter your natural-language query..."
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
-                className="min-h-[160px] text-base resize-none"
+                className="min-h-[160px] text-base resize-none backdrop-blur-sm bg-white/50 dark:bg-black/30 border-white/30 dark:border-white/20 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
               />
             </div>
 
             <div>
-              <Label className="text-sm font-medium text-slate-700 mb-3 block">
+              <Label className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-3 block">
                 Execution Mode
               </Label>
               <RadioGroup value={executionMode} onValueChange={setExecutionMode}>
                 <div className="space-y-3">
                   {Object.values(EXECUTION_MODES).map(mode => (
-                    <div key={mode.id} className="flex items-center space-x-3 border border-slate-200 rounded-lg p-3 hover:bg-slate-50">
+                    <div key={mode.id} className="flex items-center space-x-3 backdrop-blur-md bg-white/40 dark:bg-white/10 border border-white/30 dark:border-white/20 rounded-xl p-3 hover:bg-white/60 dark:hover:bg-white/20 transition-all">
                       <RadioGroupItem value={mode.id} id={mode.id} />
                       <label htmlFor={mode.id} className="flex-1 cursor-pointer">
-                        <div className="font-medium text-slate-900">{mode.label}</div>
-                        <div className="text-xs text-slate-500">{mode.description}</div>
+                        <div className="font-medium text-slate-900 dark:text-white">{mode.label}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400">{mode.description}</div>
                       </label>
                     </div>
                   ))}
@@ -595,9 +595,9 @@ export default function NewQuery() {
         </div>
 
         {errorMessage && (
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-xl p-6">
-            <h3 className="text-red-900 font-semibold mb-2">Validation Failed</h3>
-            <pre className="text-sm text-red-800 whitespace-pre-wrap font-mono bg-red-100 p-4 rounded-lg overflow-auto max-h-96">
+          <div className="mt-6 backdrop-blur-xl bg-red-100/60 dark:bg-red-900/40 border border-red-300/50 dark:border-red-500/30 rounded-2xl p-6 shadow-xl">
+            <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Validation Failed</h3>
+            <pre className="text-sm text-red-800 dark:text-red-200 whitespace-pre-wrap font-mono bg-red-50/60 dark:bg-red-950/40 p-4 rounded-lg overflow-auto max-h-96">
               {errorMessage}
             </pre>
           </div>
