@@ -458,14 +458,14 @@ export default function NewQuery() {
         </div>
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <Zap className="w-8 h-8 text-slate-900" />
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+            <Zap className="w-8 h-8 text-slate-900 dark:text-white" />
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
               Janus Blueprint Engine
             </h1>
           </div>
-          <p className="text-slate-500 text-sm">CP-002 v1.5</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">CP-002 v1.5</p>
           {(new URLSearchParams(window.location.search).get('debug') === '1') && (
-            <div className="mt-3 px-3 py-2 bg-slate-100 rounded-lg border border-slate-200 font-mono text-xs text-slate-600">
+            <div className="mt-3 px-3 py-2 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg font-mono text-xs text-slate-600 dark:text-slate-300">
               <div><strong>Route:</strong> {window.location.pathname}</div>
               <div><strong>Registered:</strong> /new-query, /history, /results, /diagnostics</div>
             </div>
@@ -577,13 +577,13 @@ export default function NewQuery() {
                   <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 block">
                     External Refresh
                   </Label>
-                  <div className="flex items-center justify-between h-10 px-3 border border-slate-200 rounded-md bg-slate-50">
-                    <span className="text-sm text-slate-600">Use credits for web search</span>
+                  <div className="flex items-center justify-between h-10 px-3 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-md">
+                    <span className="text-sm text-slate-600 dark:text-slate-300">Use credits for web search</span>
                     <Switch checked={refreshEnabled} onCheckedChange={setRefreshEnabled} />
                   </div>
                   {refreshEnabled && (
                     <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                      <Info className="w-3 h-3" />
+                      <Info className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                       Limited refresh to conserve credits
                     </p>
                   )}
@@ -591,7 +591,7 @@ export default function NewQuery() {
               )}
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-between pt-4 border-t border-white/20 dark:border-white/15">
               <div className="flex items-center gap-3">
                 <StatusPill status={status} />
                 <Link to="/diagnostics">
