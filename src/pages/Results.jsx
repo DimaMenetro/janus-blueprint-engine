@@ -88,7 +88,7 @@ export default function Results() {
           <StatusPill status={run.status} />
         </div>
 
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 p-6 mb-6 shadow-2xl">
+        <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] p-6 mb-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
@@ -114,7 +114,7 @@ export default function Results() {
         </div>
 
         {hasFailed && run.validation_errors && (
-          <div className="backdrop-blur-xl bg-red-100/60 dark:bg-red-900/40 border border-red-300/50 dark:border-red-500/30 rounded-2xl p-6 mb-6 shadow-xl">
+          <div className="backdrop-blur-[40px] bg-red-100/[0.10] dark:bg-red-900/[0.10] border border-red-300/60 dark:border-red-500/35 rounded-2xl p-6 mb-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
             <div className="flex items-start gap-3 mb-3">
               <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
               <div>
@@ -124,7 +124,7 @@ export default function Results() {
                 </p>
                 <ul className="space-y-1">
                   {run.validation_errors.map((err, idx) => (
-                    <li key={idx} className="text-sm text-red-800 font-mono bg-red-100 px-3 py-1 rounded">
+                    <li key={idx} className="text-sm text-red-800 dark:text-red-200 font-mono font-medium backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/30 px-3 py-1 rounded">
                       {err}
                     </li>
                   ))}
@@ -136,7 +136,7 @@ export default function Results() {
                 <summary className="text-sm font-medium text-red-900 cursor-pointer hover:underline">
                   View Raw JSON Output
                 </summary>
-                <pre className="mt-2 text-xs text-red-800 whitespace-pre-wrap font-mono bg-red-100 p-4 rounded-lg overflow-auto max-h-96">
+                <pre className="mt-2 text-xs text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/30 p-4 rounded-lg overflow-auto max-h-96">
                   {run.raw_json}
                 </pre>
               </details>
@@ -145,12 +145,12 @@ export default function Results() {
         )}
 
         {hasFailed && !run.validation_errors && run.error_message && (
-          <div className="backdrop-blur-xl bg-red-100/60 dark:bg-red-900/40 border border-red-300/50 dark:border-red-500/30 rounded-2xl p-6 mb-6 shadow-xl">
+          <div className="backdrop-blur-[40px] bg-red-100/[0.10] dark:bg-red-900/[0.10] border border-red-300/60 dark:border-red-500/35 rounded-2xl p-6 mb-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
               <div>
                 <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Execution Failed</h3>
-                <pre className="text-sm text-red-800 dark:text-red-200 whitespace-pre-wrap font-mono bg-red-50/60 dark:bg-red-950/40 p-4 rounded-lg overflow-auto max-h-96">
+                <pre className="text-sm text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-950/[0.15] border border-red-300/30 p-4 rounded-lg overflow-auto max-h-96">
                   {run.error_message}
                 </pre>
               </div>
@@ -160,7 +160,7 @@ export default function Results() {
 
         {!hasFailed && (
           <Tabs defaultValue={availableTabs[0]} className="w-full">
-            <TabsList className="w-full flex flex-wrap h-auto gap-1 backdrop-blur-xl bg-white/25 dark:bg-black/30 p-1 rounded-xl mb-6 border border-white/20 dark:border-white/10">
+            <TabsList className="w-full flex flex-wrap h-auto gap-1 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] p-1 rounded-xl mb-6 border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
               {availableTabs.includes("refresh") && (
                 <TabsTrigger value="refresh" className="flex items-center gap-1.5 flex-1 min-w-fit">
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -209,7 +209,7 @@ export default function Results() {
               </TabsTrigger>
             </TabsList>
 
-            <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden">
+            <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">
               {availableTabs.includes("refresh") && (
                 <TabsContent value="refresh" className="m-0">
                   <RefreshTab data={run.refresh} />

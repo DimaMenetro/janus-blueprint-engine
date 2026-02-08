@@ -56,18 +56,18 @@ export default function History() {
             placeholder="Search by keyword..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 backdrop-blur-md bg-white/20 dark:bg-black/30 border-white/30 dark:border-white/20 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
+            className="pl-10 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] text-slate-900 dark:text-white font-medium placeholder:text-slate-500 dark:placeholder:text-slate-400"
           />
         </div>
 
         {loading ? (
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
-              <div key={i} className="h-20 backdrop-blur-xl bg-white/40 dark:bg-black/20 rounded-2xl border border-white/20 dark:border-white/10 animate-pulse" />
+              <div key={i} className="h-20 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)] animate-pulse" />
             ))}
           </div>
         ) : filteredRuns.length === 0 ? (
-          <div className="text-center py-16 backdrop-blur-xl bg-white/25 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-xl">
+          <div className="text-center py-16 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
             <Zap className="w-12 h-12 text-blue-300 dark:text-purple-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
               {searchQuery ? "No matching runs found" : "No runs yet"}

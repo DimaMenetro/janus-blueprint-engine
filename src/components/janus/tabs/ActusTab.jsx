@@ -27,7 +27,7 @@ export default function ActusTab({ data }) {
           </div>
           <div className="space-y-4">
             {data.recommendations.map((rec, idx) => (
-              <div key={idx} className="bg-white border border-slate-200 rounded-lg p-4">
+              <div key={idx} className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-sm font-semibold text-slate-600">{rec.id}</span>
@@ -41,7 +41,7 @@ export default function ActusTab({ data }) {
                   </div>
                 </div>
                 
-                <p className="text-slate-700 text-sm mb-3">{rec.text}</p>
+                <p className="text-slate-700 dark:text-slate-200 text-sm font-medium mb-3">{rec.text}</p>
 
                 {rec.depends_on_claims && rec.depends_on_claims.length > 0 && (
                   <div className="flex items-center gap-2 mb-3">
@@ -56,7 +56,7 @@ export default function ActusTab({ data }) {
                 )}
 
                 {rec.failure_modes && rec.failure_modes.length > 0 && (
-                  <div className="bg-red-50 rounded-md p-3 mb-3">
+                  <div className="backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] border border-red-300/30 rounded-md p-3 mb-3">
                     <div className="flex items-center gap-1.5 mb-2">
                       <AlertCircle className="w-3.5 h-3.5 text-red-600" />
                       <span className="text-xs font-medium text-red-800">Failure Modes</span>
@@ -70,7 +70,7 @@ export default function ActusTab({ data }) {
                 )}
 
                 {rec.next_actions && rec.next_actions.length > 0 && (
-                  <div className="bg-slate-50 rounded-md p-3">
+                  <div className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/30 rounded-md p-3">
                     <div className="flex items-center gap-1.5 mb-2">
                       <ArrowRight className="w-3.5 h-3.5 text-slate-600" />
                       <span className="text-xs font-medium text-slate-700">Next Actions</span>

@@ -22,17 +22,17 @@ export default function BlueprintTab({ data, blueprintLevel }) {
   return (
     <div className="space-y-6 p-6">
       {data.goal && (
-        <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+        <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-lg p-4 border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
           <div className="flex items-center gap-2 mb-2">
             <Target className="w-5 h-5 text-slate-600" />
             <h4 className="font-semibold text-slate-900">Goal</h4>
           </div>
-          <p className="text-slate-700">{data.goal}</p>
+          <p className="text-slate-700 dark:text-slate-200 font-medium">{data.goal}</p>
         </div>
       )}
 
       {data.assumptions && data.assumptions.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
+        <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <Lightbulb className="w-5 h-5 text-amber-500" />
             <h4 className="font-medium text-slate-900">Assumptions</h4>
@@ -41,7 +41,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
             {data.assumptions.map((assumption, idx) => (
               <li key={idx} className="flex items-start gap-3 text-sm">
                 <span className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-                <span className="text-slate-700">{assumption}</span>
+                <span className="text-slate-700 dark:text-slate-200 font-medium">{assumption}</span>
               </li>
             ))}
           </ul>
@@ -49,14 +49,14 @@ export default function BlueprintTab({ data, blueprintLevel }) {
       )}
 
       {data.alternative_approaches && data.alternative_approaches.length > 0 && (
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+        <div className="backdrop-blur-[40px] bg-purple-50/[0.15] dark:bg-purple-900/[0.15] border border-purple-300/60 dark:border-purple-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-5 h-5 text-purple-600" />
             <h4 className="font-medium text-purple-900">Alternative Approaches Considered</h4>
           </div>
           <div className="space-y-3">
             {data.alternative_approaches.map((approach, idx) => (
-              <Card key={idx} className="p-3 bg-white">
+              <Card key={idx} className="p-3 backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/50 dark:border-white/30">
                 <h5 className="font-medium text-slate-900 mb-2">{approach.name}</h5>
                 {approach.pros && approach.pros.length > 0 && (
                   <div className="mb-2">
@@ -94,7 +94,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
           <h4 className="font-semibold text-slate-900 mb-4">Implementation Steps</h4>
           <div className="space-y-4">
             {data.steps.map((step) => (
-              <Card key={step.step} className="p-5 bg-white border-slate-200">
+              <Card key={step.step} className="p-5 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-semibold text-sm shrink-0">
@@ -133,7 +133,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                     <h6 className="text-xs font-medium text-slate-600 mb-2">Substeps:</h6>
                     <div className="space-y-2">
                       {step.substeps.map((sub, idx) => (
-                        <div key={idx} className="bg-slate-50 rounded p-2 text-sm">
+                        <div key={idx} className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/30 rounded p-2 text-sm">
                           <span className="font-medium text-slate-700">{sub.substep}</span>
                           {sub.details && <p className="text-slate-600 text-xs mt-1">{sub.details}</p>}
                         </div>
@@ -167,7 +167,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                     </div>
                     <ul className="space-y-1">
                       {step.acceptance_tests.map((test, idx) => (
-                        <li key={idx} className="text-sm text-slate-700 bg-blue-50 rounded px-2 py-1">
+                        <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium backdrop-blur-[40px] bg-blue-50/[0.15] dark:bg-blue-900/[0.15] border border-blue-300/30 rounded px-2 py-1">
                           {test}
                         </li>
                       ))}
@@ -210,7 +210,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
       )}
 
       {data.success_criteria && data.success_criteria.length > 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+        <div className="backdrop-blur-[40px] bg-emerald-50/[0.15] dark:bg-emerald-900/[0.15] border border-emerald-300/60 dark:border-emerald-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             <h4 className="font-medium text-emerald-900">Success Criteria</h4>
@@ -234,7 +234,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
           </div>
           <div className="space-y-3">
             {data.risk_register.map((risk, idx) => (
-              <div key={idx} className="bg-white border border-slate-200 rounded-lg p-4">
+              <div key={idx} className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <span className="font-medium text-slate-900">{risk.risk}</span>
                   <Badge className={impactColors[risk.impact] || "bg-slate-100"}>

@@ -9,12 +9,12 @@ export default function RunCard({ run }) {
   
   return (
     <Link to={`/results?id=${run.id}`}>
-      <Card className="p-4 hover:shadow-xl transition-all cursor-pointer backdrop-blur-xl bg-white/25 dark:bg-black/30 border-white/30 dark:border-white/20 hover:bg-white/40 dark:hover:bg-black/40">
+      <Card className="p-4 hover:shadow-xl transition-all cursor-pointer backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <FileText className="w-4 h-4 text-blue-500 dark:text-purple-400 shrink-0" />
-              <span className="text-sm font-medium text-slate-900 dark:text-white truncate">
+              <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">
                 {shortTitle || "Untitled Query"}
               </span>
             </div>
