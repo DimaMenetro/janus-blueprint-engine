@@ -105,7 +105,7 @@ export default function Results() {
                 {run.refresh_enabled && (
                   <>
                     <span>•</span>
-                    <Badge variant="secondary" className="text-xs">Refresh Enabled</Badge>
+                    <span className="text-xs px-2 py-0.5 rounded backdrop-blur-[40px] bg-blue-50/[0.15] dark:bg-blue-900/[0.15] text-blue-700 dark:text-blue-400 border border-blue-300/60 dark:border-blue-500/35">Refresh Enabled</span>
                   </>
                 )}
               </div>

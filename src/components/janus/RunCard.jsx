@@ -34,12 +34,15 @@ export default function RunCard({ run }) {
               )}
             </div>
           </div>
-          <Badge 
-            variant={run.status === "completed" ? "default" : run.status === "failed" ? "destructive" : "secondary"}
-            className="shrink-0"
-          >
+          <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${
+            run.status === "completed" 
+              ? "backdrop-blur-[40px] bg-emerald-50/[0.15] dark:bg-emerald-900/[0.15] text-emerald-700 dark:text-emerald-400 border border-emerald-300/60 dark:border-emerald-500/35"
+              : run.status === "failed" 
+              ? "backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] text-red-700 dark:text-red-400 border border-red-300/60 dark:border-red-500/35"
+              : "backdrop-blur-[40px] bg-slate-50/[0.15] dark:bg-slate-900/[0.15] text-slate-600 dark:text-slate-400 border border-slate-300/60 dark:border-slate-500/35"
+          }`}>
             {run.status || "idle"}
-          </Badge>
+          </span>
         </div>
       </Card>
     </Link>
