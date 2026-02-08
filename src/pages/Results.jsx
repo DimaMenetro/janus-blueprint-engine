@@ -160,7 +160,7 @@ export default function Results() {
 
         {!hasFailed && (
           <Tabs defaultValue={availableTabs[0]} className="w-full">
-            <TabsList className="w-full flex flex-wrap h-auto gap-1 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] p-1 rounded-xl mb-6 border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
+            <TabsList className="w-full flex flex-wrap h-auto gap-1 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] p-1 rounded-xl mb-6 border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
               {availableTabs.includes("refresh") && (
                 <TabsTrigger value="refresh" className="flex items-center gap-1.5 flex-1 min-w-fit">
                   <RefreshCw className="w-3.5 h-3.5" />
