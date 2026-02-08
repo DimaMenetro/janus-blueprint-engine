@@ -305,7 +305,7 @@ export default function Diagnostics() {
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Regression Test - Navigation</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {ROUTES.map(route => (
-              <Button
+              <button
                 key={route.path}
                 onClick={() => {
                   const beforePath = window.location.pathname;
@@ -316,12 +316,11 @@ export default function Diagnostics() {
                     console.log(`Navigation ${beforePath} → ${route.path}: ${success ? 'PASS' : 'FAIL'}`);
                   }, 100);
                 }}
-                variant="outline"
-                className="flex flex-col items-center gap-1 h-auto py-3"
+                className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg flex flex-col items-center gap-1 h-auto py-3 hover:bg-white/[0.15] dark:hover:bg-white/[0.08] transition-colors"
               >
-                <ExternalLink className="w-4 h-4" />
-                <span className="text-xs font-mono">{route.path}</span>
-              </Button>
+                <ExternalLink className="w-4 h-4 text-slate-700 dark:text-slate-300" />
+                <span className="text-xs font-mono text-slate-700 dark:text-slate-300">{route.path}</span>
+              </button>
             ))}
           </div>
           <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)] rounded p-3 mt-3">
