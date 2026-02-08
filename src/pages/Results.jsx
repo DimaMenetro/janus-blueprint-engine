@@ -118,8 +118,8 @@ export default function Results() {
             <div className="flex items-start gap-3 mb-3">
               <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
               <div>
-                <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Validation Failed</h3>
-                <p className="text-sm text-red-800 dark:text-red-300 mb-3">
+                <h3 className="text-red-600 dark:text-red-400 font-semibold mb-2">Validation Failed</h3>
+                <p className="text-sm text-red-600 dark:text-red-400 mb-3">
                   The LLM output did not match the expected schema. See errors below:
                 </p>
                 <ul className="space-y-1">
@@ -133,7 +133,7 @@ export default function Results() {
             </div>
             {run.raw_json && (
               <details className="mt-4">
-                <summary className="text-sm font-medium text-red-900 cursor-pointer hover:underline">
+                <summary className="text-sm font-medium text-red-600 dark:text-red-400 cursor-pointer hover:underline">
                   View Raw JSON Output
                 </summary>
                 <pre className="mt-2 text-xs text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/30 p-4 rounded-lg overflow-auto max-h-96">
@@ -149,7 +149,7 @@ export default function Results() {
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
               <div>
-                <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Execution Failed</h3>
+                <h3 className="text-red-600 dark:text-red-400 font-semibold mb-2">Execution Failed</h3>
                 <pre className="text-sm text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-950/[0.15] border border-red-300/30 p-4 rounded-lg overflow-auto max-h-96">
                   {run.error_message}
                 </pre>

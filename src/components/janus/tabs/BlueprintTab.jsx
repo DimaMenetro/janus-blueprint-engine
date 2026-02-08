@@ -24,7 +24,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
       {data.goal && (
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-lg p-4 border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
           <div className="flex items-center gap-2 mb-2">
-            <Target className="w-5 h-5 text-slate-600" />
+            <Target className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             <h4 className="font-semibold text-slate-900">Goal</h4>
           </div>
           <p className="text-slate-700 dark:text-slate-200 font-medium">{data.goal}</p>
@@ -34,13 +34,13 @@ export default function BlueprintTab({ data, blueprintLevel }) {
       {data.assumptions && data.assumptions.length > 0 && (
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Lightbulb className="w-5 h-5 text-amber-500" />
+            <Lightbulb className="w-5 h-5 text-amber-600 dark:text-amber-300" />
             <h4 className="font-medium text-slate-900">Assumptions</h4>
           </div>
           <ul className="space-y-2">
             {data.assumptions.map((assumption, idx) => (
               <li key={idx} className="flex items-start gap-3 text-sm">
-                <span className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-amber-600 dark:bg-amber-400 mt-1.5 shrink-0" />
                 <span className="text-slate-700 dark:text-slate-200 font-medium">{assumption}</span>
               </li>
             ))}
@@ -51,7 +51,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
       {data.alternative_approaches && data.alternative_approaches.length > 0 && (
         <div className="backdrop-blur-[40px] bg-purple-50/[0.15] dark:bg-purple-900/[0.15] border border-purple-300/60 dark:border-purple-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Zap className="w-5 h-5 text-purple-600" />
+            <Zap className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             <h4 className="font-medium text-purple-900">Alternative Approaches Considered</h4>
           </div>
           <div className="space-y-3">
@@ -60,7 +60,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                 <h5 className="font-medium text-slate-900 mb-2">{approach.name}</h5>
                 {approach.pros && approach.pros.length > 0 && (
                   <div className="mb-2">
-                    <span className="text-xs font-medium text-emerald-700">Pros:</span>
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Pros:</span>
                     <ul className="text-sm text-slate-600 ml-4 mt-1">
                       {approach.pros.map((pro, i) => (
                         <li key={i}>+ {pro}</li>
@@ -70,7 +70,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                 )}
                 {approach.cons && approach.cons.length > 0 && (
                   <div className="mb-2">
-                    <span className="text-xs font-medium text-red-700">Cons:</span>
+                    <span className="text-xs font-medium text-red-600 dark:text-red-400">Cons:</span>
                     <ul className="text-sm text-slate-600 ml-4 mt-1">
                       {approach.cons.map((con, i) => (
                         <li key={i}>- {con}</li>
@@ -212,13 +212,13 @@ export default function BlueprintTab({ data, blueprintLevel }) {
       {data.success_criteria && data.success_criteria.length > 0 && (
         <div className="backdrop-blur-[40px] bg-emerald-50/[0.15] dark:bg-emerald-900/[0.15] border border-emerald-300/60 dark:border-emerald-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             <h4 className="font-medium text-emerald-900">Success Criteria</h4>
           </div>
           <ul className="space-y-2">
             {data.success_criteria.map((criterion, idx) => (
               <li key={idx} className="flex items-start gap-3 text-sm">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
                 <span className="text-emerald-900">{criterion}</span>
               </li>
             ))}
@@ -229,7 +229,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
       {data.risk_register && data.risk_register.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="w-5 h-5 text-amber-600" />
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300" />
             <h4 className="font-medium text-slate-900">Risk Register</h4>
           </div>
           <div className="space-y-3">

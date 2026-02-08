@@ -15,7 +15,7 @@ export default function CogitoTab({ data }) {
       {data.claims && data.claims.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <Brain className="w-5 h-5 text-slate-600" />
+            <Brain className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             <h4 className="font-medium text-slate-900">Claims (with Evidence Discipline)</h4>
             <Badge variant="secondary" className="ml-auto">{data.claims.length}</Badge>
           </div>
@@ -24,7 +24,7 @@ export default function CogitoTab({ data }) {
               <div key={idx} className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4),0_2px_10px_rgba(0,0,0,0.05)] rounded-lg p-4">
                 <div className="flex items-start justify-between gap-4 mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-slate-600">{claim.id}</span>
+                    <span className="font-mono text-sm font-semibold text-slate-600 dark:text-slate-300">{claim.id}</span>
                     <Badge className={tagColors[claim.tag] || "bg-slate-100 text-slate-800"}>
                       {claim.tag}
                     </Badge>
@@ -34,7 +34,7 @@ export default function CogitoTab({ data }) {
                 
                 {claim.depends_on && claim.depends_on.length > 0 && (
                   <div className="flex items-center gap-2 mb-3 pb-3 border-b border-white/30 dark:border-white/20">
-                    <Link className="w-3.5 h-3.5 text-slate-400" />
+                    <Link className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                     <span className="text-xs text-slate-500">Depends on:</span>
                     {claim.depends_on.map((dep, i) => (
                       <Badge key={i} variant="outline" className="text-xs font-mono">
@@ -48,19 +48,19 @@ export default function CogitoTab({ data }) {
                   <div className="space-y-2">
                     {claim.why_believed && (
                       <div className="text-xs">
-                        <span className="font-medium text-emerald-700">Why Believed:</span>
+                        <span className="font-medium text-emerald-600 dark:text-emerald-400">Why Believed:</span>
                         <p className="text-slate-600 dark:text-slate-300 font-medium mt-1">{claim.why_believed}</p>
                       </div>
                     )}
                     {claim.falsifiable_by && (
                       <div className="text-xs">
-                        <span className="font-medium text-red-700">Falsifiable By:</span>
+                        <span className="font-medium text-red-600 dark:text-red-400">Falsifiable By:</span>
                         <p className="text-slate-600 dark:text-slate-300 font-medium mt-1">{claim.falsifiable_by}</p>
                       </div>
                     )}
                     {claim.verify_later && (
                       <div className="text-xs">
-                        <span className="font-medium text-amber-700">Verify Later:</span>
+                        <span className="font-medium text-amber-600 dark:text-amber-300">Verify Later:</span>
                         <p className="text-slate-600 dark:text-slate-300 font-medium mt-1">{claim.verify_later}</p>
                       </div>
                     )}
@@ -75,7 +75,7 @@ export default function CogitoTab({ data }) {
       {data.reasoning_map && data.reasoning_map.length > 0 && (
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-4">
-            <Map className="w-5 h-5 text-slate-600" />
+            <Map className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             <h4 className="font-medium text-slate-900">Reasoning Map</h4>
           </div>
           <ul className="space-y-2">

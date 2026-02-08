@@ -21,7 +21,7 @@ export default function ActusTab({ data }) {
       {data.recommendations && data.recommendations.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <Rocket className="w-5 h-5 text-slate-600" />
+            <Rocket className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             <h4 className="font-medium text-slate-900">Recommendations</h4>
             <Badge variant="secondary" className="ml-auto">{data.recommendations.length}</Badge>
           </div>
@@ -30,7 +30,7 @@ export default function ActusTab({ data }) {
               <div key={idx} className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm font-semibold text-slate-600">{rec.id}</span>
+                    <span className="font-mono text-sm font-semibold text-slate-600 dark:text-slate-300">{rec.id}</span>
                     <Badge className={confidenceColors[rec.inherited_confidence] || "bg-slate-100"}>
                       {rec.inherited_confidence}
                     </Badge>
@@ -45,7 +45,7 @@ export default function ActusTab({ data }) {
 
                 {rec.depends_on_claims && rec.depends_on_claims.length > 0 && (
                   <div className="flex items-center gap-2 mb-3">
-                    <Link className="w-3.5 h-3.5 text-slate-400" />
+                    <Link className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                     <span className="text-xs text-slate-500">Based on:</span>
                     {rec.depends_on_claims.map((claim, i) => (
                       <Badge key={i} variant="outline" className="text-xs font-mono">
@@ -58,12 +58,12 @@ export default function ActusTab({ data }) {
                 {rec.failure_modes && rec.failure_modes.length > 0 && (
                   <div className="backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] border border-red-300/30 rounded-md p-3 mb-3">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-                      <span className="text-xs font-medium text-red-800">Failure Modes</span>
+                      <AlertCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                      <span className="text-xs font-medium text-red-600 dark:text-red-400">Failure Modes</span>
                     </div>
                     <ul className="space-y-1">
                       {rec.failure_modes.map((mode, i) => (
-                        <li key={i} className="text-xs text-red-700 pl-3">• {mode}</li>
+                        <li key={i} className="text-xs text-red-600 dark:text-red-400 pl-3">• {mode}</li>
                       ))}
                     </ul>
                   </div>
@@ -72,12 +72,12 @@ export default function ActusTab({ data }) {
                 {rec.next_actions && rec.next_actions.length > 0 && (
                   <div className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/30 rounded-md p-3">
                     <div className="flex items-center gap-1.5 mb-2">
-                      <ArrowRight className="w-3.5 h-3.5 text-slate-600" />
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                       <span className="text-xs font-medium text-slate-700">Next Actions</span>
                     </div>
                     <ul className="space-y-1">
                       {rec.next_actions.map((action, i) => (
-                        <li key={i} className="text-xs text-slate-600 pl-3">• {action}</li>
+                        <li key={i} className="text-xs text-slate-600 dark:text-slate-300 pl-3">• {action}</li>
                       ))}
                     </ul>
                   </div>
