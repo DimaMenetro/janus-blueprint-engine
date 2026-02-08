@@ -36,7 +36,7 @@ export default function Layout({ children }) {
 
   return (
     <ThemeProvider>
-      <div className="min-h-screen bg-gradient-to-br from-blue-100 via-pink-50 to-blue-50 dark:from-purple-950 dark:via-red-950 dark:to-purple-900 transition-colors duration-500">
+      <div className="min-h-screen bg-gradient-to-br from-blue-200 via-pink-100 to-purple-100 dark:from-purple-950 dark:via-red-950 dark:to-purple-900 transition-colors duration-500">
         {/* Liquid Glass Navigation - Rim Light */}
         <nav className="sticky top-0 z-50 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border-b border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
           <div className="max-w-6xl mx-auto px-6">
