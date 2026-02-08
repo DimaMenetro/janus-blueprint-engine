@@ -4,18 +4,18 @@ import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, Circle, ExternalLink } from "lucide-react";
 
 const AUDIT_ITEMS = [
-  { id: "nav-new-query", control: "Main Nav: New Query", action: "Navigate to /new-query", testPath: "/new-query" },
+  { id: "nav-new-query", control: "Main Nav: New Query", action: "Navigate to /NewQuery", testPath: "/NewQuery" },
   { id: "nav-history", control: "Main Nav: History", action: "Navigate to /history", testPath: "/history" },
   { id: "nav-diagnostics", control: "Main Nav: Diagnostics", action: "Navigate to /diagnostics", testPath: "/diagnostics" },
-  { id: "history-new-query-btn", control: "History: New Query Button", action: "Navigate to /new-query", testPath: "/history", notes: "Click New Query button" },
+  { id: "history-new-query-btn", control: "History: New Query Button", action: "Navigate to /NewQuery", testPath: "/history", notes: "Click New Query button" },
   { id: "history-diagnostics-btn", control: "History: Diagnostics Button", action: "Navigate to /diagnostics", testPath: "/history", notes: "Click Diagnostics button" },
   { id: "history-run-card", control: "History: Open Run Card", action: "Navigate to /results?id=X", testPath: "/history", notes: "Click any run card", manual: true },
   { id: "results-back-btn", control: "Results: Back to History", action: "Navigate to /history", testPath: "/results", notes: "Click Back button", manual: true },
   { id: "results-tabs", control: "Results: All Tabs", action: "Switch between tabs", testPath: "/results", notes: "Test each tab", manual: true },
   { id: "results-export-json", control: "Results: Export JSON", action: "Download JSON file", testPath: "/results", notes: "Export tab - Copy/Download", manual: true },
   { id: "results-export-md", control: "Results: Export Markdown", action: "Download MD file", testPath: "/results", notes: "Export tab - Copy/Download", manual: true },
-  { id: "newquery-diagnostics-btn", control: "New Query: Diagnostics Button", action: "Navigate to /diagnostics", testPath: "/new-query", notes: "Click Diagnostics button" },
-  { id: "newquery-execute", control: "New Query: Execute Button", action: "Create run & navigate to /results", testPath: "/new-query", notes: "Enter query and execute", manual: true }
+  { id: "newquery-diagnostics-btn", control: "New Query: Diagnostics Button", action: "Navigate to /diagnostics", testPath: "/NewQuery", notes: "Click Diagnostics button" },
+  { id: "newquery-execute", control: "New Query: Execute Button", action: "Create run & navigate to /results", testPath: "/NewQuery", notes: "Enter query and execute", manual: true }
 ];
 
 export default function UIButtonAudit({ navigate }) {

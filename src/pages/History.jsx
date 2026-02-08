@@ -41,7 +41,7 @@ export default function History() {
                 Diagnostics
               </Button>
             </Link>
-            <Link to="/new-query">
+            <Link to="/NewQuery">
               <Button>
                 <Plus className="w-4 h-4 mr-2" />
                 New Query
@@ -78,7 +78,7 @@ export default function History() {
                 : "Execute your first Janus query to get started"}
             </p>
             {!searchQuery && (
-              <Link to="/new-query">
+              <Link to="/NewQuery">
                 <Button>
                   <Plus className="w-4 h-4 mr-2" />
                   Create First Query

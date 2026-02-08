@@ -13,7 +13,7 @@ export default function Layout({ children }) {
   };
 
   const navItems = [
-    { path: "/new-query", label: "New Query", icon: Plus },
+    { path: "/NewQuery", label: "New Query", icon: Plus },
     { path: "/history", label: "History", icon: History },
     { path: "/diagnostics", label: "Diagnostics", icon: Zap },
   ];
@@ -41,7 +41,7 @@ export default function Layout({ children }) {
         <nav className="sticky top-0 z-50 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border-b border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
           <div className="max-w-6xl mx-auto px-6">
             <div className="flex items-center justify-between h-14">
-              <Link to="/new-query" className="flex items-center gap-2">
+              <Link to="/NewQuery" className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-blue-600 dark:text-purple-400" />
                 <span className="font-semibold text-slate-900 dark:text-white">Janus Blueprint</span>
                 <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">CP-002 v1.5</span>

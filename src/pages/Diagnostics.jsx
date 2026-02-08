@@ -27,7 +27,7 @@ const STATUS = {
 
 const ROUTES = [
   { path: "/", name: "Root (redirect)" },
-  { path: "/new-query", name: "New Query" },
+  { path: "/NewQuery", name: "New Query" },
   { path: "/history", name: "History" },
   { path: "/results", name: "Results" },
   { path: "/diagnostics", name: "Diagnostics" }

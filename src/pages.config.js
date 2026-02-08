@@ -47,18 +47,18 @@
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
-import Diagnostics from './pages/Diagnostics';
 import History from './pages/History';
-import NewQuery from './pages/NewQuery';
 import Results from './pages/Results';
+import NewQuery from './pages/NewQuery';
+import Diagnostics from './pages/Diagnostics';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
-    "Diagnostics": Diagnostics,
     "History": History,
-    "NewQuery": NewQuery,
     "Results": Results,
+    "NewQuery": NewQuery,
+    "Diagnostics": Diagnostics,
 }
 
 export const pagesConfig = {
