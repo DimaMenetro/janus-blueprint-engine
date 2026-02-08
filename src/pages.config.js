@@ -49,20 +49,20 @@
  */
 import Diagnostics from './pages/Diagnostics';
 import History from './pages/History';
+import NewQuery from './pages/NewQuery';
 import Results from './pages/Results';
-import newQuery from './pages/new-query';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
     "Diagnostics": Diagnostics,
     "History": History,
+    "NewQuery": NewQuery,
     "Results": Results,
-    "new-query": newQuery,
 }
 
 export const pagesConfig = {
-    mainPage: "Diagnostics",
+    mainPage: "NewQuery",
     Pages: PAGES,
     Layout: __Layout,
 };
