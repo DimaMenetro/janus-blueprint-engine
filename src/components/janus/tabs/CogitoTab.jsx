@@ -80,7 +80,7 @@ export default function CogitoTab({ data }) {
           </div>
           <ul className="space-y-2">
             {data.reasoning_map.map((item, idx) => (
-              <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 pl-4 border-l-2 border-slate-300 dark:border-slate-600">
+              <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 pl-4 border-l-2 border-slate-300/60 dark:border-slate-600/60">
                 {item}
               </li>
             ))}

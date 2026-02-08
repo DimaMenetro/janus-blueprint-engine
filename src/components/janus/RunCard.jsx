@@ -23,14 +23,14 @@ export default function RunCard({ run }) {
                 <Clock className="w-3 h-3" />
                 <span>{run.created_date ? format(new Date(run.created_date), "MMM d, yyyy HH:mm") : "—"}</span>
               </div>
-              <Badge variant="outline" className="text-xs">
+              <span className="text-xs px-2 py-0.5 rounded backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] text-slate-700 dark:text-slate-300 border border-white/60 dark:border-white/35">
                 {run.output_mode || "Blueprint"}
-              </Badge>
+              </span>
               {run.refresh?.attempted === false && (
-                <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                <span className="text-xs px-2 py-0.5 rounded backdrop-blur-[40px] bg-slate-50/[0.15] dark:bg-slate-900/[0.15] text-slate-700 dark:text-slate-300 border border-slate-300/60 dark:border-slate-500/35 flex items-center gap-1">
                   <RefreshCw className="w-3 h-3" />
                   No Refresh
-                </Badge>
+                </span>
               )}
             </div>
           </div>

@@ -34,7 +34,7 @@ export default function SynthesisTab({ data }) {
           </div>
           <ul className="space-y-2">
             {data.constraint_collisions.map((collision, idx) => (
-              <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 pl-4 border-l-2 border-amber-300 dark:border-amber-600">
+              <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 pl-4 border-l-2 border-amber-300/60 dark:border-amber-600/60">
                 {collision}
               </li>
             ))}

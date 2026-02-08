@@ -34,7 +34,7 @@ export default function CorpusTab({ data }) {
           </div>
           <ul className="space-y-2">
             {data.feasibility_notes.map((note, idx) => (
-              <li key={idx} className="text-sm text-blue-800 dark:text-blue-200 pl-4 border-l-2 border-blue-300 dark:border-blue-600">
+              <li key={idx} className="text-sm text-blue-800 dark:text-blue-200 pl-4 border-l-2 border-blue-300/60 dark:border-blue-600/60">
                 {note}
               </li>
             ))}

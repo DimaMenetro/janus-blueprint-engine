@@ -124,7 +124,7 @@ export default function Results() {
                 </p>
                 <ul className="space-y-1">
                   {run.validation_errors.map((err, idx) => (
-                    <li key={idx} className="text-sm text-red-800 dark:text-red-200 font-mono font-medium backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/30 px-3 py-1 rounded">
+                    <li key={idx} className="text-sm text-red-800 dark:text-red-200 font-mono font-medium backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/60 dark:border-red-500/35 px-3 py-1 rounded">
                       {err}
                     </li>
                   ))}
@@ -136,7 +136,7 @@ export default function Results() {
                 <summary className="text-sm font-medium text-red-600 dark:text-red-400 cursor-pointer hover:underline">
                   View Raw JSON Output
                 </summary>
-                <pre className="mt-2 text-xs text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/30 p-4 rounded-lg overflow-auto max-h-96">
+                <pre className="mt-2 text-xs text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/60 dark:border-red-500/35 p-4 rounded-lg overflow-auto max-h-96">
                   {run.raw_json}
                 </pre>
               </details>
@@ -150,7 +150,7 @@ export default function Results() {
               <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
               <div>
                 <h3 className="text-red-600 dark:text-red-400 font-semibold mb-2">Execution Failed</h3>
-                <pre className="text-sm text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-950/[0.15] border border-red-300/30 p-4 rounded-lg overflow-auto max-h-96">
+                <pre className="text-sm text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-950/[0.15] border border-red-300/60 dark:border-red-500/35 p-4 rounded-lg overflow-auto max-h-96">
                   {run.error_message}
                 </pre>
               </div>
