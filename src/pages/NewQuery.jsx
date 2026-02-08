@@ -453,7 +453,7 @@ export default function NewQuery() {
   return (
     <div className="min-h-screen">
       <div className="max-w-4xl mx-auto px-6 py-12">
-        <div className="mb-2 px-3 py-1 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-700 font-mono">
+        <div className="mb-2 px-3 py-1 backdrop-blur-[40px] bg-emerald-50/[0.15] dark:bg-emerald-900/[0.15] border border-emerald-300/60 dark:border-emerald-500/35 rounded text-xs text-emerald-700 dark:text-emerald-300 font-mono">
           <span className="font-semibold">New Query route mounted ✅</span> | Path: {window.location.pathname}
         </div>
         <div className="mb-8">

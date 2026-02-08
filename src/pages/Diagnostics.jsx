@@ -289,11 +289,11 @@ export default function Diagnostics() {
             <p className="text-slate-600 dark:text-slate-300">CP-002 v1.5 - Test Suite & Validation</p>
           </div>
           <div className="flex gap-3">
-            <Button onClick={copyDebugReport} variant="outline">
+            <Button onClick={copyDebugReport} variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
               <Copy className="w-4 h-4 mr-2" />
               Copy Report
             </Button>
-            <Button onClick={runAllTests}>
+            <Button onClick={runAllTests} className="backdrop-blur-[40px] bg-slate-800/[0.80] dark:bg-slate-200/[0.80] text-white dark:text-slate-900 hover:bg-slate-900/[0.80] dark:hover:bg-slate-100/[0.80] border border-slate-700/60 dark:border-slate-300/60">
               <Play className="w-4 h-4 mr-2" />
               Run All Tests
             </Button>
@@ -332,7 +332,7 @@ export default function Diagnostics() {
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white">1. Route Existence Tests</h2>
-            <Button onClick={runRouteTests} size="sm" variant="outline">
+            <Button onClick={runRouteTests} size="sm" variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
               Run Route Tests
             </Button>
           </div>
@@ -379,7 +379,7 @@ export default function Diagnostics() {
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white">2. Dependency / Module Smoke Test</h2>
-            <Button onClick={runDependencyTest} size="sm" variant="outline">
+            <Button onClick={runDependencyTest} size="sm" variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
               Run Dependency Test
             </Button>
           </div>
@@ -394,16 +394,16 @@ export default function Diagnostics() {
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">3. Export Pipeline Test</h2>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <Button onClick={createDummyRun} variant="outline">
+              <Button onClick={createDummyRun} variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
                 Create Dummy Run
               </Button>
               {dummyRun && (
                 <>
-                  <Button onClick={exportDummyJSON} variant="outline">
+                  <Button onClick={exportDummyJSON} variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
                     <FileJson className="w-4 h-4 mr-2" />
                     Export JSON
                   </Button>
-                  <Button onClick={exportDummyMarkdown} variant="outline">
+                  <Button onClick={exportDummyMarkdown} variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
                     <FileText className="w-4 h-4 mr-2" />
                     Export Markdown
                   </Button>
@@ -431,7 +431,7 @@ export default function Diagnostics() {
             4. History Regression Test (Manual Navigation)
           </h2>
           <div className="space-y-3">
-            <Button onClick={startRegressionTest} variant="outline">
+            <Button onClick={startRegressionTest} variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
               Start Regression Test
             </Button>
             {regressionSteps.length > 0 && (
@@ -444,6 +444,7 @@ export default function Diagnostics() {
                       <Button 
                         size="sm" 
                         variant="outline"
+                        className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]"
                         onClick={() => executeRegressionStep(step)}
                       >
                         Execute

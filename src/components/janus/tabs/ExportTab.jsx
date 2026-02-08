@@ -79,7 +79,7 @@ export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
           <Button
             variant="outline"
             onClick={() => handleCopy(rawJson, "json")}
-            className="flex-1"
+            className="flex-1 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]"
           >
             {copiedJson ? (
               <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
@@ -90,7 +90,7 @@ export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
           </Button>
           <Button
             onClick={() => handleDownload(rawJson, "janus-blueprint.json", "json")}
-            className="flex-1"
+            className="flex-1 backdrop-blur-[40px] bg-slate-800/[0.80] dark:bg-slate-200/[0.80] text-white dark:text-slate-900 hover:bg-slate-900/[0.80] dark:hover:bg-slate-100/[0.80] border border-slate-700/60 dark:border-slate-300/60"
           >
             <Download className="w-4 h-4 mr-2" />
             Download JSON
@@ -118,7 +118,7 @@ export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
           <Button
             variant="outline"
             onClick={() => handleCopy(renderMd, "md")}
-            className="flex-1"
+            className="flex-1 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]"
           >
             {copiedMd ? (
               <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
@@ -129,7 +129,7 @@ export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
           </Button>
           <Button
             onClick={() => handleDownload(renderMd, "janus-blueprint.md", "md")}
-            className="flex-1"
+            className="flex-1 backdrop-blur-[40px] bg-slate-800/[0.80] dark:bg-slate-200/[0.80] text-white dark:text-slate-900 hover:bg-slate-900/[0.80] dark:hover:bg-slate-100/[0.80] border border-slate-700/60 dark:border-slate-300/60"
           >
             <Download className="w-4 h-4 mr-2" />
             Download Markdown
