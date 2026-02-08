@@ -61,7 +61,7 @@ export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
             </Button>
           </div>
           <div className="max-h-96 overflow-auto">
-            <pre className="backdrop-blur-[40px] bg-amber-100/[0.20] dark:bg-amber-900/[0.20] border border-amber-300/40 rounded-lg p-3 text-xs text-amber-900 dark:text-amber-200 whitespace-pre-wrap">
+            <pre className="backdrop-blur-[40px] bg-amber-100/[0.20] dark:bg-amber-900/[0.20] border border-amber-300/60 dark:border-amber-500/35 rounded-lg p-3 text-xs text-amber-900 dark:text-amber-200 whitespace-pre-wrap">
               {fullPrompt}
             </pre>
           </div>

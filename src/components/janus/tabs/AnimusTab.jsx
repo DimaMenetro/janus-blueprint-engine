@@ -50,7 +50,7 @@ export default function AnimusTab({ data }) {
           </div>
           <ul className="space-y-2">
             {data.safety_notes.map((note, idx) => (
-              <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 pl-4 border-l-2 border-amber-300 dark:border-amber-600">
+              <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 pl-4 border-l-2 border-amber-300/60 dark:border-amber-600/60">
                 {note}
               </li>
             ))}

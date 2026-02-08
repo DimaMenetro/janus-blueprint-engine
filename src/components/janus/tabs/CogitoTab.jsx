@@ -33,7 +33,7 @@ export default function CogitoTab({ data }) {
                 <p className="text-slate-700 dark:text-slate-200 text-sm mb-3">{claim.text}</p>
                 
                 {claim.depends_on && claim.depends_on.length > 0 && (
-                  <div className="flex items-center gap-2 mb-3 pb-3 border-b border-white/30 dark:border-white/20">
+                  <div className="flex items-center gap-2 mb-3 pb-3 border-b border-white/60 dark:border-white/35">
                     <Link className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                     <span className="text-xs text-slate-500">Depends on:</span>
                     {claim.depends_on.map((dep, i) => (

@@ -87,7 +87,7 @@ export default function UIButtonAudit({ navigate }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-white/30 dark:border-white/20">
+            <tr className="border-b border-white/60 dark:border-white/35">
               <th className="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-300">Control</th>
               <th className="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-300">Expected Action</th>
               <th className="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-300">Result</th>
@@ -99,7 +99,7 @@ export default function UIButtonAudit({ navigate }) {
             {AUDIT_ITEMS.map(item => {
               const result = results[item.id];
               return (
-                <tr key={item.id} className="border-b border-white/20 dark:border-white/15">
+                <tr key={item.id} className="border-b border-white/60 dark:border-white/35">
                   <td className="py-3 px-3 text-slate-700 dark:text-slate-200">{item.control}</td>
                   <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{item.action}</td>
                   <td className="py-3 px-3">

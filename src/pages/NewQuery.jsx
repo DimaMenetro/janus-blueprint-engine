@@ -591,7 +591,7 @@ export default function NewQuery() {
               )}
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-white/20 dark:border-white/15">
+            <div className="flex items-center justify-between pt-4 border-t border-white/60 dark:border-white/35">
               <div className="flex items-center gap-3">
                 <StatusPill status={status} />
                 <Link to="/diagnostics">

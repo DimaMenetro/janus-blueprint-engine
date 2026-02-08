@@ -56,7 +56,7 @@ export default function ActusTab({ data }) {
                 )}
 
                 {rec.failure_modes && rec.failure_modes.length > 0 && (
-                  <div className="backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] border border-red-300/30 rounded-md p-3 mb-3">
+                  <div className="backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] border border-red-300/60 dark:border-red-500/35 rounded-md p-3 mb-3">
                     <div className="flex items-center gap-1.5 mb-2">
                       <AlertCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
                       <span className="text-xs font-medium text-red-600 dark:text-red-400">Failure Modes</span>
@@ -70,7 +70,7 @@ export default function ActusTab({ data }) {
                 )}
 
                 {rec.next_actions && rec.next_actions.length > 0 && (
-                  <div className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/30 rounded-md p-3">
+                  <div className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/60 dark:border-white/35 rounded-md p-3">
                     <div className="flex items-center gap-1.5 mb-2">
                       <ArrowRight className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                       <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Next Actions</span>

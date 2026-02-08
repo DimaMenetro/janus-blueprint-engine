@@ -56,7 +56,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
           </div>
           <div className="space-y-3">
             {data.alternative_approaches.map((approach, idx) => (
-              <Card key={idx} className="p-3 backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/50 dark:border-white/30">
+              <Card key={idx} className="p-3 backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/60 dark:border-white/35">
                 <h5 className="font-medium text-slate-900 dark:text-white mb-2">{approach.name}</h5>
                 {approach.pros && approach.pros.length > 0 && (
                   <div className="mb-2">
@@ -133,7 +133,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                     <h6 className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Substeps:</h6>
                     <div className="space-y-2">
                       {step.substeps.map((sub, idx) => (
-                        <div key={idx} className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/30 rounded p-2 text-sm">
+                        <div key={idx} className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/60 dark:border-white/35 rounded p-2 text-sm">
                           <span className="font-medium text-slate-700 dark:text-slate-200">{sub.substep}</span>
                           {sub.details && <p className="text-slate-600 dark:text-slate-300 text-xs mt-1">{sub.details}</p>}
                         </div>
@@ -167,7 +167,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                     </div>
                     <ul className="space-y-1">
                       {step.acceptance_tests.map((test, idx) => (
-                        <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium backdrop-blur-[40px] bg-blue-50/[0.15] dark:bg-blue-900/[0.15] border border-blue-300/30 rounded px-2 py-1">
+                        <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium backdrop-blur-[40px] bg-blue-50/[0.15] dark:bg-blue-900/[0.15] border border-blue-300/60 dark:border-blue-500/35 rounded px-2 py-1">
                           {test}
                         </li>
                       ))}

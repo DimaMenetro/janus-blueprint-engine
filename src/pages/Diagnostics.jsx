@@ -339,7 +339,7 @@ export default function Diagnostics() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-700">
+                <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                   <th className="text-left py-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300">Route</th>
                   <th className="text-left py-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300">Name</th>
                   <th className="text-left py-2 px-3 text-sm font-medium text-slate-600 dark:text-slate-300">Status</th>
@@ -349,7 +349,7 @@ export default function Diagnostics() {
               </thead>
               <tbody>
                 {ROUTES.map(route => (
-                  <tr key={route.path} className="border-b border-slate-100 dark:border-slate-700">
+                  <tr key={route.path} className="border-b border-slate-100/60 dark:border-slate-700/60">
                     <td className="py-3 px-3 font-mono text-sm text-slate-900 dark:text-white">{route.path}</td>
                     <td className="py-3 px-3 text-sm text-slate-700 dark:text-slate-300">{route.name}</td>
                     <td className="py-3 px-3">
