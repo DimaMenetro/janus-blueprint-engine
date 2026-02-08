@@ -266,8 +266,14 @@ export default function Diagnostics() {
   const StatusBadge = ({ status }) => {
     const config = STATUS[status] || STATUS.NOT_RUN;
     const Icon = config.icon;
+    const badgeClasses = {
+      PASS: "backdrop-blur-[40px] bg-emerald-50/[0.15] dark:bg-emerald-900/[0.15] text-emerald-600 dark:text-emerald-400 border border-emerald-300/60 dark:border-emerald-500/35",
+      FAIL: "backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] text-red-600 dark:text-red-400 border border-red-300/60 dark:border-red-500/35",
+      WARN: "backdrop-blur-[40px] bg-amber-50/[0.15] dark:bg-amber-900/[0.15] text-amber-600 dark:text-amber-300 border border-amber-300/60 dark:border-amber-500/35",
+      NOT_RUN: "backdrop-blur-[40px] bg-slate-50/[0.15] dark:bg-slate-900/[0.15] text-slate-600 dark:text-slate-400 border border-slate-300/60 dark:border-slate-500/35"
+    };
     return (
-      <Badge className={`${config.bg} ${config.color} border-0`}>
+      <Badge className={badgeClasses[status] || badgeClasses.NOT_RUN}>
         <Icon className="w-3 h-3 mr-1" />
         {config.label}
       </Badge>
@@ -318,13 +324,15 @@ export default function Diagnostics() {
               </Button>
             ))}
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Current: <span className="font-mono">{location.pathname}</span></p>
+          <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)] rounded p-3 mt-3">
+            <p className="text-xs text-slate-600 dark:text-slate-300">Current: <span className="font-mono">{location.pathname}</span></p>
+          </div>
         </div>
 
         {/* Route Tests */}
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-slate-900">1. Route Existence Tests</h2>
+            <h2 className="text-xl font-semibold text-slate-900 dark:text-white">1. Route Existence Tests</h2>
             <Button onClick={runRouteTests} size="sm" variant="outline">
               Run Route Tests
             </Button>
@@ -455,19 +463,19 @@ export default function Diagnostics() {
         </div>
 
         {/* Navigation Log */}
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6">
+        <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] p-6">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Navigation Event Log</h2>
-          <div className="bg-slate-900 rounded p-4 text-slate-100 font-mono text-xs overflow-auto max-h-64">
+          <div className="backdrop-blur-[40px] bg-slate-900/[0.80] dark:bg-slate-950/[0.80] border border-slate-700/60 dark:border-slate-600/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] rounded p-4 text-slate-100 font-mono text-xs overflow-auto max-h-64">
             {navLog.length === 0 ? (
-              <p className="text-slate-400">No navigation events recorded yet</p>
+              <p className="text-slate-400 dark:text-slate-500">No navigation events recorded yet</p>
             ) : (
               navLog.map((event, idx) => (
                 <div key={idx} className="mb-1">
-                  <span className="text-slate-400">{event.timestamp}</span>
+                  <span className="text-slate-400 dark:text-slate-500">{event.timestamp}</span>
                   {" → "}
-                  <span className="text-emerald-400">{event.from || "(start)"}</span>
+                  <span className="text-emerald-400 dark:text-emerald-300">{event.from || "(start)"}</span>
                   {" → "}
-                  <span className="text-blue-400">{event.to}</span>
+                  <span className="text-blue-400 dark:text-blue-300">{event.to}</span>
                 </div>
               ))
             )}
