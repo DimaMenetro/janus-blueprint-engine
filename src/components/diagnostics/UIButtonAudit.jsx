@@ -79,7 +79,7 @@ export default function UIButtonAudit({ navigate }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white">5. UI Button Audit</h2>
-        <Button onClick={runAudit} variant="outline">
+        <Button onClick={runAudit} variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
           Run Button Audit
         </Button>
       </div>
