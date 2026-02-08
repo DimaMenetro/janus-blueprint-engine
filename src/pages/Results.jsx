@@ -96,11 +96,11 @@ export default function Results() {
               </h1>
               <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
                 <span>
-                  Mode: <span className="font-medium text-slate-800 dark:text-slate-100">{mode.label}</span>
+                   Mode: <span className="text-slate-800 dark:text-slate-100">{mode.label}</span>
                 </span>
                 <span>•</span>
                 <span>
-                  Output: <span className="font-medium text-slate-800 dark:text-slate-100">{run.output_mode}</span>
+                  Output: <span className="text-slate-800 dark:text-slate-100">{run.output_mode}</span>
                 </span>
                 {run.refresh_enabled && (
                   <>
