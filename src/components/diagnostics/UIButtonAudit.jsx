@@ -62,23 +62,23 @@ export default function UIButtonAudit({ navigate }) {
   };
 
   const getStatusIcon = (status) => {
-    if (status === "PASS") return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
-    if (status === "FAIL") return <XCircle className="w-4 h-4 text-red-600" />;
-    if (status === "MANUAL") return <Circle className="w-4 h-4 text-amber-600" />;
+    if (status === "PASS") return <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />;
+    if (status === "FAIL") return <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />;
+    if (status === "MANUAL") return <Circle className="w-4 h-4 text-amber-600 dark:text-amber-300" />;
     return <Circle className="w-4 h-4 text-slate-400" />;
   };
 
   const getStatusBadge = (status) => {
-    if (status === "PASS") return <Badge className="bg-emerald-50 text-emerald-700 border-0">PASS</Badge>;
-    if (status === "FAIL") return <Badge className="bg-red-50 text-red-700 border-0">FAIL</Badge>;
-    if (status === "MANUAL") return <Badge className="bg-amber-50 text-amber-700 border-0">MANUAL</Badge>;
-    return <Badge className="bg-slate-50 text-slate-500 border-0">NOT RUN</Badge>;
+    if (status === "PASS") return <Badge className="backdrop-blur-[40px] bg-emerald-50/[0.15] dark:bg-emerald-900/[0.15] text-emerald-600 dark:text-emerald-400 border border-emerald-300/60 dark:border-emerald-500/35">PASS</Badge>;
+    if (status === "FAIL") return <Badge className="backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] text-red-600 dark:text-red-400 border border-red-300/60 dark:border-red-500/35">FAIL</Badge>;
+    if (status === "MANUAL") return <Badge className="backdrop-blur-[40px] bg-amber-50/[0.15] dark:bg-amber-900/[0.15] text-amber-600 dark:text-amber-300 border border-amber-300/60 dark:border-amber-500/35">MANUAL</Badge>;
+    return <Badge className="backdrop-blur-[40px] bg-slate-50/[0.15] dark:bg-slate-900/[0.15] text-slate-600 dark:text-slate-400 border border-slate-300/60 dark:border-slate-500/35">NOT RUN</Badge>;
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-slate-900">5. UI Button Audit</h2>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">5. UI Button Audit</h2>
         <Button onClick={runAudit} variant="outline">
           Run Button Audit
         </Button>
@@ -87,25 +87,25 @@ export default function UIButtonAudit({ navigate }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-200">
-              <th className="text-left py-2 px-3 font-medium text-slate-600">Control</th>
-              <th className="text-left py-2 px-3 font-medium text-slate-600">Expected Action</th>
-              <th className="text-left py-2 px-3 font-medium text-slate-600">Result</th>
-              <th className="text-left py-2 px-3 font-medium text-slate-600">Notes</th>
-              <th className="text-left py-2 px-3 font-medium text-slate-600">Actions</th>
+            <tr className="border-b border-white/30 dark:border-white/20">
+              <th className="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-300">Control</th>
+              <th className="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-300">Expected Action</th>
+              <th className="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-300">Result</th>
+              <th className="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-300">Notes</th>
+              <th className="text-left py-2 px-3 font-medium text-slate-600 dark:text-slate-300">Actions</th>
             </tr>
           </thead>
           <tbody>
             {AUDIT_ITEMS.map(item => {
               const result = results[item.id];
               return (
-                <tr key={item.id} className="border-b border-slate-100">
-                  <td className="py-3 px-3 text-slate-700">{item.control}</td>
-                  <td className="py-3 px-3 text-slate-600">{item.action}</td>
+                <tr key={item.id} className="border-b border-white/20 dark:border-white/15">
+                  <td className="py-3 px-3 text-slate-700 dark:text-slate-200 font-medium">{item.control}</td>
+                  <td className="py-3 px-3 text-slate-600 dark:text-slate-300 font-medium">{item.action}</td>
                   <td className="py-3 px-3">
                     {getStatusBadge(result?.status)}
                   </td>
-                  <td className="py-3 px-3 text-xs text-slate-500">
+                  <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
                     {result?.notes || item.notes || "—"}
                   </td>
                   <td className="py-3 px-3">
@@ -125,7 +125,7 @@ export default function UIButtonAudit({ navigate }) {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                            className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                             onClick={() => markManual(item.id, true)}
                           >
                             ✓
@@ -133,7 +133,7 @@ export default function UIButtonAudit({ navigate }) {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20"
                             onClick={() => markManual(item.id, false)}
                           >
                             ✗
@@ -149,7 +149,7 @@ export default function UIButtonAudit({ navigate }) {
         </table>
       </div>
       
-      <div className="mt-4 p-3 bg-slate-50 rounded text-xs text-slate-600">
+      <div className="mt-4 p-3 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded text-xs text-slate-600 dark:text-slate-300 font-medium">
         <p><strong>Instructions:</strong> Click "Run Button Audit" to test automatic routes. For manual items, click "Go" to navigate, test the control, then mark ✓ (pass) or ✗ (fail).</p>
       </div>
     </div>

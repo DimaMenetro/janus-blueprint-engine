@@ -615,8 +615,8 @@ export default function NewQuery() {
 
         {errorMessage && (
           <div className="mt-6 backdrop-blur-[40px] bg-red-100/[0.10] dark:bg-red-900/[0.10] border border-red-300/60 dark:border-red-500/35 rounded-2xl p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
-            <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Validation Failed</h3>
-            <pre className="text-sm font-medium text-red-800 dark:text-red-200 whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.10] dark:bg-red-950/[0.10] border border-red-300/60 dark:border-red-500/35 p-4 rounded-lg overflow-auto max-h-96">
+            <h3 className="text-red-600 dark:text-red-400 font-semibold mb-2">Validation Failed</h3>
+            <pre className="text-sm font-medium text-red-600 dark:text-red-400 whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.10] dark:bg-red-950/[0.10] border border-red-300/60 dark:border-red-500/35 p-4 rounded-lg overflow-auto max-h-96">
               {errorMessage}
             </pre>
           </div>

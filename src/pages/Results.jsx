@@ -116,7 +116,7 @@ export default function Results() {
         {hasFailed && run.validation_errors && (
           <div className="backdrop-blur-[40px] bg-red-100/[0.10] dark:bg-red-900/[0.10] border border-red-300/60 dark:border-red-500/35 rounded-2xl p-6 mb-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
             <div className="flex items-start gap-3 mb-3">
-              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
               <div>
                 <h3 className="text-red-600 dark:text-red-400 font-semibold mb-2">Validation Failed</h3>
                 <p className="text-sm text-red-600 dark:text-red-400 mb-3">
@@ -147,7 +147,7 @@ export default function Results() {
         {hasFailed && !run.validation_errors && run.error_message && (
           <div className="backdrop-blur-[40px] bg-red-100/[0.10] dark:bg-red-900/[0.10] border border-red-300/60 dark:border-red-500/35 rounded-2xl p-6 mb-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
               <div>
                 <h3 className="text-red-600 dark:text-red-400 font-semibold mb-2">Execution Failed</h3>
                 <pre className="text-sm text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-950/[0.15] border border-red-300/30 p-4 rounded-lg overflow-auto max-h-96">
