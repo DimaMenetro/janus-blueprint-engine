@@ -48,15 +48,25 @@ export default function Diagnostics() {
     setNavLog(navigationLogger.getRecent(10));
   }, [location.pathname]);
 
-  const runRouteTests = () => {
+  const runRouteTests = async () => {
     const results = {};
-    ROUTES.forEach(route => {
+    const originalPath = location.pathname;
+    
+    for (const route of ROUTES) {
       try {
-        // Basic check - routes are handled by React Router
-        // We can't easily test navigation without actually navigating
+        // Actually test navigation
+        navigate(route.path);
+        
+        // Wait a bit for navigation
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Check if we're at the expected path
+        const currentPath = window.location.pathname;
+        const success = currentPath === route.path || (route.path === "/" && currentPath === "/new-query");
+        
         results[route.path] = {
-          status: "PASS",
-          details: "Route registered in application"
+          status: success ? "PASS" : "FAIL",
+          details: success ? `Navigated successfully to ${currentPath}` : `Expected ${route.path}, got ${currentPath}`
         };
       } catch (e) {
         results[route.path] = {
@@ -64,7 +74,10 @@ export default function Diagnostics() {
           details: e.message
         };
       }
-    });
+    }
+    
+    // Return to diagnostics
+    navigate("/diagnostics");
     setRouteTests(results);
   };
 
