@@ -472,10 +472,10 @@ export default function NewQuery() {
           )}
         </div>
 
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 p-6 shadow-2xl">
+        <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 rounded-2xl border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] p-6">
           <div className="space-y-6">
             <div>
-              <Label htmlFor="query" className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-2 block">
+              <Label htmlFor="query" className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2 block">
                 Query
               </Label>
               <Textarea
@@ -483,12 +483,12 @@ export default function NewQuery() {
                 placeholder="Enter your natural-language query..."
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
-                className="min-h-[160px] text-base resize-none backdrop-blur-sm bg-white/20 dark:bg-black/30 border-white/30 dark:border-white/20 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                className="min-h-[160px] text-base font-medium resize-none backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
               />
             </div>
 
             <div>
-              <Label className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-3 block">
+              <Label className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3 block">
                 Execution Mode
               </Label>
               <div className="space-y-3">
@@ -497,10 +497,10 @@ export default function NewQuery() {
                     key={mode.id} 
                     onClick={() => setExecutionMode(mode.id)}
                     className={cn(
-                      "flex items-center space-x-3 backdrop-blur-md rounded-xl p-3 cursor-pointer transition-all",
+                      "flex items-center space-x-3 backdrop-blur-[30px] rounded-xl p-3 cursor-pointer transition-all",
                       executionMode === mode.id
-                        ? "bg-blue-500/30 dark:bg-purple-500/30 border-2 border-blue-500 dark:border-purple-400"
-                        : "bg-white/20 dark:bg-white/10 border border-white/30 dark:border-white/20 hover:bg-white/35 dark:hover:bg-white/20"
+                        ? "bg-blue-500/[0.15] dark:bg-purple-500/[0.20] border-2 border-blue-500 dark:border-purple-400 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]"
+                        : "bg-white/[0.15] dark:bg-[#141414]/20 border border-white/15 hover:bg-white/[0.20] dark:hover:bg-white/[0.15] shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]"
                     )}
                   >
                     <div className={cn(
@@ -514,7 +514,7 @@ export default function NewQuery() {
                       )}
                     </div>
                     <div className="flex-1">
-                      <div className="font-medium text-slate-900 dark:text-white">{mode.label}</div>
+                      <div className="font-semibold text-slate-900 dark:text-white">{mode.label}</div>
                       <div className="text-xs text-slate-600 dark:text-slate-400">{mode.description}</div>
                     </div>
                   </div>
@@ -524,7 +524,7 @@ export default function NewQuery() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <Label htmlFor="output-mode" className="text-sm font-medium text-slate-700 mb-2 block">
+                <Label htmlFor="output-mode" className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 block">
                   Output Mode
                 </Label>
                 <Select value={outputMode} onValueChange={setOutputMode}>
@@ -541,7 +541,7 @@ export default function NewQuery() {
               </div>
 
               <div>
-                <Label htmlFor="blueprint-level" className="text-sm font-medium text-slate-700 mb-2 block">
+                <Label htmlFor="blueprint-level" className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 block">
                   Blueprint Level
                 </Label>
                 <Select value={blueprintLevel} onValueChange={setBlueprintLevel}>
@@ -557,7 +557,7 @@ export default function NewQuery() {
               </div>
 
               <div>
-                <Label htmlFor="novelty-dial" className="text-sm font-medium text-slate-700 mb-2 block">
+                <Label htmlFor="novelty-dial" className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 block">
                   Novelty Level
                 </Label>
                 <Select value={noveltyDial} onValueChange={setNoveltyDial}>
@@ -574,7 +574,7 @@ export default function NewQuery() {
 
               {showRefreshToggle && (
                 <div>
-                  <Label className="text-sm font-medium text-slate-700 mb-2 block">
+                  <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2 block">
                     External Refresh
                   </Label>
                   <div className="flex items-center justify-between h-10 px-3 border border-slate-200 rounded-md bg-slate-50">
@@ -614,9 +614,9 @@ export default function NewQuery() {
         </div>
 
         {errorMessage && (
-          <div className="mt-6 backdrop-blur-xl bg-red-100/60 dark:bg-red-900/40 border border-red-300/50 dark:border-red-500/30 rounded-2xl p-6 shadow-xl">
+          <div className="mt-6 backdrop-blur-[30px] bg-red-100/[0.15] dark:bg-red-900/[0.20] border border-red-300/15 dark:border-red-500/15 rounded-2xl p-6 shadow-[inset_0_0_10px_rgba(255,0,0,0.05)]">
             <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Validation Failed</h3>
-            <pre className="text-sm text-red-800 dark:text-red-200 whitespace-pre-wrap font-mono bg-red-50/60 dark:bg-red-950/40 p-4 rounded-lg overflow-auto max-h-96">
+            <pre className="text-sm font-medium text-red-800 dark:text-red-200 whitespace-pre-wrap font-mono backdrop-blur-[30px] bg-red-50/[0.15] dark:bg-red-950/[0.20] border border-red-300/15 p-4 rounded-lg overflow-auto max-h-96">
               {errorMessage}
             </pre>
           </div>

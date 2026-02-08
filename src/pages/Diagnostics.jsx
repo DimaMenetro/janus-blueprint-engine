@@ -279,7 +279,7 @@ export default function Diagnostics() {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">System Diagnostics</h1>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 font-semibold">System Diagnostics</h1>
             <p className="text-slate-600 dark:text-slate-300">CP-002 v1.5 - Test Suite & Validation</p>
           </div>
           <div className="flex gap-3">
@@ -295,7 +295,7 @@ export default function Diagnostics() {
         </div>
 
         {/* Regression Test */}
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+        <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 rounded-2xl border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] p-6 mb-6">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Regression Test - Navigation</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {ROUTES.map(route => (
@@ -322,7 +322,7 @@ export default function Diagnostics() {
         </div>
 
         {/* Route Tests */}
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+        <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 rounded-2xl border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-900">1. Route Existence Tests</h2>
             <Button onClick={runRouteTests} size="sm" variant="outline">
@@ -369,7 +369,7 @@ export default function Diagnostics() {
         </div>
 
         {/* Dependency Test */}
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+        <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 rounded-2xl border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-900 dark:text-white">2. Dependency / Module Smoke Test</h2>
             <Button onClick={runDependencyTest} size="sm" variant="outline">
@@ -383,7 +383,7 @@ export default function Diagnostics() {
         </div>
 
         {/* Export Pipeline Test */}
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+        <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 rounded-2xl border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] p-6 mb-6">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">3. Export Pipeline Test</h2>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
@@ -408,7 +408,7 @@ export default function Diagnostics() {
               <p className="text-sm text-slate-600 dark:text-slate-300">{exportTest.details || "Not run yet"}</p>
             </div>
             {dummyRun && (
-              <div className="bg-slate-50 dark:bg-slate-800 rounded p-3 mt-3">
+              <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 border border-white/15 rounded p-3 mt-3">
                 <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">Preview:</p>
                 <pre className="text-xs text-slate-700 dark:text-slate-300 overflow-auto max-h-32">
                   {JSON.stringify(dummyRun, null, 2).substring(0, 500)}...
@@ -419,7 +419,7 @@ export default function Diagnostics() {
         </div>
 
         {/* Regression Test */}
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+        <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 rounded-2xl border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] p-6 mb-6">
           <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">
             4. History Regression Test (Manual Navigation)
           </h2>
@@ -430,7 +430,7 @@ export default function Diagnostics() {
             {regressionSteps.length > 0 && (
               <div className="space-y-2 mt-4">
                 {regressionSteps.map(step => (
-                  <div key={step.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded">
+                  <div key={step.id} className="flex items-center gap-3 p-3 backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 border border-white/15 rounded">
                     <StatusBadge status={step.completed ? "PASS" : "NOT_RUN"} />
                     <span className="text-sm text-slate-700 dark:text-slate-300 flex-1">{step.label}</span>
                     {!step.completed && (
@@ -450,7 +450,7 @@ export default function Diagnostics() {
         </div>
 
         {/* UI Button Audit */}
-        <div className="backdrop-blur-xl bg-white/30 dark:bg-black/40 rounded-2xl border border-white/20 dark:border-white/10 shadow-2xl p-6 mb-6">
+        <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 rounded-2xl border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] p-6 mb-6">
           <UIButtonAudit navigate={navigate} />
         </div>
 
