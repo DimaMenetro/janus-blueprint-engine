@@ -98,7 +98,7 @@ export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
         </div>
         {rawJson && (
           <div className="mt-4 max-h-48 overflow-auto">
-            <pre className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/40 rounded-lg p-3 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+            <pre className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/60 dark:border-white/35 rounded-lg p-3 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
               {rawJson.substring(0, 500)}
               {rawJson.length > 500 && "..."}
             </pre>
@@ -137,7 +137,7 @@ export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
         </div>
         {renderMd && (
           <div className="mt-4 max-h-48 overflow-auto">
-            <pre className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/40 rounded-lg p-3 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+            <pre className="backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/60 dark:border-white/35 rounded-lg p-3 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
               {renderMd.substring(0, 500)}
               {renderMd.length > 500 && "..."}
             </pre>
