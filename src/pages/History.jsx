@@ -36,7 +36,7 @@ export default function History() {
           </div>
           <div className="flex gap-2">
             <Link to="/diagnostics">
-              <Button variant="outline">
+              <Button variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
                 <Wrench className="w-4 h-4 mr-2" />
                 Diagnostics
               </Button>

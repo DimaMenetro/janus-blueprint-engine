@@ -11,12 +11,12 @@ export default function SynthesisTab({ data }) {
           <div className="flex items-center gap-2 mb-4">
             <Layers className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             <h4 className="font-semibold text-slate-900 dark:text-white">Key Takeaways</h4>
-            <Badge variant="secondary" className="ml-auto">{data.key_takeaways.length}</Badge>
+            <span className="ml-auto px-2 py-0.5 rounded text-xs font-medium backdrop-blur-[40px] bg-slate-800/[0.80] dark:bg-slate-200/[0.80] text-white dark:text-slate-900 border border-slate-700/60 dark:border-slate-300/60">{data.key_takeaways.length}</span>
           </div>
           <ul className="space-y-3">
             {data.key_takeaways.map((takeaway, idx) => (
               <li key={idx} className="flex items-start gap-3 text-sm">
-                <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center shrink-0 text-xs font-medium">
+                <span className="w-6 h-6 rounded-full backdrop-blur-[40px] bg-slate-800/[0.80] dark:bg-slate-200/[0.80] text-white dark:text-slate-900 border border-slate-700/60 dark:border-slate-300/60 flex items-center justify-center shrink-0 text-xs font-medium">
                   {idx + 1}
                 </span>
                 <span className="text-slate-700 dark:text-slate-200 pt-0.5">{takeaway}</span>

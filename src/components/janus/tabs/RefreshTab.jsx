@@ -7,12 +7,16 @@ export default function RefreshTab({ data }) {
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-4">
-        <Badge variant={data.attempted ? "default" : "secondary"} className="text-sm">
+        <span className={`px-2 py-1 rounded text-sm font-medium backdrop-blur-[40px] bg-slate-800/[0.80] dark:bg-slate-200/[0.80] text-white dark:text-slate-900 border border-slate-700/60 dark:border-slate-300/60`}>
           Mode: {data.mode || "Tier 0"}
-        </Badge>
-        <Badge variant={data.attempted ? "default" : "outline"} className="text-sm">
+        </span>
+        <span className={`px-2 py-1 rounded text-sm font-medium ${
+          data.attempted 
+            ? "backdrop-blur-[40px] bg-blue-50/[0.15] dark:bg-blue-900/[0.15] text-blue-700 dark:text-blue-400 border border-blue-300/60 dark:border-blue-500/35"
+            : "backdrop-blur-[40px] bg-slate-50/[0.15] dark:bg-slate-900/[0.15] text-slate-700 dark:text-slate-300 border border-slate-300/60 dark:border-slate-500/35"
+        }`}>
           {data.attempted ? "Refresh Attempted" : "No External Refresh"}
-        </Badge>
+        </span>
       </div>
 
       {data.limitations && (
@@ -32,7 +36,7 @@ export default function RefreshTab({ data }) {
           <div className="flex items-start gap-3">
             <List className="w-5 h-5 text-slate-600 dark:text-slate-300 mt-0.5 shrink-0" />
             <div className="flex-1">
-              <h4 className="font-medium text-slate-900 mb-3">Would Verify (if tools available)</h4>
+              <h4 className="font-medium text-slate-900 dark:text-white mb-3">Would Verify (if tools available)</h4>
               <ul className="space-y-2">
                 {data.would_refresh.map((item, idx) => (
                   <li key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
