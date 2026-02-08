@@ -10,7 +10,7 @@ export default function SynthesisTab({ data }) {
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <Layers className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-            <h4 className="font-medium text-slate-900">Key Takeaways</h4>
+            <h4 className="font-semibold text-slate-900 dark:text-white">Key Takeaways</h4>
             <Badge variant="secondary" className="ml-auto">{data.key_takeaways.length}</Badge>
           </div>
           <ul className="space-y-3">
@@ -30,7 +30,7 @@ export default function SynthesisTab({ data }) {
         <div className="backdrop-blur-[40px] bg-amber-50/[0.15] dark:bg-amber-900/[0.15] border border-amber-300/60 dark:border-amber-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-            <h4 className="font-medium text-amber-900">Constraint Collisions</h4>
+            <h4 className="font-semibold text-amber-900 dark:text-amber-200">Constraint Collisions</h4>
           </div>
           <ul className="space-y-2">
             {data.constraint_collisions.map((collision, idx) => (
@@ -47,7 +47,7 @@ export default function SynthesisTab({ data }) {
           <div className="flex items-start gap-3">
             <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
             <div>
-              <h4 className="font-medium text-blue-900 mb-1">Limitation Foreground</h4>
+              <h4 className="font-semibold text-blue-900 dark:text-blue-200 mb-1">Limitation Foreground</h4>
               <p className="text-blue-800 dark:text-blue-200 text-sm font-medium">{data.limitation_foreground}</p>
             </div>
           </div>

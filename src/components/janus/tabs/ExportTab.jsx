@@ -33,7 +33,7 @@ export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-6 font-medium">
       {isAdmin && fullPrompt && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
           <div className="flex items-center gap-3 mb-4">

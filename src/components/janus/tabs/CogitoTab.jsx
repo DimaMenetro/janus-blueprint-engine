@@ -16,7 +16,7 @@ export default function CogitoTab({ data }) {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <Brain className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-            <h4 className="font-medium text-slate-900">Claims (with Evidence Discipline)</h4>
+            <h4 className="font-semibold text-slate-900 dark:text-white">Claims (with Evidence Discipline)</h4>
             <Badge variant="secondary" className="ml-auto">{data.claims.length}</Badge>
           </div>
           <div className="space-y-4">
@@ -76,7 +76,7 @@ export default function CogitoTab({ data }) {
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <Map className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-            <h4 className="font-medium text-slate-900">Reasoning Map</h4>
+            <h4 className="font-semibold text-slate-900 dark:text-white">Reasoning Map</h4>
           </div>
           <ul className="space-y-2">
             {data.reasoning_map.map((item, idx) => (

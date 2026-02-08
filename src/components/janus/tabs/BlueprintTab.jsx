@@ -35,7 +35,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <Lightbulb className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-            <h4 className="font-medium text-slate-900">Assumptions</h4>
+            <h4 className="font-semibold text-slate-900 dark:text-white">Assumptions</h4>
           </div>
           <ul className="space-y-2">
             {data.assumptions.map((assumption, idx) => (
@@ -52,7 +52,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
         <div className="backdrop-blur-[40px] bg-purple-50/[0.15] dark:bg-purple-900/[0.15] border border-purple-300/60 dark:border-purple-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            <h4 className="font-medium text-purple-900">Alternative Approaches Considered</h4>
+            <h4 className="font-semibold text-purple-900 dark:text-purple-200">Alternative Approaches Considered</h4>
           </div>
           <div className="space-y-3">
             {data.alternative_approaches.map((approach, idx) => (
@@ -91,7 +91,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
 
       {data.steps && data.steps.length > 0 && (
         <div>
-          <h4 className="font-semibold text-slate-900 mb-4">Implementation Steps</h4>
+          <h4 className="font-semibold text-slate-900 dark:text-white mb-4">Implementation Steps</h4>
           <div className="space-y-4">
             {data.steps.map((step) => (
               <Card key={step.step} className="p-5 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)]">
@@ -101,7 +101,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                       {step.step}
                     </div>
                     <div>
-                      <h5 className="font-semibold text-slate-900">{step.title}</h5>
+                      <h5 className="font-semibold text-slate-900 dark:text-white">{step.title}</h5>
                       {(level === "L2" || level === "L3") && (
                         <div className="flex items-center gap-3 mt-1">
                           {step.time_estimate && (
@@ -126,7 +126,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                   )}
                 </div>
 
-                <p className="text-slate-700 text-sm mb-3 pl-11">{step.instructions}</p>
+                <p className="text-slate-700 dark:text-slate-200 text-sm font-medium mb-3 pl-11">{step.instructions}</p>
 
                 {(level === "L2" || level === "L3") && step.substeps && step.substeps.length > 0 && (
                   <div className="pl-11 mb-3">
@@ -213,7 +213,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
         <div className="backdrop-blur-[40px] bg-emerald-50/[0.15] dark:bg-emerald-900/[0.15] border border-emerald-300/60 dark:border-emerald-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            <h4 className="font-medium text-emerald-900">Success Criteria</h4>
+            <h4 className="font-semibold text-emerald-900 dark:text-emerald-200">Success Criteria</h4>
           </div>
           <ul className="space-y-2">
             {data.success_criteria.map((criterion, idx) => (
@@ -230,7 +230,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300" />
-            <h4 className="font-medium text-slate-900">Risk Register</h4>
+            <h4 className="font-semibold text-slate-900 dark:text-white">Risk Register</h4>
           </div>
           <div className="space-y-3">
             {data.risk_register.map((risk, idx) => (
