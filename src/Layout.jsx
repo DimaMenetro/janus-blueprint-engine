@@ -37,8 +37,8 @@ export default function Layout({ children }) {
   return (
     <ThemeProvider>
       <div className="min-h-screen bg-gradient-to-br from-blue-100 via-pink-50 to-blue-50 dark:from-purple-950 dark:via-red-950 dark:to-purple-900 transition-colors duration-500">
-        {/* Liquid Glass Navigation - Ultra Thin */}
-        <nav className="sticky top-0 z-50 backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 border-b border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]">
+        {/* Liquid Glass Navigation - Rim Light */}
+        <nav className="sticky top-0 z-50 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border-b border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
           <div className="max-w-6xl mx-auto px-6">
             <div className="flex items-center justify-between h-14">
               <Link to="/new-query" className="flex items-center gap-2">
@@ -56,8 +56,8 @@ export default function Layout({ children }) {
                       className={cn(
                         "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                         isActive(path)
-                          ? "backdrop-blur-[30px] bg-blue-500/[0.15] dark:bg-purple-500/[0.20] text-blue-700 dark:text-purple-200 border border-white/15 font-medium"
-                          : "text-slate-700 dark:text-slate-300 hover:backdrop-blur-[30px] hover:bg-white/[0.15] dark:hover:bg-white/[0.10] font-medium"
+                          ? "backdrop-blur-[40px] bg-blue-500/[0.15] dark:bg-purple-500/[0.20] text-blue-700 dark:text-purple-200 border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)] font-medium"
+                          : "text-slate-700 dark:text-slate-300 hover:backdrop-blur-[40px] hover:bg-white/[0.10] dark:hover:bg-white/[0.05] hover:border hover:border-white/40 dark:hover:border-white/25 font-medium"
                       )}
                     >
                       <Icon className="w-4 h-4" />

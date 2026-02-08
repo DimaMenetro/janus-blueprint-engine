@@ -472,7 +472,7 @@ export default function NewQuery() {
           )}
         </div>
 
-        <div className="backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 rounded-2xl border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] p-6">
+        <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] p-6">
           <div className="space-y-6">
             <div>
               <Label htmlFor="query" className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2 block">
@@ -483,7 +483,7 @@ export default function NewQuery() {
                 placeholder="Enter your natural-language query..."
                 value={queryText}
                 onChange={(e) => setQueryText(e.target.value)}
-                className="min-h-[160px] text-base font-medium resize-none backdrop-blur-[30px] bg-white/[0.15] dark:bg-[#141414]/20 border border-white/15 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)] text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
+                className="min-h-[160px] text-base font-medium resize-none backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
               />
             </div>
 
@@ -497,10 +497,10 @@ export default function NewQuery() {
                     key={mode.id} 
                     onClick={() => setExecutionMode(mode.id)}
                     className={cn(
-                      "flex items-center space-x-3 backdrop-blur-[30px] rounded-xl p-3 cursor-pointer transition-all",
+                      "flex items-center space-x-3 backdrop-blur-[40px] rounded-xl p-3 cursor-pointer transition-all",
                       executionMode === mode.id
-                        ? "bg-blue-500/[0.15] dark:bg-purple-500/[0.20] border-2 border-blue-500 dark:border-purple-400 shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]"
-                        : "bg-white/[0.15] dark:bg-[#141414]/20 border border-white/15 hover:bg-white/[0.20] dark:hover:bg-white/[0.15] shadow-[inset_0_0_10px_rgba(255,255,255,0.05)]"
+                        ? "bg-blue-500/[0.15] dark:bg-purple-500/[0.20] border-2 border-blue-500 dark:border-purple-400 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]"
+                        : "bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 hover:bg-white/[0.15] dark:hover:bg-white/[0.08] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]"
                     )}
                   >
                     <div className={cn(
@@ -614,9 +614,9 @@ export default function NewQuery() {
         </div>
 
         {errorMessage && (
-          <div className="mt-6 backdrop-blur-[30px] bg-red-100/[0.15] dark:bg-red-900/[0.20] border border-red-300/15 dark:border-red-500/15 rounded-2xl p-6 shadow-[inset_0_0_10px_rgba(255,0,0,0.05)]">
+          <div className="mt-6 backdrop-blur-[40px] bg-red-100/[0.10] dark:bg-red-900/[0.10] border border-red-300/60 dark:border-red-500/35 rounded-2xl p-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
             <h3 className="text-red-900 dark:text-red-200 font-semibold mb-2">Validation Failed</h3>
-            <pre className="text-sm font-medium text-red-800 dark:text-red-200 whitespace-pre-wrap font-mono backdrop-blur-[30px] bg-red-50/[0.15] dark:bg-red-950/[0.20] border border-red-300/15 p-4 rounded-lg overflow-auto max-h-96">
+            <pre className="text-sm font-medium text-red-800 dark:text-red-200 whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.10] dark:bg-red-950/[0.10] border border-red-300/60 dark:border-red-500/35 p-4 rounded-lg overflow-auto max-h-96">
               {errorMessage}
             </pre>
           </div>
