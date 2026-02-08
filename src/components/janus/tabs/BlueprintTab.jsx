@@ -126,7 +126,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                   )}
                 </div>
 
-                <p className="text-slate-700 dark:text-slate-200 text-sm font-medium mb-3 pl-11">{step.instructions}</p>
+                <p className="text-slate-700 dark:text-slate-200 text-sm mb-3 pl-11">{step.instructions}</p>
 
                 {(level === "L2" || level === "L3") && step.substeps && step.substeps.length > 0 && (
                   <div className="pl-11 mb-3">

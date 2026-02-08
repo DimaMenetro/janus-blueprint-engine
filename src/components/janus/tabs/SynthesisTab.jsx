@@ -19,7 +19,7 @@ export default function SynthesisTab({ data }) {
                 <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center shrink-0 text-xs font-medium">
                   {idx + 1}
                 </span>
-                <span className="text-slate-700 dark:text-slate-200 font-medium pt-0.5">{takeaway}</span>
+                <span className="text-slate-700 dark:text-slate-200 pt-0.5">{takeaway}</span>
               </li>
             ))}
           </ul>
@@ -34,7 +34,7 @@ export default function SynthesisTab({ data }) {
           </div>
           <ul className="space-y-2">
             {data.constraint_collisions.map((collision, idx) => (
-              <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 font-medium pl-4 border-l-2 border-amber-300 dark:border-amber-600">
+              <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 pl-4 border-l-2 border-amber-300 dark:border-amber-600">
                 {collision}
               </li>
             ))}
@@ -48,7 +48,7 @@ export default function SynthesisTab({ data }) {
             <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
             <div>
               <h4 className="font-semibold text-blue-900 dark:text-blue-200 mb-1">Limitation Foreground</h4>
-              <p className="text-blue-800 dark:text-blue-200 text-sm font-medium">{data.limitation_foreground}</p>
+              <p className="text-blue-800 dark:text-blue-200 text-sm">{data.limitation_foreground}</p>
             </div>
           </div>
         </div>

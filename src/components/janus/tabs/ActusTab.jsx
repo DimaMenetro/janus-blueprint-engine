@@ -41,7 +41,7 @@ export default function ActusTab({ data }) {
                   </div>
                 </div>
                 
-                <p className="text-slate-700 dark:text-slate-200 text-sm font-medium mb-3">{rec.text}</p>
+                <p className="text-slate-700 dark:text-slate-200 text-sm mb-3">{rec.text}</p>
 
                 {rec.depends_on_claims && rec.depends_on_claims.length > 0 && (
                   <div className="flex items-center gap-2 mb-3">

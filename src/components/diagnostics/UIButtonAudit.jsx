@@ -100,12 +100,12 @@ export default function UIButtonAudit({ navigate }) {
               const result = results[item.id];
               return (
                 <tr key={item.id} className="border-b border-white/20 dark:border-white/15">
-                  <td className="py-3 px-3 text-slate-700 dark:text-slate-200 font-medium">{item.control}</td>
-                  <td className="py-3 px-3 text-slate-600 dark:text-slate-300 font-medium">{item.action}</td>
+                  <td className="py-3 px-3 text-slate-700 dark:text-slate-200">{item.control}</td>
+                  <td className="py-3 px-3 text-slate-600 dark:text-slate-300">{item.action}</td>
                   <td className="py-3 px-3">
                     {getStatusBadge(result?.status)}
                   </td>
-                  <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  <td className="py-3 px-3 text-xs text-slate-500 dark:text-slate-400">
                     {result?.notes || item.notes || "—"}
                   </td>
                   <td className="py-3 px-3">
@@ -149,7 +149,7 @@ export default function UIButtonAudit({ navigate }) {
         </table>
       </div>
       
-      <div className="mt-4 p-3 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded text-xs text-slate-600 dark:text-slate-300 font-medium">
+      <div className="mt-4 p-3 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded text-xs text-slate-600 dark:text-slate-300">
         <p><strong>Instructions:</strong> Click "Run Button Audit" to test automatic routes. For manual items, click "Go" to navigate, test the control, then mark ✓ (pass) or ✗ (fail).</p>
       </div>
     </div>

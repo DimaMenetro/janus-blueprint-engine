@@ -17,7 +17,7 @@ export default function AnimusTab({ data }) {
             {data.boundary_checks.map((check, idx) => (
               <li key={idx} className="flex items-start gap-3 text-sm">
                 <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400 mt-1.5 shrink-0" />
-                <span className="text-slate-700 dark:text-slate-200 font-medium">{check}</span>
+                <span className="text-slate-700 dark:text-slate-200">{check}</span>
               </li>
             ))}
           </ul>
@@ -35,7 +35,7 @@ export default function AnimusTab({ data }) {
             {data.disallowed_moves.map((move, idx) => (
               <li key={idx} className="flex items-start gap-3 text-sm">
                 <span className="w-2 h-2 rounded-full bg-red-600 dark:bg-red-400 mt-1.5 shrink-0" />
-                <span className="text-red-800 dark:text-red-200 font-medium">{move}</span>
+                <span className="text-red-800 dark:text-red-200">{move}</span>
               </li>
             ))}
           </ul>
@@ -50,7 +50,7 @@ export default function AnimusTab({ data }) {
           </div>
           <ul className="space-y-2">
             {data.safety_notes.map((note, idx) => (
-              <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 font-medium pl-4 border-l-2 border-amber-300 dark:border-amber-600">
+              <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 pl-4 border-l-2 border-amber-300 dark:border-amber-600">
                 {note}
               </li>
             ))}

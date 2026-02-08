@@ -21,7 +21,7 @@ export default function RefreshTab({ data }) {
             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300 mt-0.5 shrink-0" />
             <div>
               <h4 className="font-medium text-amber-900 dark:text-amber-200 mb-1">Limitations</h4>
-              <p className="text-amber-800 dark:text-amber-200 text-sm font-medium">{data.limitations}</p>
+              <p className="text-amber-800 dark:text-amber-200 text-sm">{data.limitations}</p>
             </div>
           </div>
         </div>
@@ -35,7 +35,7 @@ export default function RefreshTab({ data }) {
               <h4 className="font-medium text-slate-900 mb-3">Would Verify (if tools available)</h4>
               <ul className="space-y-2">
                 {data.would_refresh.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-medium">
+                  <li key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
                     <CheckCircle className="w-4 h-4 text-slate-400 dark:text-slate-500 mt-0.5 shrink-0" />
                     <span>{item}</span>
                   </li>

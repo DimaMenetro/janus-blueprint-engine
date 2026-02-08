@@ -19,7 +19,7 @@ export default function CorpusTab({ data }) {
                 <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 text-xs font-medium">
                   {idx + 1}
                 </span>
-                <span className="text-slate-700 dark:text-slate-200 font-medium pt-0.5">{constraint}</span>
+                <span className="text-slate-700 dark:text-slate-200 pt-0.5">{constraint}</span>
               </li>
             ))}
           </ul>
@@ -34,7 +34,7 @@ export default function CorpusTab({ data }) {
           </div>
           <ul className="space-y-2">
             {data.feasibility_notes.map((note, idx) => (
-              <li key={idx} className="text-sm text-blue-800 dark:text-blue-200 font-medium pl-4 border-l-2 border-blue-300 dark:border-blue-600">
+              <li key={idx} className="text-sm text-blue-800 dark:text-blue-200 pl-4 border-l-2 border-blue-300 dark:border-blue-600">
                 {note}
               </li>
             ))}

@@ -30,7 +30,7 @@ export default function CogitoTab({ data }) {
                     </Badge>
                   </div>
                 </div>
-                <p className="text-slate-700 dark:text-slate-200 text-sm font-medium mb-3">{claim.text}</p>
+                <p className="text-slate-700 dark:text-slate-200 text-sm mb-3">{claim.text}</p>
                 
                 {claim.depends_on && claim.depends_on.length > 0 && (
                   <div className="flex items-center gap-2 mb-3 pb-3 border-b border-white/30 dark:border-white/20">
@@ -49,19 +49,19 @@ export default function CogitoTab({ data }) {
                     {claim.why_believed && (
                       <div className="text-xs">
                         <span className="font-medium text-emerald-600 dark:text-emerald-400">Why Believed:</span>
-                        <p className="text-slate-600 dark:text-slate-300 font-medium mt-1">{claim.why_believed}</p>
+                        <p className="text-slate-600 dark:text-slate-300 mt-1">{claim.why_believed}</p>
                       </div>
                     )}
                     {claim.falsifiable_by && (
                       <div className="text-xs">
                         <span className="font-medium text-red-600 dark:text-red-400">Falsifiable By:</span>
-                        <p className="text-slate-600 dark:text-slate-300 font-medium mt-1">{claim.falsifiable_by}</p>
+                        <p className="text-slate-600 dark:text-slate-300 mt-1">{claim.falsifiable_by}</p>
                       </div>
                     )}
                     {claim.verify_later && (
                       <div className="text-xs">
                         <span className="font-medium text-amber-600 dark:text-amber-300">Verify Later:</span>
-                        <p className="text-slate-600 dark:text-slate-300 font-medium mt-1">{claim.verify_later}</p>
+                        <p className="text-slate-600 dark:text-slate-300 mt-1">{claim.verify_later}</p>
                       </div>
                     )}
                   </div>
@@ -80,7 +80,7 @@ export default function CogitoTab({ data }) {
           </div>
           <ul className="space-y-2">
             {data.reasoning_map.map((item, idx) => (
-              <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 font-medium pl-4 border-l-2 border-slate-300 dark:border-slate-600">
+              <li key={idx} className="text-sm text-slate-700 dark:text-slate-200 pl-4 border-l-2 border-slate-300 dark:border-slate-600">
                 {item}
               </li>
             ))}
