@@ -1,5 +1,4 @@
-import { Badge } from "@/components/ui/badge";
-import { Brain, Link, Map } from "lucide-react";
+import { Brain, Link, Map, Network, GitBranch, Lightbulb } from "lucide-react";
 
 const tagColors = {
   Established: "backdrop-blur-[40px] bg-emerald-50/[0.15] dark:bg-emerald-900/[0.15] text-emerald-700 dark:text-emerald-400 border border-emerald-300/60 dark:border-emerald-500/35",
@@ -87,6 +86,63 @@ export default function CogitoTab({ data }) {
           </ul>
         </div>
       )}
+
+      {/* v2.0 — GraphRAG Cross-Space Connections */}
+      {data.graphrag_connections && data.graphrag_connections.length > 0 && (
+        <div className="backdrop-blur-[40px] bg-cyan-50/[0.15] dark:bg-cyan-900/[0.15] border border-cyan-300/60 dark:border-cyan-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Network className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+            <h4 className="font-semibold text-cyan-900 dark:text-cyan-200">GraphRAG — Semantic Cross-Space Leaps (2.4)</h4>
+          </div>
+          <p className="text-xs text-cyan-700 dark:text-cyan-400 mb-3 opacity-70">Non-obvious connections discovered by traversing latency-space between knowledge nodes.</p>
+          <ul className="space-y-2">
+            {data.graphrag_connections.map((conn, idx) => (
+              <li key={idx} className="text-sm text-cyan-800 dark:text-cyan-200 pl-4 border-l-2 border-cyan-300/60 dark:border-cyan-600/60">{conn}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* v2.0 — Causal Chains (Systems Modeling) */}
+      {data.causal_chains && data.causal_chains.length > 0 && (
+        <div className="backdrop-blur-[40px] bg-indigo-50/[0.15] dark:bg-indigo-900/[0.15] border border-indigo-300/60 dark:border-indigo-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <GitBranch className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <h4 className="font-semibold text-indigo-900 dark:text-indigo-200">Causal Chains — Systems Modeling (2.5)</h4>
+          </div>
+          <p className="text-xs text-indigo-700 dark:text-indigo-400 mb-3 opacity-70">Cause-effect relationships stress-tested via internal simulation before assertion.</p>
+          <ul className="space-y-2">
+            {data.causal_chains.map((chain, idx) => {
+              const confColor = chain.confidence === "Established" ? "text-emerald-600 dark:text-emerald-400" : chain.confidence === "Contested" ? "text-amber-600 dark:text-amber-400" : "text-purple-600 dark:text-purple-400";
+              return (
+                <li key={idx} className="text-sm text-indigo-800 dark:text-indigo-200 pl-4 border-l-2 border-indigo-300/60 dark:border-indigo-600/60">
+                  <span className={`text-xs font-semibold ${confColor} mr-2`}>[{chain.confidence}]</span>
+                  <span className="font-medium">{chain.cause}</span>
+                  <span className="text-indigo-500 dark:text-indigo-400 mx-2">→</span>
+                  <span>{chain.effect}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* v2.0 — Neuro-Symbolic Insights */}
+      {data.neuro_symbolic_insights && data.neuro_symbolic_insights.length > 0 && (
+        <div className="backdrop-blur-[40px] bg-purple-50/[0.15] dark:bg-purple-900/[0.15] border border-purple-300/60 dark:border-purple-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Lightbulb className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <h4 className="font-semibold text-purple-900 dark:text-purple-200">Neuro-Symbolic Insights (2.3)</h4>
+          </div>
+          <p className="text-xs text-purple-700 dark:text-purple-400 mb-3 opacity-70">Insights that only emerge when symbolic structure meets neural pattern recognition.</p>
+          <ul className="space-y-2">
+            {data.neuro_symbolic_insights.map((insight, idx) => (
+              <li key={idx} className="text-sm text-purple-800 dark:text-purple-200 pl-4 border-l-2 border-purple-300/60 dark:border-purple-600/60">{insight}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
     </div>
   );
 }
