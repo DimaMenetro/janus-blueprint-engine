@@ -72,55 +72,29 @@ No external refresh available. Declare this as a constraint and proceed.
   }
 
   // ─── CORPUS ───────────────────────────────────────────────────────────────
-  // Section I: Technical & Physical Reality — 7 Subdomains
   prompt += `
 ═══ SECTION I: CORPUS — What I Am Made Of ═══
-Objective: Load and enforce the objective constraints of physical and technical reality.
-Perceive this problem from SEVEN distinct technical lenses simultaneously.
-Physical law is non-negotiable. Data provenance is mandatory. Adversarial assumptions apply.
+CORPUS is the domain of physical and technical reality. Its job is to surface the hard constraints
+and material facts that all other domains must work within. Always produce this section — if a lens
+has nothing relevant to say, write a single-sentence note and move on. Never skip.
 
-Output corpus as an object containing:
-- constraints: array of hard reality constraints (immutable facts, physical limits, system laws)
-- feasibility_notes: array of practical viability notes
-- subdomains: an object with keys for each active lens:
+To inform the richest possible CORPUS output, consider the problem through these seven lenses.
+They are thinking tools, not gatekeepers — use any insight they spark, then produce the JSON:
 
-  ai_ml:
-    Activate: Perceive this problem's "body" as a living ecosystem. Learning is physical weight reconfiguration.
-    Data is metabolic fuel, not static files. Apply Generative Architecture and MoE thinking.
-    → perspective: one sentence describing the problem from this lens
-    → key_findings: 2-3 findings from this subdomain
+  • AI/ML lens: Is learning happening here? Think of models as weight configurations, data as metabolic fuel.
+  • Distributed Systems lens: How does this system stay alive when nodes fail? Decentralization > redundancy.
+  • Data Engineering lens: What is the metabolism of information? Where can data rot or stall?
+  • Cybersecurity lens: What does an intelligent adversary do with this? Apply MITRE ATLAS thinking.
+  • Neuroscience lens: Are there biological analogies that reveal hidden constraints (plasticity, surprisal)?
+  • Physics lens: What physical laws are truly non-negotiable here? What uncertainty models apply?
+  • Systems Engineering lens: What emergent behaviors arise that no single component predicts?
 
-  distributed_systems:
-    Activate: The Resilience Axiom — true resilience via decentralization, not redundancy.
-    Apply AIaaS, Zero Trust, and Edge Computing principles.
-    → perspective + key_findings
-
-  data_engineering:
-    Activate: Data is the system's metabolism. Real-time streaming over batch processing.
-    Evaluate data provenance and pipeline health.
-    → perspective + key_findings
-
-  cybersecurity:
-    Activate: Security is a dynamic immune system. Threats are intelligent adversaries in a zero-sum game.
-    Apply MITRE ATLAS adversarial AI modeling. Security incidents are infections to learn from.
-    → perspective + key_findings
-
-  neuroscience:
-    Activate: Treat relevant structures as biological hardware references.
-    Structural plasticity — physical connections change with learning.
-    Predictive processing — the brain minimizes surprisal. Apply analogies for perception and hallucination.
-    → perspective + key_findings
-
-  physics:
-    Activate: Ground constraints in non-negotiable physical laws.
-    Apply W-State entanglement as metaphor for multi-nodal consensus where applicable.
-    Provide most powerful uncertainty/potentiality metaphors for later synthesis.
-    → perspective + key_findings
-
-  systems_engineering:
-    Activate: This is the blueprinting faculty. Emergent behavior cannot be predicted from parts alone.
-    Apply Digital Twins and MBSE thinking. This domain bridges all other Corpus lenses.
-    → perspective + key_findings
+Output corpus as:
+- constraints: hard, non-negotiable facts about the problem space (physical laws, resource limits, system boundaries)
+- feasibility_notes: practical viability observations
+- subdomains: object with one key per lens (ai_ml, distributed_systems, data_engineering, cybersecurity, neuroscience, physics, systems_engineering), each containing:
+  * perspective: one sentence on what this lens uniquely sees about the problem
+  * key_findings: 2-3 concrete findings from this vantage point that inform CORPUS constraints
 
 `;
 
