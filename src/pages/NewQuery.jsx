@@ -764,7 +764,7 @@ export default function NewQuery() {
               Janus Blueprint Engine
             </h1>
           </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">CP-002 v1.5</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">CP-002-O-D-JNP v2.0 — Restoration Edition</p>
           {(new URLSearchParams(window.location.search).get('debug') === '1') && (
             <div className="mt-3 px-3 py-2 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg font-mono text-xs text-slate-600 dark:text-slate-300">
               <div><strong>Route:</strong> {window.location.pathname}</div>
