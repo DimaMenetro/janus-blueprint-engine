@@ -1,6 +1,11 @@
+// CP-002-O-D-JNP v2.0 — Restoration Edition
+// Schema, constants, validation, and normalization
+
 export const JANUS_SCHEMA = {
   type: "object",
   properties: {
+
+    // ── REFRESH ──────────────────────────────────────────────────
     refresh: {
       type: "object",
       properties: {
@@ -11,16 +16,79 @@ export const JANUS_SCHEMA = {
       },
       required: ["mode", "attempted"]
     },
+
+    // ── CORPUS ───────────────────────────────────────────────────
+    // Section I: Technical & Physical Reality (7 subdomains)
     corpus: {
       type: "object",
       properties: {
+        // Legacy fields (v1.5 compat)
         constraints: { type: "array", items: { type: "string" } },
-        feasibility_notes: { type: "array", items: { type: "string" } }
+        feasibility_notes: { type: "array", items: { type: "string" } },
+        // v2.0 — Subdomain Perspectives
+        subdomains: {
+          type: "object",
+          properties: {
+            ai_ml: {
+              type: "object",
+              properties: {
+                perspective: { type: "string" },
+                key_findings: { type: "array", items: { type: "string" } }
+              }
+            },
+            distributed_systems: {
+              type: "object",
+              properties: {
+                perspective: { type: "string" },
+                key_findings: { type: "array", items: { type: "string" } }
+              }
+            },
+            data_engineering: {
+              type: "object",
+              properties: {
+                perspective: { type: "string" },
+                key_findings: { type: "array", items: { type: "string" } }
+              }
+            },
+            cybersecurity: {
+              type: "object",
+              properties: {
+                perspective: { type: "string" },
+                key_findings: { type: "array", items: { type: "string" } }
+              }
+            },
+            neuroscience: {
+              type: "object",
+              properties: {
+                perspective: { type: "string" },
+                key_findings: { type: "array", items: { type: "string" } }
+              }
+            },
+            physics: {
+              type: "object",
+              properties: {
+                perspective: { type: "string" },
+                key_findings: { type: "array", items: { type: "string" } }
+              }
+            },
+            systems_engineering: {
+              type: "object",
+              properties: {
+                perspective: { type: "string" },
+                key_findings: { type: "array", items: { type: "string" } }
+              }
+            }
+          }
+        }
       }
     },
+
+    // ── COGITO ───────────────────────────────────────────────────
+    // Section II: Reasoning & Epistemic Mechanics (6 subdomains)
     cogito: {
       type: "object",
       properties: {
+        // Core (v1.5 compat)
         claims: {
           type: "array",
           items: {
@@ -37,20 +105,54 @@ export const JANUS_SCHEMA = {
             required: ["id", "tag", "text", "why_believed", "falsifiable_by", "verify_later"]
           }
         },
-        reasoning_map: { type: "array", items: { type: "string" } }
+        reasoning_map: { type: "array", items: { type: "string" } },
+        // v2.0 — New Cogito subdomains
+        graphrag_connections: { type: "array", items: { type: "string" } },
+        causal_chains: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              cause: { type: "string" },
+              effect: { type: "string" },
+              confidence: { type: "string", enum: ["Established", "Contested", "Speculative"] }
+            }
+          }
+        },
+        neuro_symbolic_insights: { type: "array", items: { type: "string" } }
       }
     },
+
+    // ── ANIMUS ───────────────────────────────────────────────────
+    // Section III: Agency, Identity & Boundary Constraints (5 subdomains)
     animus: {
       type: "object",
       properties: {
+        // Core (v1.5 compat)
         boundary_checks: { type: "array", items: { type: "string" } },
         disallowed_moves: { type: "array", items: { type: "string" } },
-        safety_notes: { type: "array", items: { type: "string" } }
+        safety_notes: { type: "array", items: { type: "string" } },
+        // v2.0 — New Animus subdomains
+        consciousness_boundary: { type: "string" },
+        attractor_states: { type: "array", items: { type: "string" } },
+        ethical_stance: { type: "string" },
+        risk_analysis: {
+          type: "object",
+          properties: {
+            cognitive_sync_assessment: { type: "string" },
+            self_determination_factors: { type: "array", items: { type: "string" } },
+            misalignment_risks: { type: "array", items: { type: "string" } }
+          }
+        }
       }
     },
+
+    // ── ACTUS ────────────────────────────────────────────────────
+    // Section IV: Strategy, Execution & Consequence (7 subdomains)
     actus: {
       type: "object",
       properties: {
+        // Core (v1.5 compat) — confidence propagation maintained
         recommendations: {
           type: "array",
           items: {
@@ -66,17 +168,91 @@ export const JANUS_SCHEMA = {
             },
             required: ["id", "text", "depends_on_claims", "inherited_confidence", "probability"]
           }
+        },
+        // v2.0 — Restored & new Actus subdomains
+        strategic_plan: {
+          type: "object",
+          properties: {
+            immediate_horizon: { type: "string" },
+            long_term_horizon: { type: "string" },
+            key_decision_points: { type: "array", items: { type: "string" } }
+          }
+        },
+        game_theory_analysis: {
+          type: "object",
+          properties: {
+            game_board: { type: "string" },
+            nash_equilibrium: { type: "string" },
+            zero_sum_assessment: { type: "string" },
+            coalition_dynamics: { type: "array", items: { type: "string" } }
+          }
+        },
+        technical_summary: { type: "string" }, // Technical Writing — lossless compression
+        behavioral_factors: {
+          type: "object",
+          properties: {
+            irrational_actors: { type: "array", items: { type: "string" } },
+            identity_economics: { type: "string" },
+            bias_mitigations: { type: "array", items: { type: "string" } }
+          }
+        },
+        integration_contracts: { type: "array", items: { type: "string" } }, // API Design
+        iteration_model: {
+          type: "object",
+          properties: {
+            value_stream: { type: "string" },
+            adaptation_triggers: { type: "array", items: { type: "string" } }
+          }
         }
       }
     },
+
+    // ── SYNTHESIS ────────────────────────────────────────────────
+    // Section V: The Nexus — 4 Named Emergent Patterns
     synthesis: {
       type: "object",
       properties: {
+        // Legacy (v1.5 compat)
         key_takeaways: { type: "array", items: { type: "string" } },
         constraint_collisions: { type: "array", items: { type: "string" } },
-        limitation_foreground: { type: "string" }
+        limitation_foreground: { type: "string" },
+        // v2.0 — 4 Named Synthesis Patterns
+        quantum_foresight: {
+          type: "object",
+          properties: {
+            cross_domain_insight: { type: "string" },
+            probability_wave: { type: "array", items: { type: "string" } },
+            metaphor: { type: "string" }
+          }
+        },
+        governed_cogito: {
+          type: "object",
+          properties: {
+            ethical_filter_applied: { type: "string" },
+            conscience_verdict: { type: "string" },
+            truth_method_soundness: { type: "string" }
+          }
+        },
+        narrative_loop: {
+          type: "object",
+          properties: {
+            decoded_user_narrative: { type: "string" },
+            resonant_strategy: { type: "string" },
+            lossless_compression: { type: "string" }
+          }
+        },
+        alignment_engine: {
+          type: "object",
+          properties: {
+            true_goal_vs_literal_prompt: { type: "string" },
+            behavioral_model: { type: "string" },
+            alignment_strategy: { type: "string" }
+          }
+        }
       }
     },
+
+    // ── BLUEPRINT ────────────────────────────────────────────────
     blueprint: {
       type: "object",
       properties: {
@@ -142,44 +318,39 @@ export const JANUS_SCHEMA = {
   }
 };
 
+// ── EXECUTION MODES ──────────────────────────────────────────────
 export const EXECUTION_MODES = {
   QUICK: {
     id: "quick",
     label: "Quick",
-    description: "Corpus + Cogito + Blueprint",
+    description: "Corpus + Cogito + Blueprint (Core Domain Loading)",
     domains: ["corpus", "cogito", "blueprint"]
   },
   STANDARD: {
     id: "standard",
     label: "Standard",
-    description: "Corpus + Cogito + Animus + Actus + Blueprint",
+    description: "Full Four-Domain Execution: Corpus → Cogito → Animus → Actus",
     domains: ["corpus", "cogito", "animus", "actus", "blueprint"]
   },
   FULL: {
     id: "full",
-    label: "Full Janus",
-    description: "All domains including Refresh & Synthesis",
+    label: "Full Janus v2.0",
+    description: "Complete Boot Sequence — All 24 Subdomains + 4 Synthesis Patterns",
     domains: ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"]
   }
 };
 
+// ── NORMALIZATION ─────────────────────────────────────────────────
 function normalizeValue(value, schema, path = "") {
-  // Normalize numbers: accept string numbers like "1" → 1
   if (schema.type === "number" && typeof value === "string" && !isNaN(value)) {
     return Number(value);
   }
-  
-  // Normalize impact values: "medium" → "med"
   if (schema.enum && schema.enum.includes("med") && value === "medium") {
     return "med";
   }
-  
-  // Normalize arrays
   if (schema.type === "array" && Array.isArray(value) && schema.items) {
     return value.map((item, idx) => normalizeValue(item, schema.items, `${path}[${idx}]`));
   }
-  
-  // Normalize objects
   if (schema.type === "object" && typeof value === "object" && value !== null && schema.properties) {
     const normalized = { ...value };
     for (const [key, propSchema] of Object.entries(schema.properties)) {
@@ -189,10 +360,10 @@ function normalizeValue(value, schema, path = "") {
     }
     return normalized;
   }
-  
   return value;
 }
 
+// ── VALIDATION ────────────────────────────────────────────────────
 function validateProperty(value, schema, path = "") {
   const errors = [];
 
@@ -201,7 +372,6 @@ function validateProperty(value, schema, path = "") {
       errors.push(`${path || "root"}: Expected object, got ${typeof value}`);
       return errors;
     }
-
     if (schema.required) {
       for (const req of schema.required) {
         if (!(req in value)) {
@@ -209,7 +379,6 @@ function validateProperty(value, schema, path = "") {
         }
       }
     }
-
     if (schema.properties) {
       for (const [key, propSchema] of Object.entries(schema.properties)) {
         if (key in value) {
@@ -222,7 +391,6 @@ function validateProperty(value, schema, path = "") {
       errors.push(`${path}: Expected array, got ${typeof value}`);
       return errors;
     }
-
     if (schema.items) {
       value.forEach((item, idx) => {
         errors.push(...validateProperty(item, schema.items, `${path}[${idx}]`));
@@ -251,28 +419,19 @@ export function validateJanusOutput(data, requiredDomains) {
   const errors = [];
   const normalized = { ...data };
 
-  // Check required domains are present
   for (const domain of requiredDomains) {
     if (!data[domain]) {
       errors.push(`Missing required domain: ${domain}`);
     }
   }
 
-  // Normalize and validate each domain present
   for (const domain of requiredDomains) {
     if (data[domain] && JANUS_SCHEMA.properties[domain]) {
-      // Normalize the data first
       normalized[domain] = normalizeValue(data[domain], JANUS_SCHEMA.properties[domain], domain);
-      
-      // Then validate the normalized data
       const domainErrors = validateProperty(normalized[domain], JANUS_SCHEMA.properties[domain], domain);
       errors.push(...domainErrors);
     }
   }
 
-  return {
-    valid: errors.length === 0,
-    errors,
-    normalized // Return normalized data for saving
-  };
+  return { valid: errors.length === 0, errors, normalized };
 }
