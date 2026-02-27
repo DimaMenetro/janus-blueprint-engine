@@ -629,11 +629,12 @@ export default function NewQuery() {
 
     let result;
     try {
-      // Build detailed schema with proper structure for each domain
+      // Use a flat schema — let the prompt instructions drive the structure.
+      // Passing the full nested JANUS_SCHEMA causes the LLM to return the schema itself.
       const responseSchema = {
         type: "object",
         properties: Object.fromEntries(
-          mode.domains.map(d => [d, JANUS_SCHEMA.properties[d]])
+          mode.domains.map(d => [d, { type: "object" }])
         ),
         required: mode.domains
       };
