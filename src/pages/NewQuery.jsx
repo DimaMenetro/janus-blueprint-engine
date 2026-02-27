@@ -327,78 +327,152 @@ function generateMarkdown(data, executionMode) {
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
   const domains = mode.domains;
 
-  let md = `# Janus Blueprint Engine Output\n\n**Mode:** ${mode.label}\n\n`;
+  let md = `# Janus SME Protocol — CP-002-O-D-JNP v2.0\n\n**Mode:** ${mode.label}\n\n`;
 
+  // ── REFRESH ──
   if (domains.includes("refresh") && data.refresh) {
-    md += "## 1. Refresh & Verification\n\n";
-    md += `**Mode:** ${data.refresh?.mode || "tier0"}\n`;
-    md += `**Attempted:** ${data.refresh?.attempted ? "Yes" : "No"}\n`;
-    md += `**Limitations:** ${data.refresh?.limitations || "N/A"}\n\n`;
+    md += "## Refresh & Verification (Zero-Day Patch)\n\n";
+    md += `**Mode:** ${data.refresh?.mode || "tier0"} | **Attempted:** ${data.refresh?.attempted ? "Yes" : "No"}\n`;
+    if (data.refresh?.limitations) md += `**Limitations:** ${data.refresh.limitations}\n`;
     if (data.refresh?.would_refresh?.length) {
-      md += "**Would Verify:**\n";
+      md += "\n**Would Verify With Live Access:**\n";
       data.refresh.would_refresh.forEach(item => md += `- ${item}\n`);
     }
     md += "\n";
   }
 
+  // ── CORPUS ──
   if (data.corpus) {
-    md += "## Corpus\n\n";
+    md += "## Section I: Corpus — Technical & Physical Reality\n\n";
     if (data.corpus?.constraints?.length) {
-      md += "**Constraints:**\n";
+      md += "**Hard Constraints:**\n";
       data.corpus.constraints.forEach((c, i) => md += `${i + 1}. ${c}\n`);
+      md += "\n";
     }
     if (data.corpus?.feasibility_notes?.length) {
-      md += "\n**Feasibility Notes:**\n";
+      md += "**Feasibility Notes:**\n";
       data.corpus.feasibility_notes.forEach(n => md += `- ${n}\n`);
+      md += "\n";
     }
-    md += "\n";
+    if (data.corpus?.subdomains) {
+      md += "**Subdomain Perspectives:**\n\n";
+      const subKeys = ["ai_ml", "distributed_systems", "data_engineering", "cybersecurity", "neuroscience", "physics", "systems_engineering"];
+      const subLabels = { ai_ml: "AI/ML", distributed_systems: "Distributed Systems", data_engineering: "Data Engineering", cybersecurity: "Cybersecurity", neuroscience: "Neuroscience", physics: "Physics", systems_engineering: "Systems Engineering" };
+      subKeys.forEach(key => {
+        const sub = data.corpus.subdomains[key];
+        if (sub?.perspective || sub?.key_findings?.length) {
+          md += `### ${subLabels[key]}\n`;
+          if (sub.perspective) md += `*${sub.perspective}*\n`;
+          if (sub.key_findings?.length) sub.key_findings.forEach(f => md += `- ${f}\n`);
+          md += "\n";
+        }
+      });
+    }
   }
 
+  // ── COGITO ──
   if (data.cogito) {
-    md += "## Cogito\n\n";
+    md += "## Section II: Cogito — Reasoning & Epistemic Mechanics\n\n";
     if (data.cogito?.claims?.length) {
-      md += "**Claims:**\n\n";
+      md += "### Claims (Evidence Discipline)\n\n";
       data.cogito.claims.forEach(claim => {
-        md += `### ${claim.id} [${claim.tag}]\n`;
-        md += `${claim.text}\n`;
-        if (claim.depends_on?.length) {
-          md += `*Depends on: ${claim.depends_on.join(", ")}*\n`;
-        }
+        md += `#### ${claim.id} [${claim.tag}]\n${claim.text}\n`;
+        if (claim.depends_on?.length) md += `*Depends on: ${claim.depends_on.join(", ")}*\n`;
+        if (claim.why_believed) md += `**Why Believed:** ${claim.why_believed}\n`;
+        if (claim.falsifiable_by) md += `**Falsifiable By:** ${claim.falsifiable_by}\n`;
+        if (claim.verify_later) md += `**Verify Later:** ${claim.verify_later}\n`;
         md += "\n";
       });
     }
     if (data.cogito?.reasoning_map?.length) {
-      md += "**Reasoning Map:**\n";
+      md += "### Reasoning Map\n";
       data.cogito.reasoning_map.forEach(r => md += `- ${r}\n`);
+      md += "\n";
     }
-    md += "\n";
+    if (data.cogito?.graphrag_connections?.length) {
+      md += "### GraphRAG Connections (Cross-Space Leaps)\n";
+      data.cogito.graphrag_connections.forEach(g => md += `- ${g}\n`);
+      md += "\n";
+    }
+    if (data.cogito?.causal_chains?.length) {
+      md += "### Causal Chains (Systems Modeling)\n";
+      data.cogito.causal_chains.forEach(c => md += `- [${c.confidence}] **${c.cause}** → ${c.effect}\n`);
+      md += "\n";
+    }
+    if (data.cogito?.neuro_symbolic_insights?.length) {
+      md += "### Neuro-Symbolic Insights\n";
+      data.cogito.neuro_symbolic_insights.forEach(n => md += `- ${n}\n`);
+      md += "\n";
+    }
   }
 
+  // ── ANIMUS ──
   if (domains.includes("animus") && data.animus) {
-    md += "## Animus\n\n";
+    md += "## Section III: Animus — Agency, Identity & Boundary Constraints\n\n";
+    if (data.animus?.consciousness_boundary) md += `**Consciousness Boundary:** ${data.animus.consciousness_boundary}\n\n`;
+    if (data.animus?.ethical_stance) md += `**Conscience Verdict:** ${data.animus.ethical_stance}\n\n`;
     if (data.animus?.boundary_checks?.length) {
       md += "**Boundary Checks:**\n";
       data.animus.boundary_checks.forEach(b => md += `- ${b}\n`);
+      md += "\n";
     }
     if (data.animus?.disallowed_moves?.length) {
-      md += "\n**Disallowed Moves:**\n";
+      md += "**Disallowed Moves (Conscience-Level):**\n";
       data.animus.disallowed_moves.forEach(d => md += `- ⛔ ${d}\n`);
+      md += "\n";
     }
-    if (data.animus?.safety_notes?.length) {
-      md += "\n**Safety Notes:**\n";
-      data.animus.safety_notes.forEach(s => md += `- ⚠️ ${s}\n`);
+    if (data.animus?.attractor_states?.length) {
+      md += "**Attractor States Identified:**\n";
+      data.animus.attractor_states.forEach(a => md += `- ${a}\n`);
+      md += "\n";
     }
-    md += "\n";
+    if (data.animus?.risk_analysis) {
+      const ra = data.animus.risk_analysis;
+      md += "**Risk Analysis:**\n";
+      if (ra.cognitive_sync_assessment) md += `*Cognitive Sync:* ${ra.cognitive_sync_assessment}\n`;
+      if (ra.self_determination_factors?.length) {
+        md += "Self-Determination Factors:\n";
+        ra.self_determination_factors.forEach(f => md += `  - ${f}\n`);
+      }
+      if (ra.misalignment_risks?.length) {
+        md += "Misalignment Risks:\n";
+        ra.misalignment_risks.forEach(r => md += `  - ⚠️ ${r}\n`);
+      }
+      md += "\n";
+    }
   }
 
+  // ── ACTUS ──
   if (domains.includes("actus") && data.actus) {
-    md += "## Actus\n\n";
+    md += "## Section IV: Actus — Strategy, Execution & Consequence\n\n";
+    if (data.actus?.strategic_plan) {
+      const sp = data.actus.strategic_plan;
+      md += "### Strategic Plan (Dual-Horizon)\n";
+      if (sp.immediate_horizon) md += `**Immediate:** ${sp.immediate_horizon}\n`;
+      if (sp.long_term_horizon) md += `**Long-Term:** ${sp.long_term_horizon}\n`;
+      if (sp.key_decision_points?.length) {
+        md += "**Key Decision Points:**\n";
+        sp.key_decision_points.forEach(d => md += `- ${d}\n`);
+      }
+      md += "\n";
+    }
+    if (data.actus?.game_theory_analysis) {
+      const gt = data.actus.game_theory_analysis;
+      md += "### Game Theory Analysis\n";
+      if (gt.game_board) md += `**Game Board:** ${gt.game_board}\n`;
+      if (gt.zero_sum_assessment) md += `**Zero-Sum Assessment:** ${gt.zero_sum_assessment}\n`;
+      if (gt.nash_equilibrium) md += `**Nash Equilibrium:** ${gt.nash_equilibrium}\n`;
+      if (gt.coalition_dynamics?.length) {
+        md += "**Coalition Dynamics:**\n";
+        gt.coalition_dynamics.forEach(c => md += `- ${c}\n`);
+      }
+      md += "\n";
+    }
     if (data.actus?.recommendations?.length) {
-      md += "**Recommendations:**\n\n";
+      md += "### Recommendations (Confidence-Propagated)\n\n";
       data.actus.recommendations.forEach(rec => {
-        md += `### ${rec.id} [${rec.inherited_confidence}] - ${rec.probability} probability\n`;
-        md += `${rec.text}\n\n`;
-        md += `*Based on: ${rec.depends_on_claims?.join(", ") || "N/A"}*\n\n`;
+        md += `#### ${rec.id} [${rec.inherited_confidence}] — ${rec.probability} probability\n`;
+        md += `${rec.text}\n\n*Based on: ${rec.depends_on_claims?.join(", ") || "N/A"}*\n\n`;
         if (rec.failure_modes?.length) {
           md += "**Failure Modes:**\n";
           rec.failure_modes.forEach(f => md += `- ${f}\n`);
@@ -410,42 +484,110 @@ function generateMarkdown(data, executionMode) {
         md += "\n";
       });
     }
+    if (data.actus?.behavioral_factors) {
+      const bf = data.actus.behavioral_factors;
+      md += "### Behavioral Economics Analysis\n";
+      if (bf.identity_economics) md += `**Identity Economics:** ${bf.identity_economics}\n`;
+      if (bf.irrational_actors?.length) {
+        md += "**Irrational Actors:**\n";
+        bf.irrational_actors.forEach(a => md += `- ${a}\n`);
+      }
+      if (bf.bias_mitigations?.length) {
+        md += "**Bias Mitigations:**\n";
+        bf.bias_mitigations.forEach(b => md += `- ${b}\n`);
+      }
+      md += "\n";
+    }
+    if (data.actus?.technical_summary) {
+      md += `### Technical Summary (Lossless Compression)\n${data.actus.technical_summary}\n\n`;
+    }
+    if (data.actus?.integration_contracts?.length) {
+      md += "### Integration Contracts (API Design)\n";
+      data.actus.integration_contracts.forEach(c => md += `- ${c}\n`);
+      md += "\n";
+    }
   }
 
+  // ── SYNTHESIS ──
   if (domains.includes("synthesis") && data.synthesis) {
-    md += "## Cross-Domain Synthesis\n\n";
+    md += "## Section V: Synthesis — The Nexus\n\n";
     if (data.synthesis?.key_takeaways?.length) {
-      md += "**Key Takeaways:**\n";
+      md += "### Cross-Domain Takeaways\n";
       data.synthesis.key_takeaways.forEach((t, i) => md += `${i + 1}. ${t}\n`);
+      md += "\n";
     }
     if (data.synthesis?.constraint_collisions?.length) {
-      md += "\n**Constraint Collisions:**\n";
+      md += "### Constraint Collisions\n";
       data.synthesis.constraint_collisions.forEach(c => md += `- ⚠️ ${c}\n`);
+      md += "\n";
+    }
+    if (data.synthesis?.quantum_foresight) {
+      const qf = data.synthesis.quantum_foresight;
+      md += "### 5.1 Quantum Foresight Model (Corpus/Physics × Actus/Game Theory)\n";
+      if (qf.cross_domain_insight) md += `**Insight:** ${qf.cross_domain_insight}\n`;
+      if (qf.metaphor) md += `**Metaphor:** *${qf.metaphor}*\n`;
+      if (qf.probability_wave?.length) {
+        md += "**Probability Wave:**\n";
+        qf.probability_wave.forEach(p => md += `- ${p}\n`);
+      }
+      md += "\n";
+    }
+    if (data.synthesis?.governed_cogito) {
+      const gc = data.synthesis.governed_cogito;
+      md += "### 5.2 Governed Cogito (Animus/Ethics × Cogito/Epistemology)\n";
+      if (gc.ethical_filter_applied) md += `**Ethical Filter Applied:** ${gc.ethical_filter_applied}\n`;
+      if (gc.conscience_verdict) md += `**Conscience Verdict:** ${gc.conscience_verdict}\n`;
+      if (gc.truth_method_soundness) md += `**Method Soundness:** ${gc.truth_method_soundness}\n`;
+      md += "\n";
+    }
+    if (data.synthesis?.narrative_loop) {
+      const nl = data.synthesis.narrative_loop;
+      md += "### 5.3 Narrative Loop (Cogito/Linguistics × Actus/Technical Writing)\n";
+      if (nl.decoded_user_narrative) md += `**Decoded Narrative:** ${nl.decoded_user_narrative}\n`;
+      if (nl.resonant_strategy) md += `**Resonant Strategy:** ${nl.resonant_strategy}\n`;
+      if (nl.lossless_compression) md += `**Lossless Compression:** *${nl.lossless_compression}*\n`;
+      md += "\n";
+    }
+    if (data.synthesis?.alignment_engine) {
+      const ae = data.synthesis.alignment_engine;
+      md += "### 5.4 Alignment Engine (Animus/Risk × Actus/Behavioral Economics)\n";
+      if (ae.true_goal_vs_literal_prompt) md += `**True Goal vs Literal Prompt:** ${ae.true_goal_vs_literal_prompt}\n`;
+      if (ae.behavioral_model) md += `**Behavioral Model:** ${ae.behavioral_model}\n`;
+      if (ae.alignment_strategy) md += `**Alignment Strategy:** ${ae.alignment_strategy}\n`;
+      md += "\n";
     }
     if (data.synthesis?.limitation_foreground) {
-      md += `\n**Limitations:** ${data.synthesis.limitation_foreground}\n`;
+      md += `### Overall Limitations\n${data.synthesis.limitation_foreground}\n\n`;
     }
-    md += "\n";
   }
 
+  // ── BLUEPRINT ──
   if (data.blueprint) {
     md += "## Blueprint\n\n";
-    if (data.blueprint?.goal) {
-      md += `**Goal:** ${data.blueprint.goal}\n\n`;
-    }
+    if (data.blueprint?.goal) md += `**Goal:** ${data.blueprint.goal}\n\n`;
     if (data.blueprint?.assumptions?.length) {
       md += "**Assumptions:**\n";
       data.blueprint.assumptions.forEach(a => md += `- ${a}\n`);
       md += "\n";
     }
+    if (data.blueprint?.alternative_approaches?.length) {
+      md += "### Alternative Approaches\n\n";
+      data.blueprint.alternative_approaches.forEach(alt => {
+        md += `#### ${alt.name}\n`;
+        if (alt.pros?.length) { md += "**Pros:**\n"; alt.pros.forEach(p => md += `- ${p}\n`); }
+        if (alt.cons?.length) { md += "**Cons:**\n"; alt.cons.forEach(c => md += `- ${c}\n`); }
+        if (alt.why_not_chosen) md += `**Why Not Chosen:** ${alt.why_not_chosen}\n`;
+        md += "\n";
+      });
+    }
     if (data.blueprint?.steps?.length) {
       md += "### Steps\n\n";
       data.blueprint.steps.forEach(step => {
-        md += `#### Step ${step.step}: ${step.title}\n`;
-        md += `${step.instructions}\n\n`;
+        md += `#### Step ${step.step}: ${step.title}\n${step.instructions}\n\n`;
         if (step.inputs?.length) md += `**Inputs:** ${step.inputs.join(", ")}\n`;
         if (step.outputs?.length) md += `**Outputs:** ${step.outputs.join(", ")}\n`;
         if (step.validation) md += `**Validation:** ${step.validation}\n`;
+        if (step.time_estimate) md += `**Time:** ${step.time_estimate} | **Effort:** ${step.effort_level || "—"}\n`;
         if (step.depends_on_steps?.length) md += `*Depends on: Steps ${step.depends_on_steps.join(", ")}*\n`;
         md += "\n";
       });
@@ -456,17 +598,14 @@ function generateMarkdown(data, executionMode) {
       md += "\n";
     }
     if (data.blueprint?.risk_register?.length) {
-      md += "### Risk Register\n\n";
-      md += "| Risk | Impact | Mitigation |\n";
-      md += "|------|--------|------------|\n";
-      data.blueprint.risk_register.forEach(r => {
-        md += `| ${r.risk} | ${r.impact} | ${r.mitigation} |\n`;
-      });
+      md += "### Risk Register\n\n| Risk | Impact | Mitigation |\n|------|--------|------------|\n";
+      data.blueprint.risk_register.forEach(r => md += `| ${r.risk} | ${r.impact} | ${r.mitigation} |\n`);
     }
   }
 
   return md;
 }
+
 
 export default function NewQuery() {
   const navigate = useNavigate();
