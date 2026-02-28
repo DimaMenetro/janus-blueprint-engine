@@ -812,7 +812,7 @@ export default function NewQuery() {
               </div>
               {currentDomain && (
                 <span className="text-xs font-mono text-slate-500 dark:text-slate-400 animate-pulse">
-                  ⟳ {currentDomain.toUpperCase()}
+                  ⟳ {currentDomain.toUpperCase()} ({domainProgress.completed}/{domainProgress.total})
                 </span>
               )}
               <Button
