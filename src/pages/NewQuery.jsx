@@ -947,6 +947,11 @@ QUERY: ${queryText}`
                   </Button>
                 </Link>
               </div>
+              {currentDomain && (
+                <span className="text-xs font-mono text-slate-500 dark:text-slate-400 animate-pulse">
+                  ⟳ {currentDomain.toUpperCase()}
+                </span>
+              )}
               <Button
                 onClick={handleExecute}
                 disabled={!queryText.trim() || status === "running" || status === "validating"}
