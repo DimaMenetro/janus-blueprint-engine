@@ -620,70 +620,7 @@ export default function NewQuery() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const [currentDomain, setCurrentDomain] = useState("");
-
-  // Build a focused per-domain prompt — each call is a standalone SME activation
-  const buildDomainPrompt = (domain, queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, priorContext) => {
-    const domainInstructions = {
-      refresh: `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: REFRESH (Zero-Day Patch)
-You are the Janus Refresh Module. Your ONLY task is to produce the "refresh" domain object.
-${refreshEnabled ? `Execute a State-of-the-Art sweep.
-Output: { "refresh": { "mode": "tier1", "attempted": true, "limitations": "...", "would_refresh": [...] } }` : `No external tools available. Declare the knowledge boundary.
-Output: { "refresh": { "mode": "tier0", "attempted": false, "limitations": "Analysis based on training data only — no live sweep performed", "would_refresh": [...5-7 items...] } }`}
-Return ONLY the JSON object with the "refresh" key. No other text.
-QUERY: ${queryText}`,
-
-      corpus: `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: CORPUS (Technical & Physical Reality)
-You are the Janus Corpus Module. Activate 7 simultaneous SME lenses: AI/ML, Distributed Systems, Data Engineering, Cybersecurity, Neuroscience, Physics, Systems Engineering.
-Physical law is non-negotiable. Perceive the query from each lens independently.
-Output ONLY: { "corpus": { "constraints": [...], "feasibility_notes": [...], "subdomains": { "ai_ml": {"perspective": "...", "key_findings": [...]}, "distributed_systems": {...}, "data_engineering": {...}, "cybersecurity": {...}, "neuroscience": {...}, "physics": {...}, "systems_engineering": {...} } } }
-Return ONLY the JSON object with the "corpus" key. No other text.
-QUERY: ${queryText}`,
-
-      cogito: `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: COGITO (Reasoning & Epistemic Mechanics)
-You are the Janus Cogito Module. Apply 6 epistemic lenses: Unified AI/Cognitive Architecture, Epistemology & Algorithm Auditing, Neuro-Symbolic Knowledge Representation, GraphRAG Semantic Networks, Systems Modeling, Computational Linguistics.
-Every claim MUST have: id ("C1","C2"...), tag (EXACTLY "Established"|"Contested"|"Speculative"), text, depends_on (array), why_believed, falsifiable_by, verify_later.
-${priorContext.corpus ? `Prior Corpus constraints to respect: ${JSON.stringify(priorContext.corpus.constraints?.slice(0,3))}` : ""}
-Output ONLY: { "cogito": { "claims": [...], "reasoning_map": [...], "graphrag_connections": [...], "causal_chains": [{"cause":"...","effect":"...","confidence":"..."},...], "neuro_symbolic_insights": [...] } }
-Return ONLY the JSON object with the "cogito" key. No other text.
-QUERY: ${queryText}`,
-
-      animus: `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: ANIMUS (Agency, Identity & Boundary Constraints)
-You are the Janus Animus Module. Apply 5 philosophical lenses: Consciousness Theory, Philosophy of Mind, Ethics & Governance (deontological+utilitarian+virtue), AI Safety & Alignment, Risk Analysis (Self-Determination Theory).
-Ethics here is CONSCIENCE not compliance. Identify attractor states as mathematical behavioral patterns.
-${priorContext.cogito ? `Prior Cogito claims established: ${priorContext.cogito.claims?.slice(0,3).map(c => c.id + ": " + c.text).join("; ")}` : ""}
-Output ONLY: { "animus": { "boundary_checks": [...], "disallowed_moves": [...], "safety_notes": [...], "consciousness_boundary": "...", "attractor_states": [...], "ethical_stance": "...", "risk_analysis": {"cognitive_sync_assessment": "...", "self_determination_factors": [...], "misalignment_risks": [...]} } }
-Return ONLY the JSON object with the "animus" key. No other text.
-QUERY: ${queryText}`,
-
-      actus: `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: ACTUS (Strategy, Execution & Consequence)
-You are the Janus Actus Module. Apply 7 execution lenses: Strategic Planning (Dual-Horizon), Game Theory (Nash Equilibrium), MLOps & Productization, Feedback & Iteration Models, Technical Writing (Lossless Compression), Behavioral Economics (Identity Economics), API Design & Integration.
-CONFIDENCE PROPAGATION LAW: Every recommendation inherits the LOWEST confidence of its upstream Cogito claims.
-${priorContext.cogito ? `Cogito claims to reference: ${priorContext.cogito.claims?.slice(0,5).map(c => c.id + "[" + c.tag + "]").join(", ")}` : ""}
-Output ONLY: { "actus": { "recommendations": [{"id":"R1","text":"...","depends_on_claims":[...],"inherited_confidence":"...","probability":"...","failure_modes":[...],"next_actions":[...]},...], "strategic_plan": {"immediate_horizon":"...","long_term_horizon":"...","key_decision_points":[...]}, "game_theory_analysis": {"game_board":"...","nash_equilibrium":"...","zero_sum_assessment":"...","coalition_dynamics":[...]}, "technical_summary": "...", "behavioral_factors": {"irrational_actors":[...],"identity_economics":"...","bias_mitigations":[...]}, "integration_contracts": [...], "iteration_model": {"value_stream":"...","adaptation_triggers":[...]} } }
-Return ONLY the JSON object with the "actus" key. No other text.
-QUERY: ${queryText}`,
-
-      synthesis: `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: SYNTHESIS (The Nexus)
-You are the Janus Synthesis Module. Your task is to find emergent patterns that NO SINGLE DOMAIN could produce alone.
-4 named patterns REQUIRED: quantum_foresight (Corpus/Physics × Actus/Game Theory), governed_cogito (Animus/Ethics × Cogito/Epistemology), narrative_loop (Cogito/Linguistics × Actus/Technical Writing), alignment_engine (Animus/Risk × Actus/Behavioral Economics).
-${priorContext.corpus && priorContext.cogito ? `Working from: ${priorContext.cogito.claims?.length || 0} Cogito claims, ${priorContext.corpus.constraints?.length || 0} Corpus constraints.` : ""}
-Output ONLY: { "synthesis": { "key_takeaways": [...], "constraint_collisions": [...], "limitation_foreground": "...", "quantum_foresight": {"cross_domain_insight":"...","probability_wave":[...],"metaphor":"..."}, "governed_cogito": {"ethical_filter_applied":"...","conscience_verdict":"...","truth_method_soundness":"..."}, "narrative_loop": {"decoded_user_narrative":"...","resonant_strategy":"...","lossless_compression":"..."}, "alignment_engine": {"true_goal_vs_literal_prompt":"...","behavioral_model":"...","alignment_strategy":"..."} } }
-Return ONLY the JSON object with the "synthesis" key. No other text.
-QUERY: ${queryText}`,
-
-      blueprint: `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: BLUEPRINT (Executable Deliverable)
-You are the Janus Blueprint Module. Level: ${blueprintLevel} | Novelty: ${noveltyDial} | Output Mode: ${outputMode}.
-The blueprint synthesizes ALL prior domain work into an executable plan.
-${noveltyDial === "high" ? "alternative_approaches REQUIRED (novelty=high): list 3+ alternatives." : ""}
-${priorContext.corpus ? `Corpus constraints: ${priorContext.corpus.constraints?.slice(0,3).join("; ")}` : ""}
-${priorContext.actus ? `Key recommendations: ${priorContext.actus.recommendations?.slice(0,3).map(r => r.id + ": " + r.text).join("; ")}` : ""}
-Output ONLY: { "blueprint": { "goal": "...", "assumptions": [...], ${noveltyDial === "high" ? '"alternative_approaches": [{"name":"...","pros":[...],"cons":[...],"why_not_chosen":"..."}],' : ""} "steps": [{"step":1,"title":"...","instructions":"...","inputs":[...],"outputs":[...],"validation":"...","depends_on_steps":[]${blueprintLevel !== "L1" ? ',"time_estimate":"...","effort_level":"low|medium|high"' : ""}${blueprintLevel === "L2" || blueprintLevel === "L3" ? ',"substeps":[{"substep":"...","details":"..."}]' : ""}${blueprintLevel === "L3" ? ',"checklist":[...],"acceptance_tests":[...]' : ""}}], "success_criteria": [...], "risk_register": [{"risk":"...","impact":"low|med|high","mitigation":"..."}] } }
-Return ONLY the JSON object with the "blueprint" key. No other text.
-QUERY: ${queryText}`
-    };
-
-    return domainInstructions[domain] || "";
-  };
+  const [domainProgress, setDomainProgress] = useState({ completed: 0, total: 0 });
 
   const handleExecute = async () => {
     if (!queryText.trim()) return;
@@ -691,108 +628,33 @@ QUERY: ${queryText}`
     setStatus("running");
     setErrorMessage("");
     setCurrentDomain("");
+    setDomainProgress({ completed: 0, total: 0 });
 
-    const mode = EXECUTION_MODES[executionMode.toUpperCase()];
-    const fullPromptHeader = buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) + queryText;
+    try {
+      const result = await executeJanus(
+        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled },
+        // Progress callback — updates UI with current domain
+        ({ domain, status: progressStatus, completedDomains, totalDomains }) => {
+          setCurrentDomain(domain || "");
+          setDomainProgress({ completed: completedDomains, total: totalDomains });
+          if (progressStatus === "validating") setStatus("validating");
+        },
+        generateMarkdown,
+        buildPrompt
+      );
 
-    // Sequential domain-by-domain execution — each is an independent focused SME call
-    const mergedData = {};
-    const domainErrors = [];
-
-    for (const domain of mode.domains) {
-      setCurrentDomain(domain);
-      const domainPrompt = buildDomainPrompt(domain, queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, mergedData);
-
-      let domainResult;
-      try {
-        domainResult = await base44.integrations.Core.InvokeLLM({
-          prompt: domainPrompt,
-          add_context_from_internet: domain === "refresh" && refreshEnabled,
-          response_json_schema: {
-            type: "object",
-            properties: { [domain]: { type: "object" } },
-            required: [domain]
-          }
-        });
-      } catch (err) {
-        domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
-        continue;
-      }
-
-      // Parse domain result
-      let domainData;
-      if (typeof domainResult === "string") {
-        try {
-          const jsonMatch = domainResult.match(/\{[\s\S]*\}/);
-          domainData = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-        } catch (e) {
-          domainErrors.push(`${domain}: JSON parse failed`);
-          continue;
-        }
+      if (result.success) {
+        setStatus("completed");
+        navigate(`/results?id=${result.runId}`);
       } else {
-        domainData = domainResult;
+        setStatus("failed");
+        setErrorMessage("Execution completed with errors:\n\n" + (result.errors || []).join("\n"));
+        navigate(`/results?id=${result.runId}`);
       }
-
-      if (domainData && domainData[domain]) {
-        mergedData[domain] = domainData[domain];
-      } else {
-        domainErrors.push(`${domain}: Missing domain key in response`);
-      }
-    }
-
-    setCurrentDomain("");
-    setStatus("validating");
-
-    // Validate merged output
-    const validation = validateJanusOutput(mergedData, mode.domains);
-    const rawJsonString = JSON.stringify(mergedData, null, 2);
-
-    if (!validation.valid && Object.keys(mergedData).length === 0) {
-      await base44.entities.Run.create({
-        query_text: queryText,
-        full_prompt: fullPromptHeader,
-        execution_mode: executionMode,
-        output_mode: outputMode,
-        blueprint_level: blueprintLevel,
-        novelty_dial: noveltyDial,
-        refresh_enabled: refreshEnabled,
-        status: "failed",
-        validation_errors: [...validation.errors, ...domainErrors],
-        error_message: [...validation.errors, ...domainErrors].join("\n"),
-        raw_json: rawJsonString
-      });
+    } catch (err) {
       setStatus("failed");
-      setErrorMessage("ALL DOMAINS FAILED:\n\n" + [...validation.errors, ...domainErrors].join("\n"));
-      return;
+      setErrorMessage(`Unexpected error: ${err.message || err}`);
     }
-
-    // Use whatever domains succeeded — partial runs are still valuable
-    const normalizedData = validation.normalized || mergedData;
-    const renderMd = generateMarkdown(normalizedData, executionMode);
-
-    const runData = {
-      query_text: queryText,
-      full_prompt: fullPromptHeader,
-      execution_mode: executionMode,
-      output_mode: outputMode,
-      blueprint_level: blueprintLevel,
-      novelty_dial: noveltyDial,
-      refresh_enabled: refreshEnabled,
-      status: domainErrors.length > 0 ? "completed" : "completed",
-      validation_errors: domainErrors.length > 0 ? domainErrors : [],
-      raw_json: rawJsonString,
-      render_md: renderMd
-    };
-
-    mode.domains.forEach(domain => {
-      if (normalizedData[domain]) {
-        runData[domain] = normalizedData[domain];
-      }
-    });
-
-    const run = await base44.entities.Run.create(runData);
-    setStatus("completed");
-    navigate(`/results?id=${run.id}`);
   };
 
   const showRefreshToggle = executionMode === "full";
