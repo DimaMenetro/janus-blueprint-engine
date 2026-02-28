@@ -17,6 +17,7 @@ import {
 import StatusPill from "@/components/janus/StatusPill";
 import { Play, Zap, Info, Wrench } from "lucide-react";
 import { EXECUTION_MODES, validateJanusOutput, JANUS_SCHEMA } from "@/components/janus/janusSchema";
+import { executeJanus } from "@/components/janus/ExecutionEngine";
 
 function buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) {
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
