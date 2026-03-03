@@ -64,7 +64,7 @@ export default function GlassRunCard({ run, t, isDark }) {
             </div>
           </div>
           <span style={{
-            flexShrink: 0, padding: "4px 10px", borderRadius: 10,
+            flexShrink: 0, padding: "4px 10px", borderRadius: 999,
             fontSize: 11, fontWeight: 600,
             ...statusStyle,
           }}>

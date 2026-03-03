@@ -51,7 +51,7 @@ export default function GlassResultTabs({ run, mode, t, isDark, isAdmin }) {
           marginBottom: 16,
           overflowX: "auto",
           ...glassSurface(t),
-          borderRadius: 20,
+          borderRadius: 999,
         }}
       >
         {availableTabs.map(tabKey => {
@@ -66,7 +66,7 @@ export default function GlassResultTabs({ run, mode, t, isDark, isAdmin }) {
                 flex: "1 0 auto",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                 padding: "8px 12px",
-                borderRadius: 16,
+                borderRadius: 999,
                 fontSize: 12,
                 fontWeight: isActive ? 600 : 500,
                 color: isActive ? t.tabTextActive : t.tabText,

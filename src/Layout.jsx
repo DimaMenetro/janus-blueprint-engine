@@ -42,10 +42,10 @@ function LayoutInner({ children }) {
           background: isDark ? "rgba(10,12,18,0.6)" : "rgba(255,255,255,0.35)",
           backdropFilter: "blur(40px) saturate(180%)",
           WebkitBackdropFilter: "blur(40px) saturate(180%)",
-          borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)"}`,
+          borderBottom: `1.5px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)"}`,
           boxShadow: isDark
             ? "inset 0 -1px 0 0 rgba(255,255,255,0.04)"
-            : "inset 0 -1px 0 0 rgba(0,0,0,0.02), 0 1px 8px rgba(0,0,0,0.03)",
+            : "inset 0 -1px 0 0 rgba(0,0,0,0.02), 0 1px 8px rgba(0,0,0,0.03), 0 0 0 0.5px rgba(255,255,255,0.3)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

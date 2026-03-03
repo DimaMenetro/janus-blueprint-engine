@@ -60,7 +60,7 @@ export default function GlassSelect({ label, value, onChange, options, t, isDark
               WebkitBackdropFilter: "blur(40px) saturate(180%)",
               border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.7)"}`,
               boxShadow: isDark ? "0 16px 48px rgba(0,0,0,0.5)" : "0 16px 48px rgba(100,110,160,0.12)",
-              borderRadius: 14,
+              borderRadius: 22,
               overflow: "hidden",
             }}
           >

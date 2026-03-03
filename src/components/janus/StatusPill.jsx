@@ -20,7 +20,7 @@ export default function StatusPill({ status = "idle" }) {
       alignItems: "center",
       gap: 6,
       padding: "5px 14px",
-      borderRadius: 20,
+      borderRadius: 999,
       fontSize: 13,
       fontWeight: 600,
       color: config.color(isDark),
