@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
 import { ThemeProvider, useTheme } from "@/components/theme/ThemeProvider";
+import { ExecutionProvider } from "@/components/janus/ExecutionContext";
 import { light, dark } from "@/components/ui/LiquidGlass";
 import AmbientOrbs from "@/components/ui/AmbientOrbs";
 import GlassTabBar from "@/components/ui/GlassTabBar";
@@ -80,7 +81,9 @@ function LayoutInner({ children }) {
 export default function Layout({ children }) {
   return (
     <ThemeProvider>
-      <LayoutInner>{children}</LayoutInner>
+      <ExecutionProvider>
+        <LayoutInner>{children}</LayoutInner>
+      </ExecutionProvider>
     </ThemeProvider>
   );
 }

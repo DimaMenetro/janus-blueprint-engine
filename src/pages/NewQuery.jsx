@@ -2,16 +2,15 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
-import { Play, Zap, Info } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Play, Zap } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import {
   light, dark,
-  glassCard, glassSurface, glassBtn, glassError
+  glassCard, glassBtn, glassError
 } from "@/components/ui/LiquidGlass";
-import StatusPill from "@/components/janus/StatusPill";
-import { EXECUTION_MODES, validateJanusOutput, JANUS_SCHEMA } from "@/components/janus/janusSchema";
+import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import { executeJanus } from "@/components/janus/ExecutionEngine";
+import { useExecution } from "@/components/janus/ExecutionContext";
 import QueryForm from "@/components/janus/QueryForm";
 import ExecutionModeSelector from "@/components/janus/ExecutionModeSelector";
 import ParameterGrid from "@/components/janus/ParameterGrid";
@@ -30,22 +29,19 @@ export default function NewQuery() {
   const [refreshEnabled, setRefreshEnabled] = useState(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const [currentDomain, setCurrentDomain] = useState("");
-  const [domainProgress, setDomainProgress] = useState({ completed: 0, total: 0 });
+  const { startExecution, updateProgress, finishExecution, failExecution } = useExecution();
 
   const handleExecute = async () => {
     if (!queryText.trim()) return;
     setStatus("running");
     setErrorMessage("");
-    setCurrentDomain("");
-    setDomainProgress({ completed: 0, total: 0 });
+    startExecution(queryText);
 
     try {
       const result = await executeJanus(
         { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled },
         ({ domain, status: progressStatus, completedDomains, totalDomains }) => {
-          setCurrentDomain(domain || "");
-          setDomainProgress({ completed: completedDomains, total: totalDomains });
+          updateProgress({ domain, status: progressStatus, completedDomains, totalDomains });
           if (progressStatus === "validating") setStatus("validating");
         },
         generateMarkdown,
@@ -54,14 +50,17 @@ export default function NewQuery() {
 
       if (result.success) {
         setStatus("completed");
+        finishExecution(result.runId);
         navigate(`/results?id=${result.runId}`);
       } else {
         setStatus("failed");
         setErrorMessage("Execution completed with errors:\n\n" + (result.errors || []).join("\n"));
+        updateProgress({ runId: result.runId, status: "failed" });
         navigate(`/results?id=${result.runId}`);
       }
     } catch (err) {
       setStatus("failed");
+      failExecution();
       setErrorMessage(`Unexpected error: ${err.message || err}`);
     }
   };
@@ -105,18 +104,10 @@ export default function NewQuery() {
 
         {/* Footer bar */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
+          display: "flex", alignItems: "center", justifyContent: "flex-end",
           paddingTop: 16, borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)"}`,
           flexWrap: "wrap", gap: 12,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <StatusPill status={status} />
-            {currentDomain && (
-              <span style={{ fontSize: 11, fontFamily: "monospace", color: t.muted, animation: "pulse 2s infinite" }}>
-                ⟳ {currentDomain.toUpperCase()} ({domainProgress.completed}/{domainProgress.total})
-              </span>
-            )}
-          </div>
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
