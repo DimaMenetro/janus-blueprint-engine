@@ -16,12 +16,13 @@
 import React, { useRef, useLayoutEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, History, Zap, Wrench } from "lucide-react";
+import { Plus, History, Zap } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { 
   light, dark,
-  glassTabBar, glassTabActive, glassAccessory
+  glassTabBar, glassTabActive
 } from "@/components/ui/LiquidGlass";
+import BottomAccessory from "@/components/ui/BottomAccessory";
 
 const tabs = [
   { path: "/NewQuery",    label: "New",         icon: Plus },
@@ -29,7 +30,7 @@ const tabs = [
   { path: "/diagnostics", label: "Diagnostics", icon: Zap },
 ];
 
-export default function GlassTabBar({ accessoryContent }) {
+export default function GlassTabBar() {
   const location = useLocation();
   const { isDark } = useTheme();
   const t = isDark ? dark : light;
@@ -70,27 +71,10 @@ export default function GlassTabBar({ accessoryContent }) {
         pointerEvents: "none",
       }}
     >
-      {/* ─── CONTEXT ACCESSORY BAR ─── */}
-      <AnimatePresence>
-        {accessoryContent && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            style={{
-              ...glassAccessory(t),
-              marginBottom: 8,
-              padding: "10px 16px",
-              maxWidth: 420,
-              width: "100%",
-              pointerEvents: "auto",
-            }}
-          >
-            {accessoryContent}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ─── CONTEXT-AWARE BOTTOM ACCESSORY ─── */}
+      <div style={{ pointerEvents: "auto", marginBottom: 8, display: "flex", justifyContent: "center", width: "100%" }}>
+        <BottomAccessory />
+      </div>
 
       {/* ─── TAB BAR PILL ─── */}
       <motion.nav
