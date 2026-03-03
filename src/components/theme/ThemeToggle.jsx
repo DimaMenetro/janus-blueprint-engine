@@ -1,6 +1,6 @@
-import { Moon, Sun } from 'lucide-react';
-import { useTheme } from './ThemeProvider';
-import { cn } from '@/lib/utils';
+import { Moon, Sun } from "lucide-react";
+import { motion } from "framer-motion";
+import { useTheme } from "./ThemeProvider";
 
 export default function ThemeToggle() {
   const { isDark, toggleTheme } = useTheme();
@@ -8,29 +8,32 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={toggleTheme}
-      className={cn(
-        "relative w-14 h-7 rounded-full transition-all duration-300",
-        "backdrop-blur-xl border border-white/20",
-        isDark 
-          ? "bg-gradient-to-r from-purple-500/30 to-red-500/30" 
-          : "bg-gradient-to-r from-blue-400/30 to-pink-400/30"
-      )}
+      style={{
+        width: 40, height: 40,
+        borderRadius: 14,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "pointer",
+        background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.45)",
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.65)"}`,
+        boxShadow: `inset 0 1px 0 0 rgba(255,255,255,${isDark ? "0.06" : "0.7"})`,
+        transition: "all 0.3s ease",
+      }}
     >
-      <div
-        className={cn(
-          "absolute top-0.5 w-6 h-6 rounded-full transition-all duration-300",
-          "backdrop-blur-md border border-white/40 shadow-lg",
-          isDark 
-            ? "left-0.5 bg-purple-100/90" 
-            : "left-7 bg-pink-100/90"
-        )}
+      <motion.div
+        key={isDark ? "moon" : "sun"}
+        initial={{ scale: 0.5, rotate: -30, opacity: 0 }}
+        animate={{ scale: 1, rotate: 0, opacity: 1 }}
+        exit={{ scale: 0.5, rotate: 30, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 400, damping: 20 }}
       >
         {isDark ? (
-          <Moon className="w-4 h-4 text-purple-700 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          <Moon style={{ width: 17, height: 17, color: "#94a3b8" }} />
         ) : (
-          <Sun className="w-4 h-4 text-pink-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          <Sun style={{ width: 17, height: 17, color: "#475569" }} />
         )}
-      </div>
+      </motion.div>
     </button>
   );
 }
