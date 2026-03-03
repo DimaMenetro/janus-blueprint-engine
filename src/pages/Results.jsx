@@ -1,24 +1,18 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, RefreshCw, BookOpen, Brain, Shield, Rocket, Layers, Map, Download, AlertTriangle } from "lucide-react";
-
-import RefreshTab from "@/components/janus/tabs/RefreshTab";
-import CorpusTab from "@/components/janus/tabs/CorpusTab";
-import CogitoTab from "@/components/janus/tabs/CogitoTab";
-import AnimusTab from "@/components/janus/tabs/AnimusTab";
-import ActusTab from "@/components/janus/tabs/ActusTab";
-import SynthesisTab from "@/components/janus/tabs/SynthesisTab";
-import BlueprintTab from "@/components/janus/tabs/BlueprintTab";
-import ExportTab from "@/components/janus/tabs/ExportTab";
+import { motion } from "framer-motion";
+import { ArrowLeft, AlertTriangle } from "lucide-react";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { light, dark, glassCard, glassSurface, glassBtn, glassError } from "@/components/ui/LiquidGlass";
 import StatusPill from "@/components/janus/StatusPill";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
+import GlassResultTabs from "@/components/janus/GlassResultTabs";
 
 export default function Results() {
   const navigate = useNavigate();
+  const { isDark } = useTheme();
+  const t = isDark ? dark : light;
   const [run, setRun] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -27,231 +21,140 @@ export default function Results() {
     const loadRun = async () => {
       const params = new URLSearchParams(window.location.search);
       const id = params.get("id");
-      
-      if (!id) {
-        navigate("/new-query");
-        return;
-      }
-
-      // Check if current user is admin
-      try {
-        const user = await base44.auth.me();
-        setIsAdmin(user.role === 'admin');
-      } catch {
-        setIsAdmin(false);
-      }
-
+      if (!id) { navigate("/NewQuery"); return; }
+      try { const user = await base44.auth.me(); setIsAdmin(user.role === 'admin'); } catch { setIsAdmin(false); }
       const runs = await base44.entities.Run.filter({ id });
-      if (runs.length > 0) {
-        setRun(runs[0]);
-      }
+      if (runs.length > 0) setRun(runs[0]);
       setLoading(false);
     };
-
     loadRun();
   }, [navigate]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-slate-600 dark:text-slate-300">Loading...</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 1.5, repeat: Infinity }}>
+          <span style={{ fontSize: 15, color: t.subtitle }}>Loading...</span>
+        </motion.div>
       </div>
     );
   }
 
   if (!run) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-slate-600 dark:text-slate-300 mb-4">Run not found</p>
-          <Button onClick={() => navigate("/new-query")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to New Query
-          </Button>
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
+        <p style={{ color: t.subtitle, fontSize: 15 }}>Run not found</p>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => navigate("/NewQuery")}
+          style={{ ...glassBtn(t), padding: "0 20px", height: 40, fontSize: 13, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+        >
+          <ArrowLeft style={{ width: 15, height: 15 }} />
+          Back to New Query
+        </motion.button>
       </div>
     );
   }
 
   const mode = EXECUTION_MODES[run.execution_mode?.toUpperCase()] || EXECUTION_MODES.STANDARD;
-  const availableTabs = mode.domains;
   const hasFailed = run.status === "failed";
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" onClick={() => navigate("/history")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to History
-          </Button>
-          <StatusPill status={run.status} />
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 20px 40px" }}>
+      {/* Top bar */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}
+      >
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => navigate("/history")}
+          style={{
+            ...glassSurface(t),
+            padding: "8px 14px",
+            display: "flex", alignItems: "center", gap: 6,
+            fontSize: 13, fontWeight: 500, color: t.subtitle,
+            cursor: "pointer",
+          }}
+        >
+          <ArrowLeft style={{ width: 14, height: 14 }} />
+          History
+        </motion.button>
+        <StatusPill status={run.status} />
+      </motion.div>
+
+      {/* Query summary card */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ ...glassCard(t), padding: "18px 22px", marginBottom: 20 }}
+      >
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: t.title, marginBottom: 8, lineHeight: 1.4 }}>
+          {run.query_text?.substring(0, 120)}{run.query_text?.length > 120 ? "..." : ""}
+        </h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: t.subtitle, flexWrap: "wrap" }}>
+          <span>Mode: <strong style={{ color: t.title }}>{mode.label}</strong></span>
+          <span>•</span>
+          <span>Output: <strong style={{ color: t.title }}>{run.output_mode}</strong></span>
+          {run.refresh_enabled && (
+            <>
+              <span>•</span>
+              <span style={{
+                fontSize: 11, padding: "2px 8px", borderRadius: 8,
+                background: isDark ? "rgba(59,130,246,0.1)" : "rgba(219,234,254,0.6)",
+                color: isDark ? "#60a5fa" : "#2563eb",
+                border: `1px solid ${isDark ? "rgba(59,130,246,0.2)" : "rgba(147,197,253,0.4)"}`,
+              }}>
+                Refresh Enabled
+              </span>
+            </>
+          )}
         </div>
+      </motion.div>
 
-        <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] p-6 mb-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <h1 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
-                {run.query_text?.substring(0, 100)}{run.query_text?.length > 100 ? "..." : ""}
-              </h1>
-              <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                <span>
-                   CP-002 v2.0 | Mode: <span className="text-slate-800 dark:text-slate-100">{mode.label}</span>
-                </span>
-                <span>•</span>
-                <span>
-                  Output: <span className="text-slate-800 dark:text-slate-100">{run.output_mode}</span>
-                </span>
-                {run.refresh_enabled && (
-                  <>
-                    <span>•</span>
-                    <span className="text-xs px-2 py-0.5 rounded backdrop-blur-[40px] bg-blue-50/[0.15] dark:bg-blue-900/[0.15] text-blue-700 dark:text-blue-400 border border-blue-300/60 dark:border-blue-500/35">Refresh Enabled</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {hasFailed && run.validation_errors && (
-          <div className="backdrop-blur-[40px] bg-red-100/[0.10] dark:bg-red-900/[0.10] border border-red-300/60 dark:border-red-500/35 rounded-2xl p-6 mb-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
-            <div className="flex items-start gap-3 mb-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
-              <div>
-                <h3 className="text-red-600 dark:text-red-400 font-semibold mb-2">Validation Failed</h3>
-                <p className="text-sm text-red-600 dark:text-red-400 mb-3">
-                  The LLM output did not match the expected schema. See errors below:
-                </p>
-                <ul className="space-y-1">
-                  {run.validation_errors.map((err, idx) => (
-                    <li key={idx} className="text-sm text-red-800 dark:text-red-200 font-mono font-medium backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/60 dark:border-red-500/35 px-3 py-1 rounded">
-                      {err}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            {run.raw_json && (
-              <details className="mt-4">
-                <summary className="text-sm font-medium text-red-600 dark:text-red-400 cursor-pointer hover:underline">
-                  View Raw JSON Output
-                </summary>
-                <pre className="mt-2 text-xs text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-100/[0.15] dark:bg-red-900/[0.15] border border-red-300/60 dark:border-red-500/35 p-4 rounded-lg overflow-auto max-h-96">
-                  {run.raw_json}
-                </pre>
-              </details>
-            )}
-          </div>
-        )}
-
-        {hasFailed && !run.validation_errors && run.error_message && (
-          <div className="backdrop-blur-[40px] bg-red-100/[0.10] dark:bg-red-900/[0.10] border border-red-300/60 dark:border-red-500/35 rounded-2xl p-6 mb-6 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
-              <div>
-                <h3 className="text-red-600 dark:text-red-400 font-semibold mb-2">Execution Failed</h3>
-                <pre className="text-sm text-red-800 dark:text-red-200 font-medium whitespace-pre-wrap font-mono backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-950/[0.15] border border-red-300/60 dark:border-red-500/35 p-4 rounded-lg overflow-auto max-h-96">
+      {/* Error display */}
+      {hasFailed && (run.validation_errors || run.error_message) && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ ...glassError(t), padding: "20px 18px", marginBottom: 20 }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <AlertTriangle style={{ width: 18, height: 18, color: isDark ? "#f87171" : "#dc2626", marginTop: 2, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <h3 style={{ color: isDark ? "#f87171" : "#dc2626", fontWeight: 600, marginBottom: 8, fontSize: 15 }}>
+                {run.validation_errors ? "Validation Failed" : "Execution Failed"}
+              </h3>
+              {run.validation_errors?.map((err, idx) => (
+                <div key={idx} style={{
+                  fontSize: 12, fontFamily: "monospace", color: isDark ? "#fca5a5" : "#991b1b",
+                  background: isDark ? "rgba(127,29,29,0.15)" : "rgba(254,226,226,0.4)",
+                  padding: "6px 10px", borderRadius: 8, marginBottom: 4,
+                  border: `1px solid ${isDark ? "rgba(248,113,113,0.1)" : "rgba(252,165,165,0.2)"}`,
+                }}>
+                  {err}
+                </div>
+              ))}
+              {!run.validation_errors && run.error_message && (
+                <pre style={{
+                  fontSize: 12, fontFamily: "monospace", color: isDark ? "#fca5a5" : "#991b1b",
+                  whiteSpace: "pre-wrap", maxHeight: 300, overflow: "auto",
+                }}>
                   {run.error_message}
                 </pre>
-              </div>
+              )}
             </div>
           </div>
-        )}
+        </motion.div>
+      )}
 
-        {!hasFailed && (
-          <Tabs defaultValue={availableTabs[0]} className="w-full">
-            <TabsList className="w-full flex flex-wrap h-auto gap-1 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] p-1 rounded-xl mb-6 border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
-              {availableTabs.includes("refresh") && (
-                <TabsTrigger value="refresh" className="flex items-center gap-1.5 flex-1 min-w-fit">
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Refresh</span>
-                </TabsTrigger>
-              )}
-              {availableTabs.includes("corpus") && (
-                <TabsTrigger value="corpus" className="flex items-center gap-1.5 flex-1 min-w-fit">
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Corpus</span>
-                </TabsTrigger>
-              )}
-              {availableTabs.includes("cogito") && (
-                <TabsTrigger value="cogito" className="flex items-center gap-1.5 flex-1 min-w-fit">
-                  <Brain className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Cogito</span>
-                </TabsTrigger>
-              )}
-              {availableTabs.includes("animus") && (
-                <TabsTrigger value="animus" className="flex items-center gap-1.5 flex-1 min-w-fit">
-                  <Shield className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Animus</span>
-                </TabsTrigger>
-              )}
-              {availableTabs.includes("actus") && (
-                <TabsTrigger value="actus" className="flex items-center gap-1.5 flex-1 min-w-fit">
-                  <Rocket className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Actus</span>
-                </TabsTrigger>
-              )}
-              {availableTabs.includes("synthesis") && (
-                <TabsTrigger value="synthesis" className="flex items-center gap-1.5 flex-1 min-w-fit">
-                  <Layers className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Synthesis</span>
-                </TabsTrigger>
-              )}
-              {availableTabs.includes("blueprint") && (
-                <TabsTrigger value="blueprint" className="flex items-center gap-1.5 flex-1 min-w-fit">
-                  <Map className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Blueprint</span>
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="export" className="flex items-center gap-1.5 flex-1 min-w-fit">
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Export</span>
-              </TabsTrigger>
-            </TabsList>
-
-            <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] overflow-hidden">
-              {availableTabs.includes("refresh") && (
-                <TabsContent value="refresh" className="m-0">
-                  <RefreshTab data={run.refresh} />
-                </TabsContent>
-              )}
-              {availableTabs.includes("corpus") && (
-                <TabsContent value="corpus" className="m-0">
-                  <CorpusTab data={run.corpus} />
-                </TabsContent>
-              )}
-              {availableTabs.includes("cogito") && (
-                <TabsContent value="cogito" className="m-0">
-                  <CogitoTab data={run.cogito} />
-                </TabsContent>
-              )}
-              {availableTabs.includes("animus") && (
-                <TabsContent value="animus" className="m-0">
-                  <AnimusTab data={run.animus} />
-                </TabsContent>
-              )}
-              {availableTabs.includes("actus") && (
-                <TabsContent value="actus" className="m-0">
-                  <ActusTab data={run.actus} />
-                </TabsContent>
-              )}
-              {availableTabs.includes("synthesis") && (
-                <TabsContent value="synthesis" className="m-0">
-                  <SynthesisTab data={run.synthesis} />
-                </TabsContent>
-              )}
-              {availableTabs.includes("blueprint") && (
-                <TabsContent value="blueprint" className="m-0">
-                  <BlueprintTab data={run.blueprint} blueprintLevel={run.blueprint_level} />
-                </TabsContent>
-              )}
-              <TabsContent value="export" className="m-0">
-                <ExportTab rawJson={run.raw_json} renderMd={run.render_md} fullPrompt={run.full_prompt} isAdmin={isAdmin} />
-              </TabsContent>
-            </div>
-          </Tabs>
-        )}
-      </div>
+      {/* Results tabs */}
+      {!hasFailed && (
+        <GlassResultTabs run={run} mode={mode} t={t} isDark={isDark} isAdmin={isAdmin} />
+      )}
     </div>
   );
 }
