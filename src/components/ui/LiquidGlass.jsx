@@ -13,35 +13,35 @@ export const light = {
   orb1:           'radial-gradient(circle, rgba(200,210,240,0.55) 0%, transparent 70%)',
   orb2:           'radial-gradient(circle, rgba(210,200,240,0.45) 0%, transparent 70%)',
 
-  // Card — primary glass container (heavy blur, high refraction)
+  // Card — primary glass container
   card:           'rgba(255,255,255,0.42)',
-  cardBorder:     'rgba(255,255,255,0.72)',
-  cardShadow:     'inset 0 1.5px 0 0 rgba(255,255,255,0.92), inset 0 -1px 1px rgba(0,0,0,0.04), 0 20px 60px rgba(100,110,160,0.08), 0 2px 8px rgba(0,0,0,0.04)',
+  cardBorder:     'rgba(255,255,255,0.55)',
+  cardShadow:     `inset 0 1px 0 0 rgba(255,255,255,0.85), inset 0 -1px 0 0 rgba(0,0,0,0.06), 0 8px 32px rgba(100,110,160,0.10), 0 1px 3px rgba(0,0,0,0.05)`,
 
-  // Surface — secondary glass (lighter weight)
-  surface:        'rgba(255,255,255,0.35)',
-  surfaceBorder:  'rgba(255,255,255,0.6)',
-  surfaceShadow:  'inset 0 1px 0 0 rgba(255,255,255,0.8)',
+  // Surface — secondary glass
+  surface:        'rgba(255,255,255,0.32)',
+  surfaceBorder:  'rgba(255,255,255,0.45)',
+  surfaceShadow:  'inset 0 1px 0 0 rgba(255,255,255,0.75), inset 0 -1px 0 0 rgba(0,0,0,0.04)',
 
-  // Tab bar glass — heavier than card, more refraction
-  tabBar:         'rgba(255,255,255,0.52)',
-  tabBarBorder:   'rgba(255,255,255,0.78)',
-  tabBarShadow:   'inset 0 1.5px 0 0 rgba(255,255,255,0.95), 0 -1px 40px rgba(100,110,160,0.08), 0 8px 32px rgba(0,0,0,0.06)',
+  // Tab bar glass — heavier than card
+  tabBar:         'rgba(255,255,255,0.50)',
+  tabBarBorder:   'rgba(255,255,255,0.60)',
+  tabBarShadow:   'inset 0 1px 0 0 rgba(255,255,255,0.90), inset 0 -1px 0 0 rgba(0,0,0,0.05), 0 6px 24px rgba(100,110,160,0.08)',
 
   // Active tab indicator pill
-  tabActive:      'rgba(255,255,255,0.72)',
-  tabActiveBorder:'rgba(255,255,255,0.9)',
-  tabActiveShadow:'inset 0 1.5px 0 0 rgba(255,255,255,0.95), 0 2px 8px rgba(0,0,0,0.06)',
+  tabActive:      'rgba(255,255,255,0.65)',
+  tabActiveBorder:'rgba(255,255,255,0.75)',
+  tabActiveShadow:'inset 0 1px 0 0 rgba(255,255,255,0.90), inset 0 -1px 0 0 rgba(0,0,0,0.04), 0 2px 6px rgba(0,0,0,0.05)',
 
   // Accessory bar (now playing, context actions)
-  accessory:      'rgba(255,255,255,0.48)',
-  accessoryBorder:'rgba(255,255,255,0.72)',
-  accessoryShadow:'inset 0 1.5px 0 0 rgba(255,255,255,0.9), 0 4px 16px rgba(100,110,160,0.08)',
+  accessory:      'rgba(255,255,255,0.45)',
+  accessoryBorder:'rgba(255,255,255,0.55)',
+  accessoryShadow:'inset 0 1px 0 0 rgba(255,255,255,0.88), inset 0 -1px 0 0 rgba(0,0,0,0.05), 0 4px 16px rgba(100,110,160,0.08)',
 
   // Primary action button
   btn:            'linear-gradient(145deg, rgba(71,85,105,0.85) 0%, rgba(51,65,85,0.9) 100%)',
-  btnBorder:      'rgba(255,255,255,0.25)',
-  btnShadow:      'inset 0 1.5px 0 0 rgba(255,255,255,0.2), 0 8px 24px rgba(51,65,85,0.2)',
+  btnBorder:      'rgba(255,255,255,0.20)',
+  btnShadow:      'inset 0 1px 0 0 rgba(255,255,255,0.22), inset 0 -1px 0 0 rgba(0,0,0,0.10), 0 6px 20px rgba(51,65,85,0.18)',
 
   // States
   successBg:      'rgba(240,253,244,0.55)',
@@ -68,28 +68,28 @@ export const dark = {
   orb2:           'radial-gradient(circle, rgba(80,50,120,0.25) 0%, transparent 70%)',
 
   card:           'rgba(255,255,255,0.055)',
-  cardBorder:     'rgba(255,255,255,0.1)',
-  cardShadow:     'inset 0 1.5px 0 0 rgba(255,255,255,0.07), inset 0 -1px 1px rgba(0,0,0,0.3), 0 20px 60px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.25)',
+  cardBorder:     'rgba(255,255,255,0.08)',
+  cardShadow:     'inset 0 1px 0 0 rgba(255,255,255,0.09), inset 0 -1px 0 0 rgba(0,0,0,0.35), 0 8px 32px rgba(0,0,0,0.30), 0 1px 3px rgba(0,0,0,0.20)',
 
-  surface:        'rgba(255,255,255,0.05)',
-  surfaceBorder:  'rgba(255,255,255,0.08)',
-  surfaceShadow:  'inset 0 1px 0 0 rgba(255,255,255,0.06)',
+  surface:        'rgba(255,255,255,0.045)',
+  surfaceBorder:  'rgba(255,255,255,0.07)',
+  surfaceShadow:  'inset 0 1px 0 0 rgba(255,255,255,0.07), inset 0 -1px 0 0 rgba(0,0,0,0.25)',
 
-  tabBar:         'rgba(255,255,255,0.07)',
-  tabBarBorder:   'rgba(255,255,255,0.12)',
-  tabBarShadow:   'inset 0 1.5px 0 0 rgba(255,255,255,0.08), 0 -1px 40px rgba(0,0,0,0.15), 0 8px 32px rgba(0,0,0,0.3)',
+  tabBar:         'rgba(255,255,255,0.065)',
+  tabBarBorder:   'rgba(255,255,255,0.10)',
+  tabBarShadow:   'inset 0 1px 0 0 rgba(255,255,255,0.10), inset 0 -1px 0 0 rgba(0,0,0,0.30), 0 6px 24px rgba(0,0,0,0.25)',
 
-  tabActive:      'rgba(255,255,255,0.12)',
-  tabActiveBorder:'rgba(255,255,255,0.18)',
-  tabActiveShadow:'inset 0 1.5px 0 0 rgba(255,255,255,0.1), 0 2px 8px rgba(0,0,0,0.2)',
+  tabActive:      'rgba(255,255,255,0.10)',
+  tabActiveBorder:'rgba(255,255,255,0.15)',
+  tabActiveShadow:'inset 0 1px 0 0 rgba(255,255,255,0.12), inset 0 -1px 0 0 rgba(0,0,0,0.20), 0 2px 6px rgba(0,0,0,0.18)',
 
-  accessory:      'rgba(255,255,255,0.06)',
-  accessoryBorder:'rgba(255,255,255,0.1)',
-  accessoryShadow:'inset 0 1.5px 0 0 rgba(255,255,255,0.07), 0 4px 16px rgba(0,0,0,0.25)',
+  accessory:      'rgba(255,255,255,0.055)',
+  accessoryBorder:'rgba(255,255,255,0.09)',
+  accessoryShadow:'inset 0 1px 0 0 rgba(255,255,255,0.09), inset 0 -1px 0 0 rgba(0,0,0,0.28), 0 4px 16px rgba(0,0,0,0.22)',
 
   btn:            'linear-gradient(145deg, rgba(148,163,184,0.18) 0%, rgba(100,116,139,0.22) 100%)',
-  btnBorder:      'rgba(255,255,255,0.1)',
-  btnShadow:      'inset 0 1.5px 0 0 rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.3)',
+  btnBorder:      'rgba(255,255,255,0.09)',
+  btnShadow:      'inset 0 1px 0 0 rgba(255,255,255,0.10), inset 0 -1px 0 0 rgba(0,0,0,0.22), 0 6px 20px rgba(0,0,0,0.25)',
 
   successBg:      'rgba(20,83,45,0.2)',
   successBorder:  'rgba(74,222,128,0.2)',
