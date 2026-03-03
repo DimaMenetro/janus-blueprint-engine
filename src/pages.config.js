@@ -50,6 +50,7 @@
 import Diagnostics from './pages/Diagnostics';
 import History from './pages/History';
 import Results from './pages/Results';
+import NewQuery from './pages/NewQuery';
 import __Layout from './Layout.jsx';
 
 
@@ -57,6 +58,7 @@ export const PAGES = {
     "Diagnostics": Diagnostics,
     "History": History,
     "Results": Results,
+    "NewQuery": NewQuery,
 }
 
 export const pagesConfig = {
