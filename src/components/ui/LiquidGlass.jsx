@@ -13,25 +13,25 @@ export const light = {
   orb1:           'radial-gradient(circle, rgba(200,210,240,0.55) 0%, transparent 70%)',
   orb2:           'radial-gradient(circle, rgba(210,200,240,0.45) 0%, transparent 70%)',
 
-  // Card — primary glass container (heavy blur, high refraction, convex rim)
+  // Card — primary glass container (heavy blur, high refraction)
   card:           'rgba(255,255,255,0.42)',
   cardBorder:     'rgba(255,255,255,0.72)',
-  cardShadow:     'inset 0 2px 0 0 rgba(255,255,255,0.95), inset 0 -1.5px 2px rgba(0,0,0,0.05), 0 24px 64px rgba(100,110,160,0.10), 0 2px 10px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(255,255,255,0.3)',
+  cardShadow:     'inset 0 1.5px 0 0 rgba(255,255,255,0.92), inset 0 -1px 1px rgba(0,0,0,0.04), 0 20px 60px rgba(100,110,160,0.08), 0 2px 8px rgba(0,0,0,0.04)',
 
-  // Surface — secondary glass (lighter weight, soft rim highlight)
+  // Surface — secondary glass (lighter weight)
   surface:        'rgba(255,255,255,0.35)',
   surfaceBorder:  'rgba(255,255,255,0.6)',
-  surfaceShadow:  'inset 0 1.5px 0 0 rgba(255,255,255,0.85), 0 0 0 0.5px rgba(255,255,255,0.2)',
+  surfaceShadow:  'inset 0 1px 0 0 rgba(255,255,255,0.8)',
 
-  // Tab bar glass — heavier than card, more refraction, capsule shape
+  // Tab bar glass — heavier than card, more refraction
   tabBar:         'rgba(255,255,255,0.52)',
-  tabBarBorder:   'rgba(255,255,255,0.80)',
-  tabBarShadow:   'inset 0 2px 0 0 rgba(255,255,255,0.97), 0 -1px 40px rgba(100,110,160,0.08), 0 10px 36px rgba(0,0,0,0.07), 0 0 0 0.5px rgba(255,255,255,0.4)',
+  tabBarBorder:   'rgba(255,255,255,0.78)',
+  tabBarShadow:   'inset 0 1.5px 0 0 rgba(255,255,255,0.95), 0 -1px 40px rgba(100,110,160,0.08), 0 8px 32px rgba(0,0,0,0.06)',
 
-  // Active tab indicator pill — full capsule
+  // Active tab indicator pill
   tabActive:      'rgba(255,255,255,0.72)',
-  tabActiveBorder:'rgba(255,255,255,0.92)',
-  tabActiveShadow:'inset 0 2px 0 0 rgba(255,255,255,0.97), 0 2px 10px rgba(0,0,0,0.07)',
+  tabActiveBorder:'rgba(255,255,255,0.9)',
+  tabActiveShadow:'inset 0 1.5px 0 0 rgba(255,255,255,0.95), 0 2px 8px rgba(0,0,0,0.06)',
 
   // Accessory bar (now playing, context actions)
   accessory:      'rgba(255,255,255,0.48)',
@@ -67,21 +67,21 @@ export const dark = {
   orb1:           'radial-gradient(circle, rgba(56,80,140,0.3) 0%, transparent 70%)',
   orb2:           'radial-gradient(circle, rgba(80,50,120,0.25) 0%, transparent 70%)',
 
-  card:           'rgba(255,255,255,0.06)',
-  cardBorder:     'rgba(255,255,255,0.12)',
-  cardShadow:     'inset 0 2px 0 0 rgba(255,255,255,0.09), inset 0 -1.5px 2px rgba(0,0,0,0.35), 0 24px 64px rgba(0,0,0,0.4), 0 2px 10px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.06)',
+  card:           'rgba(255,255,255,0.055)',
+  cardBorder:     'rgba(255,255,255,0.1)',
+  cardShadow:     'inset 0 1.5px 0 0 rgba(255,255,255,0.07), inset 0 -1px 1px rgba(0,0,0,0.3), 0 20px 60px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.25)',
 
   surface:        'rgba(255,255,255,0.05)',
-  surfaceBorder:  'rgba(255,255,255,0.1)',
-  surfaceShadow:  'inset 0 1.5px 0 0 rgba(255,255,255,0.07), 0 0 0 0.5px rgba(255,255,255,0.04)',
+  surfaceBorder:  'rgba(255,255,255,0.08)',
+  surfaceShadow:  'inset 0 1px 0 0 rgba(255,255,255,0.06)',
 
-  tabBar:         'rgba(255,255,255,0.08)',
-  tabBarBorder:   'rgba(255,255,255,0.14)',
-  tabBarShadow:   'inset 0 2px 0 0 rgba(255,255,255,0.1), 0 -1px 40px rgba(0,0,0,0.15), 0 10px 36px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(255,255,255,0.06)',
+  tabBar:         'rgba(255,255,255,0.07)',
+  tabBarBorder:   'rgba(255,255,255,0.12)',
+  tabBarShadow:   'inset 0 1.5px 0 0 rgba(255,255,255,0.08), 0 -1px 40px rgba(0,0,0,0.15), 0 8px 32px rgba(0,0,0,0.3)',
 
-  tabActive:      'rgba(255,255,255,0.14)',
-  tabActiveBorder:'rgba(255,255,255,0.2)',
-  tabActiveShadow:'inset 0 2px 0 0 rgba(255,255,255,0.12), 0 2px 10px rgba(0,0,0,0.25)',
+  tabActive:      'rgba(255,255,255,0.12)',
+  tabActiveBorder:'rgba(255,255,255,0.18)',
+  tabActiveShadow:'inset 0 1.5px 0 0 rgba(255,255,255,0.1), 0 2px 8px rgba(0,0,0,0.2)',
 
   accessory:      'rgba(255,255,255,0.06)',
   accessoryBorder:'rgba(255,255,255,0.1)',
@@ -108,32 +108,32 @@ export const dark = {
 
 // ─── GLASS STYLE FACTORIES ─────────────────────────────────────────────────
 
-/** Primary glass card — heavy blur, specular rim light, pillowy radius */
+/** Primary glass card — heavy blur, smooth contoured corners, thin border */
 export const glassCard = (t) => ({
   background: t.card,
   backdropFilter: 'blur(40px) saturate(180%)',
   WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-  border: `1.5px solid ${t.cardBorder}`,
+  border: `1px solid ${t.cardBorder}`,
   boxShadow: t.cardShadow,
-  borderRadius: 32,
+  borderRadius: 28,
 });
 
-/** Secondary glass surface — lighter blur, rounded pebble feel */
+/** Secondary glass surface — lighter blur, smooth rounded edges */
 export const glassSurface = (t) => ({
   background: t.surface,
   backdropFilter: 'blur(24px) saturate(160%)',
   WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-  border: `1.5px solid ${t.surfaceBorder}`,
+  border: `1px solid ${t.surfaceBorder}`,
   boxShadow: t.surfaceShadow,
-  borderRadius: 22,
+  borderRadius: 20,
 });
 
-/** Tab bar glass — heaviest blur, floating capsule */
+/** Tab bar glass — heaviest blur, full capsule pill */
 export const glassTabBar = (t) => ({
   background: t.tabBar,
   backdropFilter: 'blur(50px) saturate(200%)',
   WebkitBackdropFilter: 'blur(50px) saturate(200%)',
-  border: `1.5px solid ${t.tabBarBorder}`,
+  border: `1px solid ${t.tabBarBorder}`,
   boxShadow: t.tabBarShadow,
   borderRadius: 999,
 });
@@ -148,40 +148,40 @@ export const glassTabActive = (t) => ({
   borderRadius: 999,
 });
 
-/** Accessory bar (mini player, context bar) — smooth lozenge */
+/** Accessory bar — smooth lozenge, thin border */
 export const glassAccessory = (t) => ({
   background: t.accessory,
   backdropFilter: 'blur(40px) saturate(180%)',
   WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-  border: `1.5px solid ${t.accessoryBorder}`,
+  border: `1px solid ${t.accessoryBorder}`,
   boxShadow: t.accessoryShadow,
-  borderRadius: 28,
+  borderRadius: 999,
 });
 
-/** Primary action button — rounded capsule */
+/** Primary action button — full pill capsule, thin border */
 export const glassBtn = (t) => ({
   background: t.btn,
   backdropFilter: 'blur(20px)',
   WebkitBackdropFilter: 'blur(20px)',
-  border: `1.5px solid ${t.btnBorder}`,
+  border: `1px solid ${t.btnBorder}`,
   boxShadow: t.btnShadow,
   borderRadius: 999,
   color: 'white',
   fontWeight: 600,
 });
 
-/** Error state — softened edges */
+/** Error state — smooth contoured corners, thin border */
 export const glassError = (t) => ({
   background: t.errorBg,
-  border: `1.5px solid ${t.errorBorder}`,
+  border: `1px solid ${t.errorBorder}`,
   boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.3)',
-  borderRadius: 28,
+  borderRadius: 24,
 });
 
-/** Success state — softened edges */
+/** Success state — smooth contoured corners, thin border */
 export const glassSuccess = (t) => ({
   background: t.successBg,
-  border: `1.5px solid ${t.successBorder}`,
+  border: `1px solid ${t.successBorder}`,
   boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.3)',
-  borderRadius: 28,
+  borderRadius: 24,
 });
