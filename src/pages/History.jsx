@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Plus, Search, History as HistoryIcon, Zap, Wrench } from "lucide-react";
-import RunCard from "@/components/janus/RunCard";
+import { motion } from "framer-motion";
+import { Plus, Search, History as HistoryIcon, Zap } from "lucide-react";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { light, dark, glassCard, glassSurface, glassBtn } from "@/components/ui/LiquidGlass";
+import GlassRunCard from "@/components/janus/GlassRunCard";
 
 export default function History() {
+  const { isDark } = useTheme();
+  const t = isDark ? dark : light;
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -25,75 +28,100 @@ export default function History() {
   );
 
   return (
-    <div className="min-h-screen">
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <HistoryIcon className="w-7 h-7 text-blue-600 dark:text-purple-400" />
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Run History
-            </h1>
-          </div>
-          <div className="flex gap-2">
-            <Link to="/diagnostics">
-              <Button variant="outline" className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] hover:bg-white/[0.15] dark:hover:bg-white/[0.08]">
-                <Wrench className="w-4 h-4 mr-2" />
-                Diagnostics
-              </Button>
-            </Link>
-            <Link to="/NewQuery">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                New Query
-              </Button>
-            </Link>
-          </div>
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px 40px" }}>
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <HistoryIcon style={{ width: 24, height: 24, color: isDark ? "#a78bfa" : "#3b82f6" }} />
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: t.title, margin: 0 }}>Run History</h1>
         </div>
+        <Link to="/NewQuery" style={{ textDecoration: "none" }}>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            style={{ ...glassBtn(t), padding: "0 18px", height: 38, fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+          >
+            <Plus style={{ width: 15, height: 15 }} />
+            New Query
+          </motion.button>
+        </Link>
+      </motion.div>
 
-        <div className="relative mb-6">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 dark:text-slate-400" />
-          <Input
-            placeholder="Search by keyword..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)] text-slate-900 dark:text-white font-medium placeholder:text-slate-500 dark:placeholder:text-slate-400"
-          />
+      {/* Search */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        style={{ position: "relative", marginBottom: 20 }}
+      >
+        <Search style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, color: t.muted }} />
+        <input
+          placeholder="Search by keyword..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            ...glassSurface(t),
+            width: "100%",
+            padding: "12px 14px 12px 40px",
+            fontSize: 14,
+            fontWeight: 500,
+            color: t.title,
+            outline: "none",
+            fontFamily: "inherit",
+          }}
+        />
+      </motion.div>
+
+      {/* Content */}
+      {loading ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{ ...glassCard(t), height: 72, opacity: 0.5 }} />
+          ))}
         </div>
-
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-20 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)] animate-pulse" />
-            ))}
-          </div>
-        ) : filteredRuns.length === 0 ? (
-          <div className="text-center py-16 backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] rounded-2xl border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5),0_4px_20px_rgba(0,0,0,0.1)]">
-            <Zap className="w-12 h-12 text-blue-300 dark:text-purple-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
-              {searchQuery ? "No matching runs found" : "No runs yet"}
-            </h3>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
-              {searchQuery
-                ? "Try a different search term"
-                : "Execute your first Janus query to get started"}
-            </p>
-            {!searchQuery && (
-              <Link to="/NewQuery">
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create First Query
-                </Button>
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredRuns.map(run => (
-              <RunCard key={run.id} run={run} />
-            ))}
-          </div>
-        )}
-      </div>
+      ) : filteredRuns.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          style={{ ...glassCard(t), textAlign: "center", padding: "48px 24px" }}
+        >
+          <Zap style={{ width: 40, height: 40, color: isDark ? "#7c3aed" : "#93c5fd", margin: "0 auto 16px" }} />
+          <h3 style={{ fontSize: 17, fontWeight: 600, color: t.title, marginBottom: 8 }}>
+            {searchQuery ? "No matching runs" : "No runs yet"}
+          </h3>
+          <p style={{ fontSize: 14, color: t.subtitle, marginBottom: 20 }}>
+            {searchQuery ? "Try a different search term" : "Execute your first Janus query to get started"}
+          </p>
+          {!searchQuery && (
+            <Link to="/NewQuery" style={{ textDecoration: "none" }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                style={{ ...glassBtn(t), padding: "0 24px", height: 42, fontSize: 14, display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+              >
+                <Plus style={{ width: 16, height: 16 }} />
+                Create First Query
+              </motion.button>
+            </Link>
+          )}
+        </motion.div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filteredRuns.map((run, i) => (
+            <motion.div
+              key={run.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03 }}
+            >
+              <GlassRunCard run={run} t={t} isDark={isDark} />
+            </motion.div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
