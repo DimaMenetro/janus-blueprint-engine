@@ -208,7 +208,7 @@ export const JANUS_SCHEMA = {
     },
 
     // ── SYNTHESIS ────────────────────────────────────────────────
-    // Section V: The Nexus — 4 Named Emergent Patterns
+    // Section V: The Nexus — 6 Intersection Pairs + 4 Named Emergent Patterns
     synthesis: {
       type: "object",
       properties: {
@@ -216,7 +216,61 @@ export const JANUS_SCHEMA = {
         key_takeaways: { type: "array", items: { type: "string" } },
         constraint_collisions: { type: "array", items: { type: "string" } },
         limitation_foreground: { type: "string" },
-        // v2.0 — 4 Named Synthesis Patterns
+        // v2.0 — 6-pair Intersection Matrix
+        intersection_matrix: {
+          type: "object",
+          properties: {
+            corpus_x_cogito: {
+              type: "object",
+              properties: {
+                insight: { type: "string" },
+                tension: { type: "string" },
+                resolution: { type: "string" }
+              }
+            },
+            corpus_x_animus: {
+              type: "object",
+              properties: {
+                insight: { type: "string" },
+                tension: { type: "string" },
+                resolution: { type: "string" }
+              }
+            },
+            corpus_x_actus: {
+              type: "object",
+              properties: {
+                insight: { type: "string" },
+                tension: { type: "string" },
+                resolution: { type: "string" }
+              }
+            },
+            cogito_x_animus: {
+              type: "object",
+              properties: {
+                insight: { type: "string" },
+                tension: { type: "string" },
+                resolution: { type: "string" }
+              }
+            },
+            cogito_x_actus: {
+              type: "object",
+              properties: {
+                insight: { type: "string" },
+                tension: { type: "string" },
+                resolution: { type: "string" }
+              }
+            },
+            animus_x_actus: {
+              type: "object",
+              properties: {
+                insight: { type: "string" },
+                tension: { type: "string" },
+                resolution: { type: "string" }
+              }
+            }
+          }
+        },
+        // v2.0 — 4 Named Synthesis Patterns (from CP-002-O-D-JNP v1.1)
         quantum_foresight: {
           type: "object",
           properties: {
@@ -241,6 +295,16 @@ export const JANUS_SCHEMA = {
             lossless_compression: { type: "string" }
           }
         },
+        // Renamed from alignment_engine to match original v1.1 protocol
+        empathy_driven_strategy: {
+          type: "object",
+          properties: {
+            true_goal_vs_literal_prompt: { type: "string" },
+            behavioral_model: { type: "string" },
+            empathy_strategy: { type: "string" }
+          }
+        },
+        // Backward compat: keep alignment_engine as alias
         alignment_engine: {
           type: "object",
           properties: {
