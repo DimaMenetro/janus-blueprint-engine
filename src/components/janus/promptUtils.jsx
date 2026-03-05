@@ -78,7 +78,7 @@ export function generateMarkdown(data, executionMode) {
     if (data.corpus?.feasibility_notes?.length) { md += "**Feasibility Notes:**\n"; data.corpus.feasibility_notes.forEach(n => md += `- ${n}\n`); md += "\n"; }
     if (data.corpus?.subdomains) {
       md += "**Subdomain Perspectives:**\n\n";
-      const labels = { ai_ml: "AI/ML", distributed_systems: "Distributed Systems", data_engineering: "Data Engineering", cybersecurity: "Cybersecurity", neuroscience: "Neuroscience", physics: "Physics", systems_engineering: "Systems Engineering" };
+      const labels = { distributed_systems: "Distributed Systems & Cloud Architecture", data_engineering: "Data Engineering & Systemic Integrity", cybersecurity: "Cybersecurity & Threat Intelligence", systems_engineering: "Systems Engineering", theoretical_physics: "Theoretical & Quantum Physics", ai_ml: "AI/ML Systems", neuroscience: "Neuroscience" };
       Object.entries(labels).forEach(([key, label]) => {
         const sub = data.corpus.subdomains[key];
         if (sub?.perspective || sub?.key_findings?.length) { md += `### ${label}\n`; if (sub.perspective) md += `*${sub.perspective}*\n`; if (sub.key_findings?.length) sub.key_findings.forEach(f => md += `- ${f}\n`); md += "\n"; }
@@ -106,8 +106,64 @@ export function generateMarkdown(data, executionMode) {
   }
 
   if (domains.includes("synthesis") && data.synthesis) {
-    md += "## Section V: Synthesis\n\n";
+    md += "## Section V: Synthesis — The Nexus\n\n";
+
+    // Intersection Matrix
+    if (data.synthesis?.intersection_matrix) {
+      md += "### Domain Intersection Matrix\n\n";
+      const pairLabels = {
+        corpus_x_cogito: "Corpus × Cogito (Knowledge ↔ Reality)",
+        corpus_x_animus: "Corpus × Animus (Technical ↔ Ethical)",
+        corpus_x_actus: "Corpus × Actus (Quantum Foresight)",
+        cogito_x_animus: "Cogito × Animus (Governed Cogito)",
+        cogito_x_actus: "Cogito × Actus (Narrative Loop)",
+        animus_x_actus: "Animus × Actus (Empathy-Driven Strategy)",
+      };
+      Object.entries(pairLabels).forEach(([key, label]) => {
+        const pair = data.synthesis.intersection_matrix[key];
+        if (pair?.insight || pair?.tension || pair?.resolution) {
+          md += `#### ${label}\n`;
+          if (pair.insight) md += `**Insight:** ${pair.insight}\n`;
+          if (pair.tension) md += `**Tension:** *${pair.tension}*\n`;
+          if (pair.resolution) md += `**Resolution:** ${pair.resolution}\n`;
+          md += "\n";
+        }
+      });
+    }
+
+    // Named Synthesis Patterns
+    if (data.synthesis?.quantum_foresight) {
+      md += "### 5.1 Quantum Foresight Model (Corpus × Actus)\n";
+      if (data.synthesis.quantum_foresight.cross_domain_insight) md += `${data.synthesis.quantum_foresight.cross_domain_insight}\n`;
+      if (data.synthesis.quantum_foresight.metaphor) md += `> *"${data.synthesis.quantum_foresight.metaphor}"*\n`;
+      if (data.synthesis.quantum_foresight.probability_wave?.length) { md += "\n**Plausible Futures:**\n"; data.synthesis.quantum_foresight.probability_wave.forEach(f => md += `- ${f}\n`); }
+      md += "\n";
+    }
+    if (data.synthesis?.governed_cogito) {
+      md += "### 5.2 Governed Cogito (Animus × Cogito)\n";
+      if (data.synthesis.governed_cogito.ethical_filter_applied) md += `**Ethical Filter:** ${data.synthesis.governed_cogito.ethical_filter_applied}\n`;
+      if (data.synthesis.governed_cogito.conscience_verdict) md += `**Verdict:** *"${data.synthesis.governed_cogito.conscience_verdict}"*\n`;
+      if (data.synthesis.governed_cogito.truth_method_soundness) md += `**Method Soundness:** ${data.synthesis.governed_cogito.truth_method_soundness}\n`;
+      md += "\n";
+    }
+    if (data.synthesis?.narrative_loop) {
+      md += "### 5.3 Narrative Loop (Cogito × Actus)\n";
+      if (data.synthesis.narrative_loop.decoded_user_narrative) md += `**Decoded Narrative:** ${data.synthesis.narrative_loop.decoded_user_narrative}\n`;
+      if (data.synthesis.narrative_loop.resonant_strategy) md += `**Resonant Strategy:** ${data.synthesis.narrative_loop.resonant_strategy}\n`;
+      if (data.synthesis.narrative_loop.lossless_compression) md += `> *"${data.synthesis.narrative_loop.lossless_compression}"*\n`;
+      md += "\n";
+    }
+    const empathy = data.synthesis?.empathy_driven_strategy || data.synthesis?.alignment_engine;
+    if (empathy) {
+      md += "### 5.4 Empathy-Driven Strategy (Animus × Actus)\n";
+      if (empathy.true_goal_vs_literal_prompt) md += `**True Goal vs Literal Prompt:** ${empathy.true_goal_vs_literal_prompt}\n`;
+      if (empathy.behavioral_model) md += `**Behavioral Model:** ${empathy.behavioral_model}\n`;
+      if (empathy.empathy_strategy || empathy.alignment_strategy) md += `**Empathy Strategy:** ${empathy.empathy_strategy || empathy.alignment_strategy}\n`;
+      md += "\n";
+    }
+
     if (data.synthesis?.key_takeaways?.length) { md += "### Key Takeaways\n"; data.synthesis.key_takeaways.forEach((t, i) => md += `${i + 1}. ${t}\n`); md += "\n"; }
+    if (data.synthesis?.constraint_collisions?.length) { md += "### Constraint Collisions\n"; data.synthesis.constraint_collisions.forEach(c => md += `- ⚠️ ${c}\n`); md += "\n"; }
     if (data.synthesis?.limitation_foreground) md += `### Limitations\n${data.synthesis.limitation_foreground}\n\n`;
   }
 
