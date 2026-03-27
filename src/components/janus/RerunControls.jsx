@@ -125,7 +125,7 @@ export default function RerunControls({ run, t, isDark, onRerunComplete }) {
             ) : (
               <Map style={{ width: 14, height: 14 }} />
             )}
-            {rerunning === "blueprint" ? "Re-running Blueprint..." : blueprintMissing ? "Run Blueprint" : "Re-run Blueprint"}
+            {rerunning === "blueprint" ? "Re-running Blueprint..." : !hasBlueprint ? "Run Blueprint" : "Re-run Blueprint"}
           </motion.button>
         )}
       </div>

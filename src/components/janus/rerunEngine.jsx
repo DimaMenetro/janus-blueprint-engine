@@ -271,7 +271,8 @@ export async function rerunBlueprint(runId, onProgress) {
   const run = runs[0];
   if (!run) throw new Error("Run not found");
 
-  const missing = ["corpus", "cogito", "animus", "actus", "synthesis"].filter(d => !run[d]);
+  // Blueprint requires core domains; synthesis is used if available but not a hard prerequisite
+  const missing = ["corpus", "cogito", "animus", "actus"].filter(d => !run[d]);
   if (missing.length > 0) throw new Error(`Cannot re-run blueprint — missing prerequisite domains: ${missing.join(", ")}`);
 
   await base44.entities.Run.update(runId, { status: "running" });
