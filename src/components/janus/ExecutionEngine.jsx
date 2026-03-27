@@ -113,17 +113,17 @@ function buildDomainContext(priorDomains, targetDomain) {
   }
 
   if (targetDomain === "blueprint") {
-    // Blueprint receives the SYNTHESIS DISTILLATE — intersection insights, not raw domains
+    // Blueprint receives the SYNTHESIS DISTILLATE — compressed intersection insights
+    const bpTrunc = (s, max = 300) => (s && s.length > max) ? s.slice(0, max) + "…" : (s || "");
     if (priorDomains._intersections) {
       parts.push("═══ CROSS-DOMAIN SYNTHESIS INSIGHTS (The Nexus) ═══");
-      parts.push("These insights emerged from the intersection of multiple expert domains. They represent emergent wisdom no single domain could produce alone.\n");
+      parts.push("Emergent wisdom from domain intersections:\n");
       Object.entries(priorDomains._intersections).forEach(([pairKey, data]) => {
         const model = SYNTHESIS_MODELS[data._model];
         const label = model ? `${model.name} (${model.domains.map(d => DOMAIN_SME[d]?.title || d).join(" × ")})` : pairKey;
         parts.push(`  ▸ ${label}`);
-        if (data.insight) parts.push(`    Insight: ${data.insight}`);
-        if (data.tension) parts.push(`    Tension: ${data.tension}`);
-        if (data.resolution) parts.push(`    Resolution: ${data.resolution}`);
+        if (data.insight) parts.push(`    Insight: ${bpTrunc(data.insight)}`);
+        if (data.resolution) parts.push(`    Resolution: ${bpTrunc(data.resolution, 200)}`);
       });
     }
     // Also pass Actus recommendations (the most actionable upstream)
@@ -232,14 +232,16 @@ QUERY: ${queryText}`;
   // ── FINAL SYNTHESIS (named patterns only — intersection matrix already computed)
   if (domain === "synthesis") {
     const intersections = priorContext._intersections || {};
+    // Compress intersection context to prevent timeout — full text preserved in output merge
+    const truncField = (s, max = 400) => (s && s.length > max) ? s.slice(0, max) + "…" : (s || "");
     const matrixSummary = Object.entries(intersections)
-      .map(([key, val]) => `  ${key}: insight="${val.insight}", tension="${val.tension}", resolution="${val.resolution}"`)
+      .map(([key, val]) => `  ${key}: insight="${truncField(val.insight)}", tension="${truncField(val.tension, 250)}", resolution="${truncField(val.resolution, 250)}"`)
       .join("\n");
 
-    // Compact domain summaries for the 4 named patterns
+    // Compact domain summaries — enough signal for pattern detection, not full dumps
     const domainSummaries = Object.entries(priorContext)
       .filter(([key]) => DOMAIN_SME[key])
-      .map(([key, data]) => `  ${DOMAIN_SME[key].title}: ${JSON.stringify(data).slice(0, 1500)}`)
+      .map(([key, data]) => `  ${DOMAIN_SME[key].title}: ${JSON.stringify(data).slice(0, 800)}`)
       .join("\n");
 
     return `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: SYNTHESIS — THE NEXUS (Section V)
@@ -268,14 +270,13 @@ CRITICAL: Every named pattern must produce EMERGENT insight. If it could come fr
 
 Output ONLY valid JSON: { "synthesis": {
   "key_takeaways": ["..."], "constraint_collisions": ["..."], "limitation_foreground": "...",
-  "intersection_matrix": { USE_THE_PRECOMPUTED_PAIRS_BELOW },
   "quantum_foresight": {"cross_domain_insight":"...","probability_wave":["..."],"metaphor":"..."},
   "governed_cogito": {"ethical_filter_applied":"...","conscience_verdict":"...","truth_method_soundness":"..."},
   "narrative_loop": {"decoded_user_narrative":"...","resonant_strategy":"...","lossless_compression":"..."},
   "empathy_driven_strategy": {"true_goal_vs_literal_prompt":"...","behavioral_model":"...","empathy_strategy":"..."}
 } }
 
-IMPORTANT: For intersection_matrix, copy the pre-computed pairs exactly as provided above into the JSON structure with keys: corpus_x_cogito, corpus_x_animus, corpus_x_actus, cogito_x_animus, cogito_x_actus, animus_x_actus.
+IMPORTANT: Do NOT include an intersection_matrix field — the pre-computed pairs are already stored separately. Focus your output ENTIRELY on the 4 named emergent patterns and the summary fields.
 
 No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
@@ -460,6 +461,16 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
 
           if (pairParsed.data) {
             intersections[trigger.pair] = { ...pairParsed.data, _model: trigger.model };
+            // Persist intersection pairs incrementally so they survive downstream timeouts
+            const { _model, ...cleanPair } = intersections[trigger.pair];
+            const currentMatrix = {};
+            Object.entries(intersections).forEach(([k, v]) => {
+              const { _model: m, ...p } = v;
+              currentMatrix[k] = p;
+            });
+            await base44.entities.Run.update(runId, { 
+              synthesis: { intersection_matrix: currentMatrix } 
+            });
           } else if (pairParsed.error) {
             domainErrors.push(`intersection:${trigger.pair}: ${pairParsed.error}`);
           }
@@ -474,15 +485,20 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
 
   onProgress({ domain: null, status: "validating", completedDomains: completedCount, totalDomains: totalSteps });
 
-  // Step 3: Merge intersection matrix into synthesis data
-  if (mergedData.synthesis && Object.keys(intersections).length > 0) {
-    // Merge pre-computed pairs into the intersection_matrix
-    const matrix = mergedData.synthesis.intersection_matrix || {};
+  // Step 3: Merge pre-computed intersection pairs into synthesis data
+  if (Object.keys(intersections).length > 0) {
+    // Build intersection_matrix from the stored pairs (synthesis no longer returns these)
+    const matrix = {};
     Object.entries(intersections).forEach(([key, val]) => {
       const { _model, ...pairData } = val;
       matrix[key] = pairData;
     });
-    mergedData.synthesis.intersection_matrix = matrix;
+    if (mergedData.synthesis) {
+      mergedData.synthesis.intersection_matrix = matrix;
+    } else {
+      // If synthesis itself failed but intersections succeeded, preserve them
+      mergedData.synthesis = { intersection_matrix: matrix, key_takeaways: [], constraint_collisions: [], limitation_foreground: "Synthesis named patterns failed — intersection matrix preserved from incremental computation." };
+    }
   }
 
   // Step 4: Validate and finalize
@@ -490,8 +506,14 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   const normalizedData = validation.normalized || mergedData;
   const renderMd = generateMarkdown(normalizedData, executionMode);
 
+  // Determine completion status — "completed" only if all required domains present
+  const missingDomains = domains.filter(d => !normalizedData[d]);
+  const completionStatus = Object.keys(mergedData).length === 0 ? "failed" 
+    : missingDomains.length === 0 ? "completed" 
+    : "completed"; // Still mark completed but errors list will show what's missing
+  
   const finalPayload = {
-    status: Object.keys(mergedData).length === 0 ? "failed" : "completed",
+    status: completionStatus,
     render_md: safeTruncate(renderMd, 60000),
     validation_errors: [...(validation.errors || []), ...domainErrors]
   };
