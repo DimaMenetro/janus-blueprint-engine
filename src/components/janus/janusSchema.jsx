@@ -412,6 +412,10 @@ function normalizeValue(value, schema, path = "") {
   if (schema.enum && schema.enum.includes("med") && value === "medium") {
     return "med";
   }
+  // Normalize LLM drift: "Probable" → "Contested" per CP-002 epistemic taxonomy
+  if (schema.enum && schema.enum.includes("Contested") && value === "Probable") {
+    return "Contested";
+  }
   if (schema.type === "array" && Array.isArray(value) && schema.items) {
     return value.map((item, idx) => normalizeValue(item, schema.items, `${path}[${idx}]`));
   }
