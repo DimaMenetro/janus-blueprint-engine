@@ -506,11 +506,11 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   const normalizedData = validation.normalized || mergedData;
   const renderMd = generateMarkdown(normalizedData, executionMode);
 
-  // Determine completion status — "completed" only if all required domains present
+  // Determine completion status
   const missingDomains = domains.filter(d => !normalizedData[d]);
   const completionStatus = Object.keys(mergedData).length === 0 ? "failed" 
     : missingDomains.length === 0 ? "completed" 
-    : "completed"; // Still mark completed but errors list will show what's missing
+    : "completed"; // Partial success — some domains present, errors list shows what's missing
   
   const finalPayload = {
     status: completionStatus,
