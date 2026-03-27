@@ -7,7 +7,7 @@ import { base44 } from "@/api/base44Client";
 import { EXECUTION_MODES, validateJanusOutput } from "./janusSchema";
 import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity, buildSynthesisPrompt } from "./domainSME";
 
-const MAX_RAW_JSON_LENGTH = 50000;
+const MAX_RAW_JSON_LENGTH = 200000; // Full fidelity for cephalon consumption
 const MAX_PROMPT_LENGTH = 10000;
 const MAX_CONTEXT_LENGTH = 6000; // Increased — we pass focused context per call now
 
