@@ -157,8 +157,8 @@ function buildIntersectionPrompt(pairKey, modelKey, domainA, domainB, dataA, dat
   const domA = DOMAIN_SME[domainA];
   const domB = DOMAIN_SME[domainB];
 
-  const contextA = JSON.stringify(dataA).slice(0, 3000);
-  const contextB = JSON.stringify(dataB).slice(0, 3000);
+  const contextA = JSON.stringify(dataA).slice(0, 6000);
+  const contextB = JSON.stringify(dataB).slice(0, 6000);
 
   return `INITIATE PROTOCOL: JANUSSMEv2.0 — CROSS-DOMAIN SYNTHESIS
 
