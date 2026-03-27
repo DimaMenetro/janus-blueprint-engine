@@ -3,11 +3,13 @@ import { motion } from "framer-motion";
 import { RefreshCw, Layers, Map, AlertTriangle, CheckCircle } from "lucide-react";
 import { glassBtn, glassError } from "@/components/ui/LiquidGlass";
 import { rerunSynthesis, rerunBlueprint } from "./rerunEngine";
+import { useExecution } from "./ExecutionContext";
 
 export default function RerunControls({ run, t, isDark, onRerunComplete }) {
   const [rerunning, setRerunning] = useState(null); // "synthesis" | "blueprint" | null
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
+  const { startExecution, updateProgress, finishExecution, failExecution } = useExecution();
 
   // Gate checks reflect the actual dependency graph of the blueprint prompt:
   // Blueprint consumes corpus constraints, actus recommendations, animus ethical stance.
@@ -34,15 +36,34 @@ export default function RerunControls({ run, t, isDark, onRerunComplete }) {
     setError(null);
     setProgress({ detail: "Starting..." });
 
+    // Drive the global ExecutionContext so BottomAccessory shows progress
+    const label = target === "synthesis" ? "Re-run: Synthesis" : "Re-run: Blueprint";
+    startExecution(label);
+    updateProgress({ runId: run.id, status: "running" });
+
     try {
       const fn = target === "synthesis" ? rerunSynthesis : rerunBlueprint;
-      const result = await fn(run.id, setProgress);
+      const result = await fn(run.id, (p) => {
+        setProgress(p);
+        // Mirror progress to ExecutionContext
+        updateProgress({
+          domain: p.domain,
+          status: p.status === "completed" ? "running" : p.status,
+          completedDomains: p.completedDomains,
+          totalDomains: p.totalDomains,
+          runId: run.id,
+        });
+      });
       if (!result.success) {
         setError(`Completed with errors: ${result.errors.join(", ")}`);
+        finishExecution(run.id); // Still navigable even with partial errors
+      } else {
+        finishExecution(run.id);
       }
       onRerunComplete();
     } catch (e) {
       setError(e.message);
+      failExecution();
     } finally {
       setRerunning(null);
       setProgress(null);

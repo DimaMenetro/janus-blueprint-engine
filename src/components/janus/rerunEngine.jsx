@@ -120,6 +120,9 @@ No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
 }
 
+// Maximum context size for blueprint prompt — prevents timeout on large runs
+const MAX_BLUEPRINT_CONTEXT = 18000;
+
 // ─── Build blueprint prompt from stored context ───
 function buildBlueprintPrompt(run) {
   const parts = [];
@@ -135,9 +138,29 @@ function buildBlueprintPrompt(run) {
     });
   }
 
+  // Named synthesis patterns — compact summaries if available
+  const namedPatterns = ["quantum_foresight", "governed_cogito", "narrative_loop", "empathy_driven_strategy"];
+  namedPatterns.forEach(key => {
+    const pattern = run.synthesis?.[key];
+    if (pattern) {
+      const summary = Object.values(pattern).filter(v => typeof v === "string").join(" | ");
+      if (summary) parts.push(`  ▸ ${key}: ${summary.slice(0, 300)}`);
+    }
+  });
+
   if (run.actus?.recommendations?.length) {
-    parts.push("\n═══ ACTUS: Key Recommendations ═══");
-    run.actus.recommendations.forEach(r => parts.push(`  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`));
+    parts.push("\n═══ ACTUS: Key Recommendations (compressed) ═══");
+    // Compress recommendations — take id, confidence, probability, and first 200 chars of text
+    run.actus.recommendations.forEach(r => {
+      const shortText = r.text?.length > 200 ? r.text.slice(0, 200) + "..." : r.text;
+      parts.push(`  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${shortText}`);
+    });
+  }
+
+  if (run.actus?.strategic_plan) {
+    const sp = run.actus.strategic_plan;
+    if (sp.immediate_horizon) parts.push(`  Immediate: ${sp.immediate_horizon.slice(0, 300)}`);
+    if (sp.long_term_horizon) parts.push(`  Long-term: ${sp.long_term_horizon.slice(0, 300)}`);
   }
 
   if (run.corpus?.constraints?.length) {
@@ -149,6 +172,9 @@ function buildBlueprintPrompt(run) {
     parts.push(`\n═══ ANIMUS: Ethical Stance ═══\n  ${run.animus.ethical_stance}`);
   }
 
+  // Truncate total context to prevent timeout
+  const contextBlock = safeTruncate(parts.join("\n"), MAX_BLUEPRINT_CONTEXT);
+
   const blueprintLevel = run.blueprint_level || "L2";
   const noveltyDial = run.novelty_dial || "medium";
 
@@ -157,7 +183,7 @@ You are the Janus Blueprint Module.
 Level: ${blueprintLevel} | Novelty: ${noveltyDial} | Output Mode: ${run.output_mode}.
 ${noveltyDial === "high" ? "alternative_approaches REQUIRED." : ""}
 
-${parts.join("\n")}
+${contextBlock}
 
 Output ONLY valid JSON: { "blueprint": { "goal": "...", "assumptions": ["..."], ${noveltyDial === "high" ? '"alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], ' : ""}"steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[]${blueprintLevel !== "L1" ? ',"time_estimate":"...","effort_level":"medium"' : ""}${blueprintLevel === "L2" || blueprintLevel === "L3" ? ',"substeps":[{"substep":"1a","details":"..."}]' : ""}${blueprintLevel === "L3" ? ',"checklist":["..."],"acceptance_tests":["..."]' : ""}}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}] } }
 No markdown fences, no prose outside JSON.
@@ -249,11 +275,18 @@ export async function rerunSynthesis(runId, onProgress) {
   const validation = validateJanusOutput(fullData, allDomains);
   const renderMd = generateMarkdown(validation.normalized || fullData, updatedRun.execution_mode);
 
+  // Write normalized domain data back to fix enum drift (e.g. "Probable" → "Contested")
+  const normalizedSynthData = validation.normalized || fullData;
+  const synthDomainUpdate = {};
+  allDomains.forEach(d => { if (normalizedSynthData[d]) synthDomainUpdate[d] = normalizedSynthData[d]; });
+
   await base44.entities.Run.update(runId, {
+    ...synthDomainUpdate,
     status: errors.length > 0 && !updatedRun.synthesis?.intersection_matrix ? "failed" : "completed",
     render_md: safeTruncate(renderMd, 60000),
-    raw_json: safeTruncate(JSON.stringify(validation.normalized || fullData), MAX_RAW_JSON_LENGTH),
-    validation_errors: [...(updatedRun.validation_errors || []).filter(e => !e.includes("synthesis") && !e.includes("intersection")), ...errors],
+    raw_json: safeTruncate(JSON.stringify(normalizedSynthData), MAX_RAW_JSON_LENGTH),
+    // Replace ALL validation errors — fresh validation + only rerun-specific errors
+    validation_errors: [...(validation.errors || []), ...errors],
   });
 
   onProgress({ domain: null, status: "completed", detail: "Synthesis re-run complete" });
@@ -304,14 +337,22 @@ export async function rerunBlueprint(runId, onProgress) {
   const fullData = {};
   allDomains.forEach(d => { fullData[d] = updatedRun[d]; });
 
+  // Re-validate ALL domains — this normalizes "Probable" → "Contested" and cleans stale errors
   const validation = validateJanusOutput(fullData, allDomains);
-  const renderMd = generateMarkdown(validation.normalized || fullData, updatedRun.execution_mode);
+  const normalizedData = validation.normalized || fullData;
+  const renderMd = generateMarkdown(normalizedData, updatedRun.execution_mode);
+
+  // Write normalized domain data back to fix enum drift (e.g. "Probable" → "Contested")
+  const domainUpdate = {};
+  allDomains.forEach(d => { if (normalizedData[d]) domainUpdate[d] = normalizedData[d]; });
 
   await base44.entities.Run.update(runId, {
+    ...domainUpdate,
     status: errors.length > 0 && !updatedRun.blueprint ? "failed" : "completed",
     render_md: safeTruncate(renderMd, 60000),
-    raw_json: safeTruncate(JSON.stringify(validation.normalized || fullData), MAX_RAW_JSON_LENGTH),
-    validation_errors: [...(updatedRun.validation_errors || []).filter(e => !e.includes("blueprint")), ...errors],
+    raw_json: safeTruncate(JSON.stringify(normalizedData), MAX_RAW_JSON_LENGTH),
+    // Replace ALL validation errors — fresh validation + only rerun-specific errors
+    validation_errors: [...(validation.errors || []), ...errors],
   });
 
   onProgress({ domain: null, status: "completed", detail: "Blueprint re-run complete" });

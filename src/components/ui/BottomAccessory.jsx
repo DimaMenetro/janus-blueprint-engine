@@ -5,7 +5,7 @@
  */
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { light, dark, glassAccessory } from "@/components/ui/LiquidGlass";
@@ -29,8 +29,13 @@ export default function BottomAccessory() {
   const { isDark } = useTheme();
   const t = isDark ? dark : light;
   const { execution, clearExecution } = useExecution();
+  const location = useLocation();
 
   const show = !!execution;
+  // If user is already viewing the results page for this run, suppress "View →"
+  const isOnResultsPage = location.pathname.toLowerCase() === "/results" && 
+    execution?.runId && location.search.includes(execution.runId);
+  const isRerun = execution?.queryText?.startsWith("Re-run:");
 
   return (
     <AnimatePresence>
@@ -66,7 +71,7 @@ export default function BottomAccessory() {
                 fontSize: 12, fontFamily: "monospace", fontWeight: 500,
                 color: t.subtitle, letterSpacing: "0.02em",
               }}>
-                ⟳ {execution.currentDomain.toUpperCase()} ({execution.completed}/{execution.total})
+                ⟳ {execution.currentDomain.toUpperCase()}{execution.total > 0 ? ` (${execution.completed}/${execution.total})` : ""}
               </span>
             ) : execution.status === "completed" ? (
               <span style={{ fontSize: 12, color: isDark ? "#4ade80" : "#16a34a", fontWeight: 500 }}>
@@ -91,10 +96,10 @@ export default function BottomAccessory() {
             )}
           </div>
 
-          {/* View link when complete */}
-          {execution.runId && (execution.status === "completed" || execution.status === "failed") && (
+          {/* View link when complete — hidden if already on results page */}
+          {execution.runId && !isOnResultsPage && (execution.status === "completed" || execution.status === "failed") && (
             <Link
-              to={`/results?id=${execution.runId}`}
+              to={`/Results?id=${execution.runId}`}
               onClick={(e) => e.stopPropagation()}
               style={{
                 fontSize: 12, fontWeight: 600,
@@ -105,6 +110,20 @@ export default function BottomAccessory() {
             >
               View →
             </Link>
+          )}
+          {/* Dismiss button when on results page and complete */}
+          {isOnResultsPage && (execution.status === "completed" || execution.status === "failed") && (
+            <button
+              onClick={(e) => { e.stopPropagation(); clearExecution(); }}
+              style={{
+                fontSize: 11, fontWeight: 500,
+                color: t.muted,
+                background: "none", border: "none",
+                cursor: "pointer", whiteSpace: "nowrap",
+              }}
+            >
+              Dismiss
+            </button>
           )}
         </motion.div>
       )}
