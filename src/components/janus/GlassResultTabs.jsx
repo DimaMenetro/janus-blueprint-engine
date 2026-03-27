@@ -35,7 +35,7 @@ export default function GlassResultTabs({ run, mode, t, isDark, isAdmin }) {
       case "actus":     return <ActusTab data={run.actus} />;
       case "synthesis": return <SynthesisTab data={run.synthesis} />;
       case "blueprint": return <BlueprintTab data={run.blueprint} blueprintLevel={run.blueprint_level} />;
-      case "export":    return <ExportTab rawJson={run.raw_json} renderMd={run.render_md} fullPrompt={run.full_prompt} isAdmin={isAdmin} />;
+      case "export":    return <ExportTab run={run} fullPrompt={run.full_prompt} isAdmin={isAdmin} />;
       default:          return null;
     }
   };

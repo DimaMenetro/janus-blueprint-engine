@@ -8,6 +8,7 @@ import { light, dark, glassCard, glassSurface, glassBtn, glassError } from "@/co
 import StatusPill from "@/components/janus/StatusPill";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import GlassResultTabs from "@/components/janus/GlassResultTabs";
+import RerunControls from "@/components/janus/RerunControls";
 
 export default function Results() {
   const navigate = useNavigate();
@@ -150,6 +151,17 @@ export default function Results() {
           </div>
         </motion.div>
       )}
+
+      {/* Domain re-run controls — show when synthesis or blueprint missing/errored */}
+      <RerunControls
+        run={run}
+        t={t}
+        isDark={isDark}
+        onRerunComplete={async () => {
+          const refreshed = await base44.entities.Run.filter({ id: run.id });
+          if (refreshed.length > 0) setRun(refreshed[0]);
+        }}
+      />
 
       {/* Results tabs */}
       {!hasFailed && (

@@ -2,8 +2,12 @@ import { Button } from "@/components/ui/button";
 import { Download, Copy, FileJson, FileText, CheckCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { reconstructFullJson, reconstructFullMarkdown } from "../exportUtils";
 
-export default function ExportTab({ rawJson, renderMd, fullPrompt, isAdmin }) {
+export default function ExportTab({ run, fullPrompt, isAdmin }) {
+  // Reconstruct full-fidelity data from individual domain fields at export time
+  const rawJson = reconstructFullJson(run);
+  const renderMd = reconstructFullMarkdown(run);
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
 
