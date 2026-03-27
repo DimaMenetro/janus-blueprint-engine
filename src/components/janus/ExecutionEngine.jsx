@@ -328,10 +328,14 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
 
     let domainResult;
     try {
-      domainResult = await base44.integrations.Core.InvokeLLM({
-        prompt: domainPrompt,
-        add_context_from_internet: domain === "refresh" && refreshEnabled
-      });
+      const llmParams = { prompt: domainPrompt };
+      if (domain === "refresh" && refreshEnabled) {
+        llmParams.add_context_from_internet = true;
+        llmParams.model = "gemini_3_flash";
+      } else {
+        llmParams.model = "claude_sonnet_4_6";
+      }
+      domainResult = await base44.integrations.Core.InvokeLLM(llmParams);
     } catch (err) {
       domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
       continue;
