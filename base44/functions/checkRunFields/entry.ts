@@ -7,28 +7,23 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { run_id } = await req.json();
-    const runs = await base44.asServiceRole.entities.Run.filter({ id: run_id });
-    const run = runs[0];
-    if (!run) return Response.json({ error: "Run not found" });
 
-    const synthesis = run.synthesis || null;
-    const synthesisKeys = synthesis ? Object.keys(synthesis) : [];
+    // Use list with a filter to avoid decompression issues on huge entities
+    const runs = await base44.asServiceRole.entities.Run.filter({ id: run_id });
+    if (!runs.length) return Response.json({ error: "Run not found" });
+    const run = runs[0];
 
     return Response.json({
+      id: run.id,
+      status: run.status,
       has_corpus: !!run.corpus,
       has_cogito: !!run.cogito,
       has_animus: !!run.animus,
       has_actus: !!run.actus,
-      has_synthesis: !!synthesis,
-      synthesis_keys: synthesisKeys,
-      has_intersection_matrix: !!synthesis?.intersection_matrix,
-      intersection_matrix_keys: synthesis?.intersection_matrix ? Object.keys(synthesis.intersection_matrix) : null,
-      has_quantum_foresight: !!synthesis?.quantum_foresight,
-      has_governed_cogito: !!synthesis?.governed_cogito,
-      has_narrative_loop: !!synthesis?.narrative_loop,
-      has_empathy_driven_strategy: !!synthesis?.empathy_driven_strategy,
+      has_synthesis: !!run.synthesis,
       has_blueprint: !!run.blueprint,
-      status: run.status,
+      synthesis_keys: run.synthesis ? Object.keys(run.synthesis) : [],
+      blueprint_keys: run.blueprint ? Object.keys(run.blueprint) : [],
     });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
