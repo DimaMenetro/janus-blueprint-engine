@@ -516,25 +516,21 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     : missingDomains.length === 0 ? "completed" 
     : "completed"; // Partial success — some domains present, errors list shows what's missing
   
+  // ── APPEND-ONLY FINALIZATION ─────────────────────────────────────────────
+  // Only write status, cached fields (render_md, raw_json), and validation_errors.
+  // Domain fields were already persisted incrementally during execution.
+  // This prevents the finalization step from clobbering data that was
+  // written by earlier incremental persistence (e.g. intersection_matrix).
   const finalPayload = {
     status: completionStatus,
     render_md: safeTruncate(renderMd, 60000),
+    raw_json: safeTruncate(JSON.stringify(normalizedData), MAX_RAW_JSON_LENGTH),
     validation_errors: [...(validation.errors || []), ...domainErrors]
   };
-
-  // Write raw_json ONCE at the end (compressed, no pretty-print)
-  finalPayload.raw_json = safeTruncate(JSON.stringify(normalizedData), MAX_RAW_JSON_LENGTH);
 
   if (finalPayload.status === "failed") {
     finalPayload.error_message = [...(validation.errors || []), ...domainErrors].join("\n");
   }
-
-  // Write normalized domain data
-  domains.forEach(domain => {
-    if (normalizedData[domain]) {
-      finalPayload[domain] = normalizedData[domain];
-    }
-  });
 
   await base44.entities.Run.update(runId, finalPayload);
 

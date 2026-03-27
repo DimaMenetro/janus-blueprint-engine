@@ -9,22 +9,22 @@ export default function RerunControls({ run, t, isDark, onRerunComplete }) {
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
 
+  // Gate checks reflect the actual dependency graph of the blueprint prompt:
+  // Blueprint consumes corpus constraints, actus recommendations, animus ethical stance.
+  // Synthesis is used if available but is not a hard prerequisite.
   const hasCoreData = run.corpus && run.cogito && run.animus && run.actus;
-  const hasSynthesis = !!run.synthesis?.intersection_matrix;
   const hasBlueprint = !!run.blueprint;
 
-  // Determine what can be re-run
   const canRerunSynthesis = hasCoreData && !rerunning;
-  const canRerunBlueprint = hasCoreData && hasSynthesis && !rerunning;
+  const canRerunBlueprint = hasCoreData && !rerunning;
 
   // Check if re-run is needed (missing or errored)
   const synthesisErrors = (run.validation_errors || []).filter(e => e.includes("synthesis") || e.includes("intersection"));
   const blueprintErrors = (run.validation_errors || []).filter(e => e.includes("blueprint"));
-  const synthesisMissing = !hasSynthesis;
-  const blueprintMissing = !hasBlueprint;
+  const synthesisMissing = !run.synthesis;
 
   const showSynthesisRerun = synthesisMissing || synthesisErrors.length > 0;
-  const showBlueprintRerun = blueprintMissing || blueprintErrors.length > 0;
+  const showBlueprintRerun = !hasBlueprint || blueprintErrors.length > 0;
 
   // Don't render anything if nothing needs re-running and core data exists
   if (!hasCoreData || (!showSynthesisRerun && !showBlueprintRerun)) return null;
