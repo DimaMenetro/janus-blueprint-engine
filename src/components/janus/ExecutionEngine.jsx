@@ -9,7 +9,7 @@ import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity, buildSynthesisPrompt } 
 
 const MAX_RAW_JSON_LENGTH = 200000; // Full fidelity for cephalon consumption
 const MAX_PROMPT_LENGTH = 10000;
-const MAX_CONTEXT_LENGTH = 6000; // Increased — we pass focused context per call now
+const MAX_CONTEXT_LENGTH = 20000; // Full fidelity — quality over speed
 
 function safeTruncate(str, max) {
   if (!str || str.length <= max) return str;
@@ -113,20 +113,21 @@ function buildDomainContext(priorDomains, targetDomain) {
   }
 
   if (targetDomain === "blueprint") {
-    // Blueprint receives the SYNTHESIS DISTILLATE — compressed intersection insights
-    const bpTrunc = (s, max = 300) => (s && s.length > max) ? s.slice(0, max) + "…" : (s || "");
+    // Blueprint receives FULL-FIDELITY intersection insights — no truncation
+    // These are the distilled cross-domain wisdom the blueprint must operationalize
     if (priorDomains._intersections) {
       parts.push("═══ CROSS-DOMAIN SYNTHESIS INSIGHTS (The Nexus) ═══");
-      parts.push("Emergent wisdom from domain intersections:\n");
+      parts.push("Emergent wisdom from domain intersections — full fidelity:\n");
       Object.entries(priorDomains._intersections).forEach(([pairKey, data]) => {
         const model = SYNTHESIS_MODELS[data._model];
         const label = model ? `${model.name} (${model.domains.map(d => DOMAIN_SME[d]?.title || d).join(" × ")})` : pairKey;
         parts.push(`  ▸ ${label}`);
-        if (data.insight) parts.push(`    Insight: ${bpTrunc(data.insight)}`);
-        if (data.resolution) parts.push(`    Resolution: ${bpTrunc(data.resolution, 200)}`);
+        if (data.insight) parts.push(`    Insight: ${data.insight}`);
+        if (data.tension) parts.push(`    Tension: ${data.tension}`);
+        if (data.resolution) parts.push(`    Resolution: ${data.resolution}`);
       });
     }
-    // Also pass Actus recommendations (the most actionable upstream)
+    // Actus recommendations — the most actionable upstream data for the blueprint
     if (priorDomains.actus?.recommendations?.length) {
       parts.push("\n═══ ACTUS: Key Recommendations (confidence-propagated) ═══");
       priorDomains.actus.recommendations.forEach(r => parts.push(`  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`));
@@ -232,29 +233,33 @@ QUERY: ${queryText}`;
   // ── FINAL SYNTHESIS (named patterns only — intersection matrix already computed)
   if (domain === "synthesis") {
     const intersections = priorContext._intersections || {};
-    // Compress intersection context to prevent timeout — full text preserved in output merge
-    const truncField = (s, max = 400) => (s && s.length > max) ? s.slice(0, max) + "…" : (s || "");
-    const matrixSummary = Object.entries(intersections)
-      .map(([key, val]) => `  ${key}: insight="${truncField(val.insight)}", tension="${truncField(val.tension, 250)}", resolution="${truncField(val.resolution, 250)}"`)
-      .join("\n");
-
-    // Compact domain summaries — enough signal for pattern detection, not full dumps
-    const domainSummaries = Object.entries(priorContext)
-      .filter(([key]) => DOMAIN_SME[key])
-      .map(([key, data]) => `  ${DOMAIN_SME[key].title}: ${JSON.stringify(data).slice(0, 800)}`)
-      .join("\n");
+    // Full-fidelity intersection pairs — NO truncation. These ARE the synthesis inputs.
+    // The intersection pairs already contain the distilled wisdom from each domain pair.
+    // We do NOT re-send raw domain dumps — that's redundant noise the LLM doesn't need.
+    const matrixEntries = Object.entries(intersections)
+      .map(([key, val]) => {
+        const model = SYNTHESIS_MODELS[val._model];
+        const label = model ? model.name : key;
+        return `═══ ${key.toUpperCase()} — ${label} ═══
+Insight: ${val.insight || "(not computed)"}
+Tension: ${val.tension || "(not computed)"}
+Resolution: ${val.resolution || "(not computed)"}`;
+      })
+      .join("\n\n");
 
     return `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: SYNTHESIS — THE NEXUS (Section V)
 
-You are the Janus Synthesis Engine. The 6 domain intersection pairs have ALREADY been computed. Your task now is to produce the 4 NAMED EMERGENT PATTERNS and the final cross-domain summary.
+You are the Janus Synthesis Engine. The 6 domain intersection pairs have ALREADY been computed by dedicated cross-domain analysis. Each pair below represents the EMERGENT wisdom found at the intersection of two expert domains.
 
-═══ PRE-COMPUTED INTERSECTION MATRIX ═══
-${matrixSummary}
+Your task: read these 6 intersection results and produce the 4 NAMED EMERGENT PATTERNS that arise from their combination, plus a final cross-domain summary.
 
-═══ DOMAIN EXPERT OUTPUTS (compressed) ═══
-${domainSummaries}
+═══ THE 6 PRE-COMPUTED INTERSECTION PAIRS (full fidelity) ═══
 
-Your task — produce ONLY these outputs:
+${matrixEntries}
+
+═══ YOUR SYNTHESIS TASK ═══
+
+Using ONLY the intersection pairs above as your source material, produce:
 
 1. QUANTUM FORESIGHT (Corpus × Actus): Probabilistic decision-making grounded in physical reality. What futures become visible when physics meets strategy?
 2. GOVERNED COGITO (Animus × Cogito): Ethical truth-finding. How does conscience govern the reasoning process?
@@ -262,11 +267,11 @@ Your task — produce ONLY these outputs:
 4. EMPATHY-DRIVEN STRATEGY (Animus × Actus): Non-rational agent modeling. What strategies emerge when you model real human behavior, not rational actors?
 
 Also produce:
-- key_takeaways: The 3-5 most groundbreaking cross-domain insights
-- constraint_collisions: Where domain findings genuinely CONFLICT
-- limitation_foreground: The single most significant limitation
+- key_takeaways: The 3-5 most groundbreaking cross-domain insights from ALL 6 intersections combined
+- constraint_collisions: Where intersection findings genuinely CONFLICT with each other
+- limitation_foreground: The single most significant limitation of this entire analysis
 
-CRITICAL: Every named pattern must produce EMERGENT insight. If it could come from one domain alone, it fails. Push past convention — novel problems require novel solutions.
+CRITICAL: Every named pattern must produce EMERGENT insight — wisdom that transcends any single intersection pair. If it could come from one pair alone, it fails. Push past convention — novel problems require novel solutions.
 
 Output ONLY valid JSON: { "synthesis": {
   "key_takeaways": ["..."], "constraint_collisions": ["..."], "limitation_foreground": "...",
@@ -278,8 +283,7 @@ Output ONLY valid JSON: { "synthesis": {
 
 IMPORTANT: Do NOT include an intersection_matrix field — the pre-computed pairs are already stored separately. Focus your output ENTIRELY on the 4 named emergent patterns and the summary fields.
 
-No markdown fences, no prose outside JSON.
-QUERY: ${queryText}`;
+No markdown fences, no prose outside JSON.`;
   }
 
   // ── BLUEPRINT
