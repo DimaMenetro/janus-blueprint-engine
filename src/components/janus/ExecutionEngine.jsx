@@ -6,6 +6,7 @@
 import { base44 } from "@/api/base44Client";
 import { EXECUTION_MODES, validateJanusOutput } from "./janusSchema";
 import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity, buildSynthesisPrompt } from "./domainSME";
+import { executeBlueprintSplitCall } from "./blueprintSplitCall";
 
 const MAX_RAW_JSON_LENGTH = 200000; // Full fidelity for cephalon consumption
 const MAX_PROMPT_LENGTH = 10000;
@@ -412,7 +413,32 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   for (const domain of domains) {
     onProgress({ domain, status: "running", completedDomains: completedCount, totalDomains: totalSteps });
 
-    // Attach intersections to context for synthesis and blueprint
+    // ── BLUEPRINT: Use split-call architecture (Option 1)
+    if (domain === "blueprint") {
+      const source = { ...mergedData, _intersections: intersections };
+      const { data: bpData, errors: bpErrors } = await executeBlueprintSplitCall({
+        source,
+        queryText,
+        blueprintLevel: params.blueprintLevel,
+        noveltyDial: params.noveltyDial,
+        outputMode: params.outputMode,
+        onProgress: (p) => onProgress({ ...p, completedDomains: completedCount, totalDomains: totalSteps }),
+      });
+      if (bpData) {
+        mergedData.blueprint = bpData;
+      }
+      domainErrors.push(...bpErrors);
+      completedCount++;
+
+      // Persist blueprint immediately
+      const bpPayload = {};
+      if (mergedData.blueprint) bpPayload.blueprint = mergedData.blueprint;
+      if (domainErrors.length > 0) bpPayload.validation_errors = [...domainErrors];
+      await base44.entities.Run.update(runId, bpPayload);
+      continue;
+    }
+
+    // Attach intersections to context for synthesis and other domains
     const contextForPrompt = { ...mergedData, _intersections: intersections };
     const domainPrompt = buildDomainPrompt(domain, queryText, params, contextForPrompt);
 

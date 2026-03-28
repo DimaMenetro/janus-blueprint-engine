@@ -4,6 +4,7 @@
 import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "./janusSchema";
 import { generateMarkdown } from "./promptUtils";
+import { executeBlueprintSplitCall } from "./blueprintSplitCall";
 
 // ─── Re-use the LLM call + prompt builders from ExecutionEngine ───
 // We import the module dynamically to avoid circular deps, but the functions
@@ -312,20 +313,22 @@ export async function rerunBlueprint(runId, onProgress) {
 
   const errors = [];
 
-  onProgress({ domain: "blueprint", status: "running", detail: "Generating blueprint from stored domain data...", completedDomains: 0, totalDomains: 1 });
+  // Use split-call architecture — 3 focused sub-calls instead of one monolithic call
+  const { data: bpData, errors: bpErrors } = await executeBlueprintSplitCall({
+    source: run,
+    queryText: run.query_text,
+    blueprintLevel: run.blueprint_level || "L2",
+    noveltyDial: run.novelty_dial || "medium",
+    outputMode: run.output_mode || "Blueprint",
+    onProgress,
+  });
 
-  try {
-    const prompt = buildBlueprintPrompt(run);
-    const result = await callLLM(prompt);
-    const parsed = parseLLMResponse(result, "blueprint");
+  errors.push(...bpErrors);
 
-    if (parsed.data) {
-      await base44.entities.Run.update(runId, { blueprint: parsed.data });
-    } else {
-      errors.push(`blueprint: ${parsed.error}`);
-    }
-  } catch (e) {
-    errors.push(`blueprint: ${e.message}`);
+  if (bpData) {
+    await base44.entities.Run.update(runId, { blueprint: bpData });
+  } else {
+    errors.push("blueprint: All sub-calls failed — no blueprint data produced");
   }
 
   // Finalize
