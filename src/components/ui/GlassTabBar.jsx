@@ -16,7 +16,7 @@
 import React, { useRef, useLayoutEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, History, Zap } from "lucide-react";
+import { Plus, History, FileText, Zap } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { 
   light, dark,
@@ -25,9 +25,10 @@ import {
 import BottomAccessory from "@/components/ui/BottomAccessory";
 
 const tabs = [
-  { path: "/NewQuery",    label: "New",         icon: Plus },
-  { path: "/history",     label: "History",     icon: History },
-  { path: "/diagnostics", label: "Diagnostics", icon: Zap },
+  { path: "/NewQuery",       label: "New",       icon: Plus },
+  { path: "/history",        label: "History",   icon: History },
+  { path: "/BlueprintPrint", label: "Blueprint", icon: FileText },
+  { path: "/diagnostics",    label: "Diag",      icon: Zap },
 ];
 
 export default function GlassTabBar() {
@@ -89,7 +90,7 @@ export default function GlassTabBar() {
           gap: 4,
           padding: "6px 8px",
           position: "relative",
-          maxWidth: 380,
+          maxWidth: 440,
           width: "100%",
           pointerEvents: "auto",
         }}
