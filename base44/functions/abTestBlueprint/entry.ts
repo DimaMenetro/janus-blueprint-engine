@@ -34,11 +34,23 @@ function safeTruncate(str, max) {
 
 // ─── LLM HELPER ──────────────────────────────────────────────────────────────
 
-async function callLLM(base44, prompt) {
-  return await base44.asServiceRole.integrations.Core.InvokeLLM({
-    prompt,
-    model: "claude_sonnet_4_6",
-  });
+async function callLLM(base44, prompt, retries = 1) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await base44.asServiceRole.integrations.Core.InvokeLLM({
+        prompt,
+        model: "claude_sonnet_4_6",
+      });
+    } catch (e) {
+      const isRetryable = e.message?.includes("502") || e.message?.includes("503") || e.message?.includes("timeout");
+      if (attempt < retries && isRetryable) {
+        console.log(`[AB-TEST] LLM call failed (attempt ${attempt + 1}/${retries + 1}): ${e.message}. Retrying...`);
+        await new Promise(r => setTimeout(r, 2000)); // 2s backoff
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 function parseLLMResponse(result, expectedKey) {
@@ -519,9 +531,9 @@ Deno.serve(async (req) => {
         prompt_chars: resultA.promptChars,
         error: resultA.error || null,
         quality: measureQuality(resultA.blueprint, "Variant A"),
-        // Include first 3 step titles for quick comparison
         step_titles: resultA.blueprint?.steps?.map(s => `${s.step}. ${s.title}`)?.slice(0, 8) || [],
         goal: resultA.blueprint?.goal || null,
+        blueprint: resultA.blueprint, // Full output for inspection
       };
       console.log(`[AB-TEST] Variant A complete. ${resultA.elapsed}ms, ${resultA.blueprint?.steps?.length || 0} steps, score: ${results.variant_a.quality.completenessScore}`);
     }
@@ -539,6 +551,7 @@ Deno.serve(async (req) => {
         quality: measureQuality(resultB.blueprint, "Variant B"),
         step_titles: resultB.blueprint?.steps?.map(s => `${s.step}. ${s.title}`)?.slice(0, 8) || [],
         goal: resultB.blueprint?.goal || null,
+        blueprint: resultB.blueprint, // Full output for inspection
       };
       console.log(`[AB-TEST] Variant B complete. ${resultB.elapsed}ms, ${resultB.blueprint?.steps?.length || 0} steps, score: ${results.variant_b.quality.completenessScore}`);
     }

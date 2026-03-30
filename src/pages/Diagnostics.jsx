@@ -20,6 +20,7 @@ const ROUTES = [
   { path: "/history", name: "History" },
   { path: "/results", name: "Results" },
   { path: "/diagnostics", name: "Diagnostics" },
+  { path: "/ABTest", name: "AB Test" },
 ];
 
 function StatusBadge({ status, isDark }) {
