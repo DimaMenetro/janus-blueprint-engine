@@ -42,9 +42,8 @@ export default function BlueprintPrint() {
     return `${short} (${date})`;
   };
 
-  const schemBg = isDark
-    ? "linear-gradient(145deg, #0a0e1a 0%, #0f1320 40%, #0c1018 100%)"
-    : "linear-gradient(145deg, #f5f0e8 0%, #ebe5d8 40%, #f0ece2 100%)";
+  // Use theme ink colors for sketched elements
+  const ink = isDark ? "rgba(148,163,184,0.7)" : "rgba(71,85,105,0.6)";
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 20px 100px" }}>
@@ -126,46 +125,46 @@ export default function BlueprintPrint() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
           style={{
-            background: schemBg,
+            ...glassCard(t),
             position: "relative",
             padding: "32px 28px",
             overflow: "hidden",
-            border: `1px solid ${isDark ? "rgba(180,140,80,0.15)" : "rgba(120,100,60,0.15)"}`,
           }}
         >
-          <EngineeringGrid isDark={isDark} />
+          <EngineeringGrid isDark={isDark} ink={ink} />
 
           <div style={{ position: "relative", zIndex: 1 }}>
             {/* ─── HEADER PLATE ─── */}
-            <SchematicHeader run={selectedRun} isDark={isDark} />
+            <SchematicHeader run={selectedRun} isDark={isDark} t={t} />
 
             {/* ─── GOAL STATEMENT ─── */}
             {selectedRun.blueprint?.goal && (
               <div style={{
-                fontFamily: "Georgia, serif", fontSize: 14, lineHeight: 1.5,
-                color: isDark ? "#e2d5c0" : "#3a3020",
-                padding: "12px 16px", marginBottom: 24,
-                borderLeft: `3px solid ${isDark ? "#d4a574" : "#8b6914"}`,
-                background: isDark ? "rgba(180,140,80,0.04)" : "rgba(180,160,120,0.06)",
+                ...glassSurface(t),
+                fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
+                fontSize: 14, lineHeight: 1.6,
+                color: t.text,
+                padding: "14px 18px", marginBottom: 24,
+                borderLeft: `2px solid ${isDark ? "rgba(148,163,184,0.4)" : "rgba(71,85,105,0.3)"}`,
               }}>
                 {selectedRun.blueprint.goal}
               </div>
             )}
 
             {/* ─── DEPENDENCY FLOW GRAPH ─── */}
-            <DependencyFlowGraph steps={selectedRun.blueprint?.steps} isDark={isDark} />
+            <DependencyFlowGraph steps={selectedRun.blueprint?.steps} isDark={isDark} t={t} />
 
             {/* ─── STEP I/O DETAIL (click to expand) ─── */}
             {selectedRun.blueprint?.steps?.length > 0 && (
               <div style={{ marginBottom: 28 }}>
                 <div style={{
-                  fontFamily: "'Courier New', monospace", fontSize: 11, letterSpacing: "0.12em",
+                  fontSize: 11, letterSpacing: "0.08em",
                   textTransform: "uppercase",
-                  color: isDark ? "#d4a574" : "#5c4a2a", fontWeight: 700,
+                  color: t.subtitle, fontWeight: 600,
                   marginBottom: 12, paddingBottom: 6,
-                  borderBottom: `1.5px solid ${isDark ? "rgba(180,140,80,0.4)" : "rgba(80,60,30,0.25)"}`,
+                  borderBottom: `1px dashed ${isDark ? "rgba(148,163,184,0.2)" : "rgba(71,85,105,0.15)"}`,
                 }}>
-                  I/O HUB DIAGRAMS — Select a phase
+                  I/O Hub Diagrams — Select a phase
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
                   {selectedRun.blueprint.steps.map(step => (
@@ -173,17 +172,12 @@ export default function BlueprintPrint() {
                       key={step.step}
                       onClick={() => setExpandedStep(expandedStep === step.step ? null : step.step)}
                       style={{
-                        fontFamily: "'Courier New', monospace", fontSize: 10,
-                        padding: "6px 12px", cursor: "pointer",
-                        background: expandedStep === step.step
-                          ? (isDark ? "rgba(180,140,80,0.15)" : "rgba(139,105,20,0.1)")
-                          : (isDark ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.5)"),
-                        border: `1px solid ${expandedStep === step.step
-                          ? (isDark ? "rgba(180,140,80,0.4)" : "rgba(139,105,20,0.3)")
-                          : (isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)")}`,
-                        color: expandedStep === step.step
-                          ? (isDark ? "#d4a574" : "#8b6914")
-                          : (isDark ? "#7a8a9a" : "#8a7a6a"),
+                        fontSize: 11, fontWeight: 500,
+                        padding: "6px 14px", cursor: "pointer", borderRadius: 12,
+                        background: expandedStep === step.step ? t.surface : "transparent",
+                        border: `1px solid ${expandedStep === step.step ? t.surfaceBorder : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")}`,
+                        color: expandedStep === step.step ? t.title : t.muted,
+                        transition: "all 0.2s ease",
                       }}
                     >
                       Phase {step.step}
@@ -195,10 +189,12 @@ export default function BlueprintPrint() {
                     key={expandedStep}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
+                    style={{ ...glassSurface(t), padding: 16 }}
                   >
                     <IOHubDiagram
                       step={selectedRun.blueprint.steps.find(s => s.step === expandedStep)}
                       isDark={isDark}
+                      t={t}
                     />
                   </motion.div>
                 )}
@@ -206,19 +202,19 @@ export default function BlueprintPrint() {
             )}
 
             {/* ─── RISK TOPOLOGY ─── */}
-            <RiskTopology risks={selectedRun.blueprint?.risk_register} isDark={isDark} />
+            <RiskTopology risks={selectedRun.blueprint?.risk_register} isDark={isDark} t={t} />
 
             {/* ─── FOOTER STAMP ─── */}
             <div style={{
               textAlign: "center", padding: "16px 0 0",
-              borderTop: `1.5px solid ${isDark ? "rgba(180,140,80,0.3)" : "rgba(80,60,30,0.15)"}`,
+              borderTop: `1px dashed ${isDark ? "rgba(148,163,184,0.15)" : "rgba(71,85,105,0.1)"}`,
             }}>
               <span style={{
-                fontFamily: "'Courier New', monospace", fontSize: 9, letterSpacing: "0.15em",
+                fontSize: 9, letterSpacing: "0.1em",
                 textTransform: "uppercase",
-                color: isDark ? "rgba(180,140,80,0.4)" : "rgba(120,100,60,0.3)",
+                color: t.muted, opacity: 0.6,
               }}>
-                JANUS BLUEPRINT PROTOCOL — CEPHALON CONTINUITY FRAMEWORK — CP-002 v1.5
+                Janus Blueprint Protocol — Cephalon Continuity Framework — CP-002 v1.5
               </span>
             </div>
           </div>

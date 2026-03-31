@@ -1,21 +1,18 @@
 /**
- * IOHubDiagram — Hub-and-spoke diagram for a single step's inputs/outputs
- * Central node = step title, left spokes = inputs, right spokes = outputs
+ * IOHubDiagram — Hub-and-spoke I/O diagram with ink lines on glass
+ * Central node for the step, spokes for inputs (left) and outputs (right).
  */
-export default function IOHubDiagram({ step, isDark }) {
+export default function IOHubDiagram({ step, isDark, t }) {
   if (!step) return null;
   const inputs = step.inputs || [];
   const outputs = step.outputs || [];
   if (inputs.length === 0 && outputs.length === 0) return null;
 
-  const text = isDark ? "#d4a574" : "#5c4a2a";
-  const muted = isDark ? "#7a8a9a" : "#8a7a6a";
   const inColor = isDark ? "#60a5fa" : "#2563eb";
   const outColor = isDark ? "#4ade80" : "#16a34a";
-  const lineColor = isDark ? "rgba(180,140,80,0.2)" : "rgba(120,100,60,0.15)";
+  const inkLine = isDark ? "rgba(148,163,184,0.15)" : "rgba(71,85,105,0.12)";
 
-  const cx = 300;
-  const cy = 120;
+  const cx = 300, cy = 120;
   const spokeLen = 120;
   const maxItems = Math.max(inputs.length, outputs.length, 1);
   const height = Math.max(maxItems * 28 + 40, 160);
@@ -23,8 +20,7 @@ export default function IOHubDiagram({ step, isDark }) {
   function spokeY(i, total) {
     if (total <= 1) return cy;
     const spacing = Math.min(28, (height - 60) / (total - 1));
-    const startY = cy - ((total - 1) * spacing) / 2;
-    return startY + i * spacing;
+    return cy - ((total - 1) * spacing) / 2 + i * spacing;
   }
 
   return (
@@ -35,13 +31,12 @@ export default function IOHubDiagram({ step, isDark }) {
         return (
           <g key={`in-${i}`}>
             <line x1={cx - 30} y1={cy} x2={cx - spokeLen} y2={y}
-              stroke={lineColor} strokeWidth={1} />
-            <circle cx={cx - spokeLen} cy={y} r={4}
-              fill={isDark ? "rgba(20,25,40,0.9)" : "rgba(255,252,245,0.95)"}
-              stroke={inColor} strokeWidth={1} />
+              stroke={inkLine} strokeWidth={1} strokeDasharray="3 3" />
+            <circle cx={cx - spokeLen} cy={y} r={3.5}
+              fill="none" stroke={inColor} strokeWidth={1} />
             <text x={cx - spokeLen - 10} y={y + 3} textAnchor="end"
-              fontSize={9} fontFamily="'Courier New', monospace" fill={inColor}>
-              {inp.length > 30 ? inp.slice(0, 30) + "…" : inp}
+              fontSize={9} fill={inColor} opacity={0.85}>
+              {inp.length > 32 ? inp.slice(0, 32) + "…" : inp}
             </text>
           </g>
         );
@@ -53,48 +48,46 @@ export default function IOHubDiagram({ step, isDark }) {
         return (
           <g key={`out-${i}`}>
             <line x1={cx + 30} y1={cy} x2={cx + spokeLen} y2={y}
-              stroke={lineColor} strokeWidth={1} />
-            <circle cx={cx + spokeLen} cy={y} r={4}
-              fill={isDark ? "rgba(20,25,40,0.9)" : "rgba(255,252,245,0.95)"}
-              stroke={outColor} strokeWidth={1} />
-            {/* Arrow tip */}
+              stroke={inkLine} strokeWidth={1} strokeDasharray="3 3" />
+            <circle cx={cx + spokeLen} cy={y} r={3.5}
+              fill="none" stroke={outColor} strokeWidth={1} />
             <polygon
-              points={`${cx + spokeLen + 4},${y} ${cx + spokeLen - 2},${y - 3} ${cx + spokeLen - 2},${y + 3}`}
-              fill={outColor} />
+              points={`${cx + spokeLen + 5},${y} ${cx + spokeLen},${y - 3} ${cx + spokeLen},${y + 3}`}
+              fill={outColor} opacity={0.6} />
             <text x={cx + spokeLen + 14} y={y + 3} textAnchor="start"
-              fontSize={9} fontFamily="'Courier New', monospace" fill={outColor}>
-              {out.length > 30 ? out.slice(0, 30) + "…" : out}
+              fontSize={9} fill={outColor} opacity={0.85}>
+              {out.length > 32 ? out.slice(0, 32) + "…" : out}
             </text>
           </g>
         );
       })}
 
-      {/* Center hub */}
-      <rect x={cx - 30} y={cy - 18} width={60} height={36} rx={2}
-        fill={isDark ? "rgba(20,25,40,0.9)" : "rgba(255,252,245,0.95)"}
-        stroke={isDark ? "rgba(180,140,80,0.5)" : "rgba(120,100,60,0.35)"}
-        strokeWidth={1.5} />
+      {/* Center hub — glass-like with subtle fill */}
+      <rect x={cx - 32} y={cy - 20} width={64} height={40} rx={10}
+        fill={isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.5)"}
+        stroke={isDark ? "rgba(148,163,184,0.2)" : "rgba(71,85,105,0.15)"}
+        strokeWidth={1} />
       <text x={cx} y={cy - 4} textAnchor="middle"
-        fontSize={10} fontWeight="700" fontFamily="'Courier New', monospace" fill={text}>
-        STEP {step.step}
+        fontSize={10} fontWeight="600" fill={t?.title || (isDark ? "#f1f5f9" : "#1e293b")}>
+        Step {step.step}
       </text>
       <text x={cx} y={cy + 8} textAnchor="middle"
-        fontSize={8} fontFamily="'Courier New', monospace" fill={muted}>
-        {step.title?.slice(0, 14)}
+        fontSize={8} fill={t?.muted || (isDark ? "#475569" : "#94a3b8")}>
+        {step.title?.slice(0, 16)}
       </text>
 
       {/* Labels */}
       {inputs.length > 0 && (
         <text x={cx - spokeLen} y={spokeY(0, inputs.length) - 14} textAnchor="end"
-          fontSize={8} fontFamily="'Courier New', monospace" fill={muted}
-          letterSpacing="0.1em">
+          fontSize={8} fill={t?.muted || (isDark ? "#475569" : "#94a3b8")}
+          letterSpacing="0.06em" opacity={0.7}>
           INPUTS
         </text>
       )}
       {outputs.length > 0 && (
         <text x={cx + spokeLen} y={spokeY(0, outputs.length) - 14} textAnchor="start"
-          fontSize={8} fontFamily="'Courier New', monospace" fill={muted}
-          letterSpacing="0.1em">
+          fontSize={8} fill={t?.muted || (isDark ? "#475569" : "#94a3b8")}
+          letterSpacing="0.06em" opacity={0.7}>
           OUTPUTS
         </text>
       )}

@@ -1,11 +1,10 @@
 /**
- * EngineeringGrid — Full-page engineering graph paper background
- * Renders minor (20px) and major (100px) grid lines as a CSS background.
- * No SVG needed — pure CSS gradient trick for performance.
+ * EngineeringGrid — Subtle graph paper rendered as ink on glass
+ * Light dashed lines that look hand-ruled, not mechanical.
  */
-export default function EngineeringGrid({ isDark }) {
-  const minor = isDark ? "rgba(100,140,200,0.06)" : "rgba(120,140,180,0.12)";
-  const major = isDark ? "rgba(100,140,200,0.12)" : "rgba(120,140,180,0.22)";
+export default function EngineeringGrid({ isDark, ink }) {
+  const fine = isDark ? "rgba(148,163,184,0.04)" : "rgba(71,85,105,0.05)";
+  const coarse = isDark ? "rgba(148,163,184,0.07)" : "rgba(71,85,105,0.09)";
 
   return (
     <div
@@ -15,12 +14,13 @@ export default function EngineeringGrid({ isDark }) {
         pointerEvents: "none",
         zIndex: 0,
         backgroundImage: `
-          linear-gradient(${minor} 1px, transparent 1px),
-          linear-gradient(90deg, ${minor} 1px, transparent 1px),
-          linear-gradient(${major} 1px, transparent 1px),
-          linear-gradient(90deg, ${major} 1px, transparent 1px)
+          linear-gradient(${fine} 1px, transparent 1px),
+          linear-gradient(90deg, ${fine} 1px, transparent 1px),
+          linear-gradient(${coarse} 1px, transparent 1px),
+          linear-gradient(90deg, ${coarse} 1px, transparent 1px)
         `,
         backgroundSize: "20px 20px, 20px 20px, 100px 100px, 100px 100px",
+        opacity: 0.7,
       }}
     />
   );
