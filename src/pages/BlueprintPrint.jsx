@@ -135,7 +135,7 @@ export default function BlueprintPrint() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        style={{ ...glassCard(t), padding: "18px 22px", marginBottom: 24 }}
+        style={{ ...glassCard(t), padding: "18px 22px", marginBottom: 24, overflow: "visible" }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {/* Run selector dropdown */}
