@@ -139,7 +139,7 @@ export default function BlueprintPrint() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           {/* Run selector dropdown */}
-          <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
+          <div style={{ flex: 1, minWidth: 200, position: "relative", zIndex: 60 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: t.label, marginBottom: 4, display: "block" }}>
               Select a completed run
             </label>
