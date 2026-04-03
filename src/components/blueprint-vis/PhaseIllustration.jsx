@@ -9,27 +9,46 @@ import { Image, Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { glassSurface } from "@/components/ui/LiquidGlass";
 
-function buildPrompt(step, goalContext) {
+// Style reference images — glass-etched schematic aesthetic
+const STYLE_REFS = [
+  "https://media.base44.com/images/public/6978a10dbc9d7c7a927c09b8/b6aadc43a_IMG_0889.jpg",
+  "https://media.base44.com/images/public/6978a10dbc9d7c7a927c09b8/95e4e3147_IMG_0888.jpg",
+  "https://media.base44.com/images/public/6978a10dbc9d7c7a927c09b8/c04b4b21e_IMG_1739.png",
+];
+
+function buildPrompt(step, goalContext, isDark) {
   const title = step.title || "Component";
   const instructions = step.instructions || "";
   const outputs = (step.outputs || []).join(", ");
+  const inputs = (step.inputs || []).join(", ");
   const substepDetails = (step.substeps || [])
     .map(s => s.details || s.substep || "")
     .filter(Boolean)
     .join("; ");
 
-  // Combine all available detail into a rich prompt
-  const details = [instructions, substepDetails, outputs].filter(Boolean).join(". ");
+  const details = [instructions, substepDetails].filter(Boolean).join(". ");
+  const ioContext = [inputs && `Inputs: ${inputs}`, outputs && `Outputs: ${outputs}`].filter(Boolean).join(". ");
+
+  // Theme-adaptive background
+  const bgStyle = isDark
+    ? "Deep indigo-navy translucent glass background, like a schematic etched into dark crystal. Luminous white and pale blue-gold wireframe lines that glow softly against the deep background."
+    : "Frosted translucent glass background, like a schematic etched onto clear crystal. Fine dark navy and copper-bronze wireframe lines with subtle depth and refraction.";
 
   return [
-    `Technical blueprint illustration, engineering schematic style, on white/light gray background.`,
-    `Subject: "${title}" — a physical component or assembly.`,
-    goalContext ? `Part of a larger project: ${goalContext}.` : "",
-    `Details to incorporate: ${details.slice(0, 600)}.`,
-    `Style: Clean technical drawing with labeled callouts, cross-section views where appropriate,`,
-    `dimensioned proportions, exploded view showing internal components if applicable.`,
-    `Monochrome linework with subtle blue accent lines. Engineering paper aesthetic.`,
-    `Professional CAD/technical illustration quality. No photorealism — clean vector-style linework.`,
+    `Technical schematic illustration of "${title}" — etched onto translucent glass.`,
+    goalContext ? `This is one component/phase of: ${goalContext}.` : "",
+    `Show the subject as a detailed engineering schematic with: geometric wireframe construction lines,`,
+    `labeled callout annotations with specifications and measurements,`,
+    `exploded or cross-section views showing internal structure where relevant,`,
+    `dimensional proportions and assembly relationships between sub-components.`,
+    details.length > 0 ? `Technical details to visualize: ${details.slice(0, 500)}.` : "",
+    ioContext.length > 0 ? `Key elements: ${ioContext.slice(0, 200)}.` : "",
+    bgStyle,
+    `Style: Glass-etched engineering art. Luminous geometric wireframes, thin precise linework,`,
+    `mathematical formulas and spec annotations scattered around the diagram.`,
+    `Think: Quantum lattice schematic, sacred geometry precision, translucent depth layers.`,
+    `NOT flat paper. NOT photorealistic. The schematic should look like it's floating inside glass.`,
+    `Professional technical illustration with artistic beauty. Monochrome wireframes with subtle accent color highlights.`,
   ].filter(Boolean).join(" ");
 }
 
@@ -37,10 +56,12 @@ function buildPrompt(step, goalContext) {
 const imageCache = {};
 
 export default function PhaseIllustration({ step, goalContext, isDark, t }) {
+  // isDark is used in prompt generation for theme-adaptive output
   const [imageUrl, setImageUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const cacheKey = `phase-${step.step}-${step.title}`;
+  const themeTag = isDark ? "dark" : "light";
+  const cacheKey = `phase-${step.step}-${step.title}-${themeTag}`;
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -58,8 +79,11 @@ export default function PhaseIllustration({ step, goalContext, isDark, t }) {
   const generate = async () => {
     setLoading(true);
     setError(null);
-    const prompt = buildPrompt(step, goalContext);
-    const result = await base44.integrations.Core.GenerateImage({ prompt });
+    const prompt = buildPrompt(step, goalContext, isDark);
+    const result = await base44.integrations.Core.GenerateImage({
+      prompt,
+      existing_image_urls: STYLE_REFS,
+    });
     if (!mountedRef.current) return;
     if (result?.url) {
       imageCache[cacheKey] = result.url;
@@ -89,7 +113,7 @@ export default function PhaseIllustration({ step, goalContext, isDark, t }) {
           </div>
         )}
         <p style={{ fontSize: 12, color: t.muted, margin: 0, textAlign: "center" }}>
-          Generate a technical illustration of what this phase's deliverable looks like
+          Generate a glass-etched schematic of this phase's deliverable
         </p>
         <motion.button
           whileHover={{ scale: 1.03 }}
@@ -106,7 +130,7 @@ export default function PhaseIllustration({ step, goalContext, isDark, t }) {
           }}
         >
           <Image style={{ width: 16, height: 16 }} />
-          Generate Blueprint Drawing
+          Generate Glass Schematic
         </motion.button>
       </div>
     );
@@ -126,7 +150,7 @@ export default function PhaseIllustration({ step, goalContext, isDark, t }) {
           animation: "spin 1s linear infinite",
         }} />
         <p style={{ fontSize: 12, color: t.muted, margin: 0 }}>
-          Generating technical illustration…
+          Etching schematic onto glass…
         </p>
         <p style={{ fontSize: 10, color: t.muted, margin: 0, opacity: 0.6 }}>
           This takes about 10 seconds
