@@ -14,6 +14,7 @@ import SchematicHeader from "@/components/blueprint-vis/SchematicHeader";
 import DependencyFlowGraph from "@/components/blueprint-vis/DependencyFlowGraph";
 import RiskTopology from "@/components/blueprint-vis/RiskTopology";
 import IOHubDiagram from "@/components/blueprint-vis/IOHubDiagram";
+import PhaseIllustration from "@/components/blueprint-vis/PhaseIllustration";
 
 export default function BlueprintPrint() {
   const { isDark } = useTheme();
@@ -184,20 +185,25 @@ export default function BlueprintPrint() {
                     </button>
                   ))}
                 </div>
-                {expandedStep && (
-                  <motion.div
-                    key={expandedStep}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    style={{ ...glassSurface(t), padding: 16 }}
-                  >
-                    <IOHubDiagram
-                      step={selectedRun.blueprint.steps.find(s => s.step === expandedStep)}
-                      isDark={isDark}
-                      t={t}
-                    />
-                  </motion.div>
-                )}
+                {expandedStep && (() => {
+                  const activeStep = selectedRun.blueprint.steps.find(s => s.step === expandedStep);
+                  return (
+                    <motion.div
+                      key={expandedStep}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      style={{ ...glassSurface(t), padding: 16 }}
+                    >
+                      <IOHubDiagram step={activeStep} isDark={isDark} t={t} />
+                      <PhaseIllustration
+                        step={activeStep}
+                        goalContext={selectedRun.blueprint?.goal}
+                        isDark={isDark}
+                        t={t}
+                      />
+                    </motion.div>
+                  );
+                })()}
               </div>
             )}
 
