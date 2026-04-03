@@ -7,8 +7,8 @@ import { glassSurface } from "@/components/ui/LiquidGlass";
 export default function RiskTopology({ risks, isDark, t }) {
   if (!risks?.length) return null;
 
-  const inkLine = isDark ? "rgba(148,163,184,0.12)" : "rgba(71,85,105,0.1)";
-  const inkDash = isDark ? "rgba(148,163,184,0.08)" : "rgba(71,85,105,0.06)";
+  const inkLine = isDark ? "rgba(148,163,184,0.4)" : "rgba(71,85,105,0.3)";
+  const inkDash = isDark ? "rgba(148,163,184,0.3)" : "rgba(71,85,105,0.22)";
 
   const severityConfig = {
     high:   { color: isDark ? "#f87171" : "#dc2626", ring: 0 },
@@ -62,17 +62,17 @@ export default function RiskTopology({ risks, isDark, t }) {
           {/* Concentric rings — dashed ink */}
           {rings.map((r, i) => (
             <circle key={i} cx={cx} cy={cy} r={r}
-              fill="none" stroke={inkDash} strokeWidth={1} strokeDasharray="3 4" />
+              fill="none" stroke={inkDash} strokeWidth={1.5} strokeDasharray="4 3" />
           ))}
 
           {/* Ring labels */}
-          <text x={cx + rings[0] + 4} y={cy - 4} fontSize={8} fill={t.muted} opacity={0.6}>HIGH</text>
-          <text x={cx + rings[1] + 4} y={cy - 4} fontSize={8} fill={t.muted} opacity={0.6}>MED</text>
-          <text x={cx + rings[2] + 4} y={cy - 4} fontSize={8} fill={t.muted} opacity={0.6}>LOW</text>
+          <text x={cx + rings[0] + 4} y={cy - 4} fontSize={9} fill={t.subtitle} fontWeight="600" opacity={0.8}>HIGH</text>
+          <text x={cx + rings[1] + 4} y={cy - 4} fontSize={9} fill={t.subtitle} fontWeight="600" opacity={0.8}>MED</text>
+          <text x={cx + rings[2] + 4} y={cy - 4} fontSize={9} fill={t.subtitle} fontWeight="600" opacity={0.8}>LOW</text>
 
           {/* Center mark */}
-          <circle cx={cx} cy={cy} r={3} fill={t.subtitle} opacity={0.4} />
-          <text x={cx} y={cy - 10} textAnchor="middle" fontSize={8} fill={t.muted}>GOAL</text>
+          <circle cx={cx} cy={cy} r={4} fill={t.subtitle} opacity={0.6} />
+          <text x={cx} y={cy - 12} textAnchor="middle" fontSize={9} fontWeight="600" fill={t.subtitle}>GOAL</text>
 
           {/* Risk nodes */}
           {allNodes.map((node, i) => {
@@ -81,12 +81,12 @@ export default function RiskTopology({ risks, isDark, t }) {
             return (
               <g key={i}>
                 <line x1={cx} y1={cy} x2={node.x} y2={node.y}
-                  stroke={inkLine} strokeWidth={0.5} strokeDasharray="2 3" />
-                <circle cx={node.x} cy={node.y} r={8}
-                  fill={isDark ? "rgba(15,18,30,0.6)" : "rgba(255,255,255,0.6)"}
-                  stroke={cfg.color} strokeWidth={1.5} />
-                <text x={node.x} y={node.y + 3} textAnchor="middle"
-                  fontSize={7} fontWeight="700" fill={cfg.color}>
+                  stroke={inkLine} strokeWidth={1} strokeDasharray="3 3" />
+                <circle cx={node.x} cy={node.y} r={10}
+                  fill={isDark ? "rgba(15,18,30,0.7)" : "rgba(255,255,255,0.7)"}
+                  stroke={cfg.color} strokeWidth={2} />
+                <text x={node.x} y={node.y + 4} textAnchor="middle"
+                  fontSize={9} fontWeight="700" fill={cfg.color}>
                   {i + 1}
                 </text>
               </g>

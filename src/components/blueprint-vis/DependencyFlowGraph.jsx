@@ -53,8 +53,8 @@ export default function DependencyFlowGraph({ steps, isDark, t }) {
   const { layers } = computeLayers(steps);
 
   // Ink colors for sketched lines
-  const inkColor = isDark ? "rgba(148,163,184,0.25)" : "rgba(71,85,105,0.2)";
-  const inkHover = isDark ? "rgba(148,163,184,0.6)" : "rgba(71,85,105,0.5)";
+  const inkColor = isDark ? "rgba(148,163,184,0.4)" : "rgba(71,85,105,0.35)";
+  const inkHover = isDark ? "rgba(148,163,184,0.75)" : "rgba(71,85,105,0.65)";
 
   const measureNodes = useCallback(() => {
     if (!containerRef.current) return;
