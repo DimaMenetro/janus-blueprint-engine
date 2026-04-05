@@ -163,14 +163,14 @@ export default function DependencyFlowGraph({ steps, isDark, t }) {
                     onMouseEnter={() => setHoveredNode(node.step)}
                     onMouseLeave={() => setHoveredNode(null)}
                     style={{
-                      ...glassSurface(t),
+                      ...glassSurface(t, { density: isHovered ? "focused" : undefined }),
                       padding: "12px 16px",
                       minWidth: 160, maxWidth: 220,
                       cursor: "default",
-                      transition: "box-shadow 0.2s, border-color 0.2s",
+                      transition: "background 0.2s ease, box-shadow 0.2s, border-color 0.2s, backdrop-filter 0.2s ease",
                       borderColor: isHovered ? (isDark ? "rgba(148,163,184,0.25)" : "rgba(71,85,105,0.2)") : undefined,
                       boxShadow: isHovered
-                        ? `${glassSurface(t).boxShadow}, 0 0 16px ${isDark ? "rgba(148,163,184,0.08)" : "rgba(71,85,105,0.06)"}`
+                        ? `${glassSurface(t, { density: "focused" }).boxShadow}, 0 0 16px ${isDark ? "rgba(148,163,184,0.08)" : "rgba(71,85,105,0.06)"}`
                         : glassSurface(t).boxShadow,
                     }}>
                     {/* Step badge + title */}

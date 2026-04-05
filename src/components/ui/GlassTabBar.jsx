@@ -103,7 +103,7 @@ export default function GlassTabBar() {
               position: "absolute",
               top: 5,
               bottom: 5,
-              ...glassTabActive(t),
+              ...glassTabActive(t, { density: "focused" }),
             }}
             animate={{
               left: indicator.left,

@@ -111,7 +111,7 @@ function StepNode({ step, isExpanded, isLast, isDark, t, onToggle, checkedItems,
               style={{ overflow: "hidden" }}
             >
               <div style={{
-                ...glassSurface(t),
+                ...glassSurface(t, { density: "focused" }),
                 padding: 14, marginTop: 10,
               }}>
                 {/* Instructions */}
