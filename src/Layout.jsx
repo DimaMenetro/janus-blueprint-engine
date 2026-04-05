@@ -43,10 +43,10 @@ function LayoutInner({ children }) {
           justifyContent: "space-between",
           padding: "10px 20px",
           background: isDark
-            ? `rgba(10,12,18,${density === "dense" ? 0.7 : density === "sparse" ? 0.4 : 0.55})`
-            : `rgba(255,255,255,${density === "dense" ? 0.45 : density === "sparse" ? 0.2 : 0.3})`,
-          backdropFilter: `blur(${density === "dense" ? 50 : density === "sparse" ? 28 : 40}px) saturate(${density === "dense" ? 200 : density === "sparse" ? 150 : 180}%)`,
-          WebkitBackdropFilter: `blur(${density === "dense" ? 50 : density === "sparse" ? 28 : 40}px) saturate(${density === "dense" ? 200 : density === "sparse" ? 150 : 180}%)`,
+            ? `rgba(10,12,18,${density === "dense" ? 0.82 : density === "sparse" ? 0.6 : 0.72})`
+            : `rgba(255,255,255,${density === "dense" ? 0.72 : density === "sparse" ? 0.5 : 0.62})`,
+          backdropFilter: `blur(${density === "dense" ? 60 : density === "sparse" ? 36 : 48}px) saturate(${density === "dense" ? 200 : density === "sparse" ? 150 : 180}%)`,
+          WebkitBackdropFilter: `blur(${density === "dense" ? 60 : density === "sparse" ? 36 : 48}px) saturate(${density === "dense" ? 200 : density === "sparse" ? 150 : 180}%)`,
           borderBottom: `1px solid ${isDark
             ? `rgba(255,255,255,${density === "dense" ? 0.08 : 0.05})`
             : `rgba(255,255,255,${density === "dense" ? 0.7 : 0.45})`}`,

@@ -24,9 +24,9 @@ export const light = {
   surfaceShadow:  'inset 0 1px 0 0 rgba(255,255,255,0.70), inset 0 -1px 0 0 rgba(0,0,0,0.03)',
 
   // Tab bar glass — heavier than card (navigation needs more solidity)
-  tabBar:         'rgba(255,255,255,0.40)',
-  tabBarBorder:   'rgba(255,255,255,0.52)',
-  tabBarShadow:   'inset 0 1px 0 0 rgba(255,255,255,0.85), inset 0 -1px 0 0 rgba(0,0,0,0.04), 0 6px 24px rgba(100,110,160,0.08)',
+  tabBar:         'rgba(255,255,255,0.65)',
+  tabBarBorder:   'rgba(255,255,255,0.55)',
+  tabBarShadow:   'inset 0 1px 0 0 rgba(255,255,255,0.85), inset 0 -1px 0 0 rgba(0,0,0,0.04), 0 6px 24px rgba(100,110,160,0.12)',
 
   // Active tab indicator pill
   tabActive:      'rgba(255,255,255,0.55)',
@@ -77,10 +77,10 @@ export const dark = {
   surfaceBorder:  'rgba(255,255,255,0.06)',
   surfaceShadow:  'inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(0,0,0,0.22)',
 
-  // Tab bar — slightly more solid for navigation legibility
-  tabBar:         'rgba(255,255,255,0.055)',
-  tabBarBorder:   'rgba(255,255,255,0.09)',
-  tabBarShadow:   'inset 0 1px 0 0 rgba(255,255,255,0.09), inset 0 -1px 0 0 rgba(0,0,0,0.28), 0 6px 24px rgba(0,0,0,0.22)',
+  // Tab bar — more solid for navigation legibility
+  tabBar:         'rgba(255,255,255,0.10)',
+  tabBarBorder:   'rgba(255,255,255,0.12)',
+  tabBarShadow:   'inset 0 1px 0 0 rgba(255,255,255,0.12), inset 0 -1px 0 0 rgba(0,0,0,0.28), 0 6px 24px rgba(0,0,0,0.25)',
 
   tabActive:      'rgba(255,255,255,0.08)',
   tabActiveBorder:'rgba(255,255,255,0.13)',
@@ -178,7 +178,7 @@ export const glassSurface = (t, opts) => {
 /** Tab bar glass — heaviest blur, full capsule pill */
 export const glassTabBar = (t, opts) => {
   const d = opts?.density;
-  const filter = shiftFilter(50, 200, d);
+  const filter = shiftFilter(60, 200, d);
   return {
     background: shiftBg(t.tabBar, d),
     backdropFilter: filter,
