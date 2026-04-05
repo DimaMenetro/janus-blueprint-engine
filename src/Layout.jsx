@@ -38,6 +38,7 @@ function LayoutInner({ children }) {
           position: "sticky",
           top: 0,
           zIndex: 50,
+          isolation: "isolate",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",

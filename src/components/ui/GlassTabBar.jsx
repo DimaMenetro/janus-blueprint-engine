@@ -78,13 +78,11 @@ export default function GlassTabBar() {
       </div>
 
       {/* ─── TAB BAR PILL ─── */}
-      <motion.nav
+      <nav
         ref={containerRef}
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30, delay: 0.1 }}
         style={{
           ...glassTabBar(t),
+          isolation: "isolate",
           display: "flex",
           alignItems: "center",
           gap: 4,
@@ -163,7 +161,7 @@ export default function GlassTabBar() {
             </Link>
           );
         })}
-      </motion.nav>
+      </nav>
     </div>
   );
 }
