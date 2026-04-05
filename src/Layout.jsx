@@ -7,11 +7,13 @@ import AmbientOrbs from "@/components/ui/AmbientOrbs";
 import GlassTabBar from "@/components/ui/GlassTabBar";
 import ThemeToggle from "@/components/theme/ThemeToggle";
 import { Zap } from "lucide-react";
+import useScrollDensity from "@/hooks/useScrollDensity";
 
 function LayoutInner({ children }) {
   const { isDark } = useTheme();
   const t = isDark ? dark : light;
   const location = useLocation();
+  const { density, scrollY } = useScrollDensity();
 
   // Determine if page wants accessory content (could be extended per-page)
   const showAccessory = location.pathname === "/results";
@@ -30,7 +32,7 @@ function LayoutInner({ children }) {
       {/* Ambient orbs — bleed through glass */}
       <AmbientOrbs t={t} />
 
-      {/* ─── TOP BAR (minimal glass strip) ─── */}
+      {/* ─── TOP BAR (scroll-reactive glass strip) ─── */}
       <header
         style={{
           position: "sticky",
@@ -40,13 +42,18 @@ function LayoutInner({ children }) {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "10px 20px",
-          background: isDark ? "rgba(10,12,18,0.6)" : "rgba(255,255,255,0.35)",
-          backdropFilter: "blur(40px) saturate(180%)",
-          WebkitBackdropFilter: "blur(40px) saturate(180%)",
-          borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)"}`,
+          background: isDark
+            ? `rgba(10,12,18,${density === "dense" ? 0.7 : density === "sparse" ? 0.4 : 0.55})`
+            : `rgba(255,255,255,${density === "dense" ? 0.45 : density === "sparse" ? 0.2 : 0.3})`,
+          backdropFilter: `blur(${density === "dense" ? 50 : density === "sparse" ? 28 : 40}px) saturate(${density === "dense" ? 200 : density === "sparse" ? 150 : 180}%)`,
+          WebkitBackdropFilter: `blur(${density === "dense" ? 50 : density === "sparse" ? 28 : 40}px) saturate(${density === "dense" ? 200 : density === "sparse" ? 150 : 180}%)`,
+          borderBottom: `1px solid ${isDark
+            ? `rgba(255,255,255,${density === "dense" ? 0.08 : 0.05})`
+            : `rgba(255,255,255,${density === "dense" ? 0.7 : 0.45})`}`,
           boxShadow: isDark
             ? "inset 0 -1px 0 0 rgba(255,255,255,0.04)"
-            : "inset 0 -1px 0 0 rgba(0,0,0,0.02), 0 1px 8px rgba(0,0,0,0.03)",
+            : `inset 0 -1px 0 0 rgba(0,0,0,0.02), 0 1px ${density === "dense" ? 12 : 6}px rgba(0,0,0,${density === "dense" ? 0.05 : 0.02})`,
+          transition: "background 0.3s ease, backdrop-filter 0.3s ease, border-bottom 0.3s ease, box-shadow 0.3s ease",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
