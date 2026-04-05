@@ -63,7 +63,7 @@ export default function BlueprintPrint() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        style={{ ...glassCard(t), padding: "14px 18px", marginBottom: 24, overflow: "visible" }}
+        style={{ ...glassCard(t), padding: "14px 18px", marginBottom: 24, overflow: "visible", position: "relative", zIndex: 50 }}
       >
         <div style={{ position: "relative", zIndex: 60 }}>
           <label style={{ fontSize: 11, fontWeight: 600, color: t.label, marginBottom: 4, display: "block" }}>
