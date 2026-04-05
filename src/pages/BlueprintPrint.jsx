@@ -15,6 +15,10 @@ import DependencyFlowGraph from "@/components/blueprint-vis/DependencyFlowGraph"
 import RiskTopology from "@/components/blueprint-vis/RiskTopology";
 import IOHubDiagram from "@/components/blueprint-vis/IOHubDiagram";
 import PhaseIllustration from "@/components/blueprint-vis/PhaseIllustration";
+import StepDetailPanel from "@/components/blueprint-vis/StepDetailPanel";
+import AssumptionsPanel from "@/components/blueprint-vis/AssumptionsPanel";
+import SuccessCriteriaPanel from "@/components/blueprint-vis/SuccessCriteriaPanel";
+import BlueprintNavBar from "@/components/blueprint-vis/BlueprintNavBar";
 
 export default function BlueprintPrint() {
   const { isDark } = useTheme();
@@ -25,6 +29,7 @@ export default function BlueprintPrint() {
   const [selectedRun, setSelectedRun] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [expandedStep, setExpandedStep] = useState(null);
+  const [viewMode, setViewMode] = useState("full");
 
   useEffect(() => {
     async function fetchRuns() {
@@ -121,110 +126,143 @@ export default function BlueprintPrint() {
 
       {/* ─── SCHEMATIC RENDER AREA ─── */}
       {selectedRun && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          style={{
-            ...glassCard(t),
-            position: "relative",
-            padding: "32px 28px",
-            overflow: "hidden",
-          }}
-        >
-          <EngineeringGrid isDark={isDark} ink={ink} />
+        <>
+          {/* Nav bar with view modes + results link */}
+          <BlueprintNavBar
+            runId={selectedRun.id}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            isDark={isDark}
+            t={t}
+          />
 
-          <div style={{ position: "relative", zIndex: 1 }}>
-            {/* ─── HEADER PLATE ─── */}
-            <SchematicHeader run={selectedRun} isDark={isDark} t={t} />
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            style={{
+              ...glassCard(t),
+              position: "relative",
+              padding: "32px 28px",
+              overflow: "hidden",
+            }}
+          >
+            <EngineeringGrid isDark={isDark} ink={ink} />
 
-            {/* ─── GOAL STATEMENT ─── */}
-            {selectedRun.blueprint?.goal && (
-              <div style={{
-                ...glassSurface(t),
-                fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
-                fontSize: 14, lineHeight: 1.6,
-                color: t.text,
-                padding: "14px 18px", marginBottom: 24,
-                borderLeft: `2px solid ${isDark ? "rgba(148,163,184,0.4)" : "rgba(71,85,105,0.3)"}`,
-              }}>
-                {selectedRun.blueprint.goal}
-              </div>
-            )}
+            <div style={{ position: "relative", zIndex: 1 }}>
+              {/* ─── HEADER PLATE ─── */}
+              <SchematicHeader run={selectedRun} isDark={isDark} t={t} />
 
-            {/* ─── DEPENDENCY FLOW GRAPH ─── */}
-            <DependencyFlowGraph steps={selectedRun.blueprint?.steps} isDark={isDark} t={t} />
-
-            {/* ─── STEP I/O DETAIL (click to expand) ─── */}
-            {selectedRun.blueprint?.steps?.length > 0 && (
-              <div style={{ marginBottom: 28 }}>
+              {/* ─── GOAL STATEMENT ─── */}
+              {selectedRun.blueprint?.goal && (
                 <div style={{
-                  fontSize: 11, letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: t.subtitle, fontWeight: 600,
-                  marginBottom: 12, paddingBottom: 6,
-                  borderBottom: `1px dashed ${isDark ? "rgba(148,163,184,0.2)" : "rgba(71,85,105,0.15)"}`,
+                  ...glassSurface(t),
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
+                  fontSize: 14, lineHeight: 1.6,
+                  color: t.text,
+                  padding: "14px 18px", marginBottom: 24,
+                  borderLeft: `2px solid ${isDark ? "rgba(148,163,184,0.4)" : "rgba(71,85,105,0.3)"}`,
                 }}>
-                  I/O Hub Diagrams — Select a phase
+                  {selectedRun.blueprint.goal}
                 </div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-                  {selectedRun.blueprint.steps.map(step => (
-                    <button
-                      key={step.step}
-                      onClick={() => setExpandedStep(expandedStep === step.step ? null : step.step)}
-                      style={{
-                        fontSize: 11, fontWeight: 500,
-                        padding: "6px 14px", cursor: "pointer", borderRadius: 12,
-                        background: expandedStep === step.step ? t.surface : "transparent",
-                        border: `1px solid ${expandedStep === step.step ? t.surfaceBorder : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")}`,
-                        color: expandedStep === step.step ? t.title : t.muted,
-                        transition: "all 0.2s ease",
-                      }}
-                    >
-                      Phase {step.step}
-                    </button>
-                  ))}
+              )}
+
+              {/* ─── ASSUMPTIONS & ALTERNATIVES (collapsible) ─── */}
+              {(viewMode === "full" || viewMode === "stepper") && (
+                <AssumptionsPanel
+                  assumptions={selectedRun.blueprint?.assumptions}
+                  alternatives={selectedRun.blueprint?.alternative_approaches}
+                  isDark={isDark}
+                  t={t}
+                />
+              )}
+
+              {/* ─── DEPENDENCY FLOW GRAPH (visual modes) ─── */}
+              {(viewMode === "full" || viewMode === "visual") && (
+                <DependencyFlowGraph steps={selectedRun.blueprint?.steps} isDark={isDark} t={t} />
+              )}
+
+              {/* ─── INTERACTIVE STEP DETAIL PANEL (stepper modes) ─── */}
+              {(viewMode === "full" || viewMode === "stepper") && (
+                <StepDetailPanel steps={selectedRun.blueprint?.steps} isDark={isDark} t={t} />
+              )}
+
+              {/* ─── I/O HUB + PHASE ILLUSTRATION (visual modes) ─── */}
+              {(viewMode === "full" || viewMode === "visual") && selectedRun.blueprint?.steps?.length > 0 && (
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{
+                    fontSize: 11, letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: t.subtitle, fontWeight: 600,
+                    marginBottom: 12, paddingBottom: 6,
+                    borderBottom: `1px dashed ${isDark ? "rgba(148,163,184,0.2)" : "rgba(71,85,105,0.15)"}`,
+                  }}>
+                    I/O Hub Diagrams — Select a phase
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                    {selectedRun.blueprint.steps.map(step => (
+                      <button
+                        key={step.step}
+                        onClick={() => setExpandedStep(expandedStep === step.step ? null : step.step)}
+                        style={{
+                          fontSize: 11, fontWeight: 500,
+                          padding: "6px 14px", cursor: "pointer", borderRadius: 12,
+                          background: expandedStep === step.step ? t.surface : "transparent",
+                          border: `1px solid ${expandedStep === step.step ? t.surfaceBorder : (isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")}`,
+                          color: expandedStep === step.step ? t.title : t.muted,
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        Phase {step.step}
+                      </button>
+                    ))}
+                  </div>
+                  {expandedStep && (() => {
+                    const activeStep = selectedRun.blueprint.steps.find(s => s.step === expandedStep);
+                    return (
+                      <motion.div
+                        key={expandedStep}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        style={{ ...glassSurface(t), padding: 16 }}
+                      >
+                        <IOHubDiagram step={activeStep} isDark={isDark} t={t} />
+                        <PhaseIllustration
+                          step={activeStep}
+                          goalContext={selectedRun.blueprint?.goal}
+                          isDark={isDark}
+                          t={t}
+                        />
+                      </motion.div>
+                    );
+                  })()}
                 </div>
-                {expandedStep && (() => {
-                  const activeStep = selectedRun.blueprint.steps.find(s => s.step === expandedStep);
-                  return (
-                    <motion.div
-                      key={expandedStep}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      style={{ ...glassSurface(t), padding: 16 }}
-                    >
-                      <IOHubDiagram step={activeStep} isDark={isDark} t={t} />
-                      <PhaseIllustration
-                        step={activeStep}
-                        goalContext={selectedRun.blueprint?.goal}
-                        isDark={isDark}
-                        t={t}
-                      />
-                    </motion.div>
-                  );
-                })()}
-              </div>
-            )}
+              )}
 
-            {/* ─── RISK TOPOLOGY ─── */}
-            <RiskTopology risks={selectedRun.blueprint?.risk_register} isDark={isDark} t={t} />
+              {/* ─── SUCCESS CRITERIA (interactive checklist) ─── */}
+              {(viewMode === "full" || viewMode === "stepper") && (
+                <SuccessCriteriaPanel criteria={selectedRun.blueprint?.success_criteria} isDark={isDark} t={t} />
+              )}
 
-            {/* ─── FOOTER STAMP ─── */}
-            <div style={{
-              textAlign: "center", padding: "16px 0 0",
-              borderTop: `1px dashed ${isDark ? "rgba(148,163,184,0.15)" : "rgba(71,85,105,0.1)"}`,
-            }}>
-              <span style={{
-                fontSize: 9, letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                color: t.muted, opacity: 0.6,
+              {/* ─── RISK TOPOLOGY ─── */}
+              <RiskTopology risks={selectedRun.blueprint?.risk_register} isDark={isDark} t={t} />
+
+              {/* ─── FOOTER STAMP ─── */}
+              <div style={{
+                textAlign: "center", padding: "16px 0 0",
+                borderTop: `1px dashed ${isDark ? "rgba(148,163,184,0.15)" : "rgba(71,85,105,0.1)"}`,
               }}>
-                Janus Blueprint Protocol — Cephalon Continuity Framework — CP-002 v1.5
-              </span>
+                <span style={{
+                  fontSize: 9, letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: t.muted, opacity: 0.6,
+                }}>
+                  Janus Blueprint Protocol — Cephalon Continuity Framework — CP-002 v1.5
+                </span>
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </>
       )}
 
       {/* Empty state */}
