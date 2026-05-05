@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, Search, History as HistoryIcon, Zap } from "lucide-react";
+import { Plus, Search, History as HistoryIcon, Zap, Trash2 } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { light, dark, glassCard, glassSurface, glassBtn } from "@/components/ui/LiquidGlass";
 import GlassRunCard from "@/components/janus/GlassRunCard";
+import PullToRefresh from "@/components/ui/PullToRefresh";
+import AccountDeletionModal from "@/components/ui/AccountDeletionModal";
 
 export default function History() {
   const { isDark } = useTheme();
@@ -13,14 +15,19 @@ export default function History() {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  useEffect(() => {
-    const loadRuns = async () => {
-      const data = await base44.entities.Run.list("-created_date", 100);
-      setRuns(data);
-      setLoading(false);
-    };
-    loadRuns();
+  const loadRuns = useCallback(async () => {
+    const data = await base44.entities.Run.list("-created_date", 100);
+    setRuns(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadRuns(); }, [loadRuns]);
+
+  const handleRefresh = useCallback(async () => {
+    const data = await base44.entities.Run.list("-created_date", 100);
+    setRuns(data);
   }, []);
 
   const filteredRuns = runs.filter(run =>
@@ -28,6 +35,7 @@ export default function History() {
   );
 
   return (
+    <PullToRefresh onRefresh={handleRefresh} color={isDark ? "#a78bfa" : "#3b82f6"}>
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 20px 40px" }}>
       <motion.div
         initial={{ opacity: 0, y: -12 }}
@@ -38,16 +46,18 @@ export default function History() {
           <HistoryIcon style={{ width: 24, height: 24, color: isDark ? "#a78bfa" : "#3b82f6" }} />
           <h1 style={{ fontSize: 24, fontWeight: 700, color: t.title, margin: 0 }}>Run History</h1>
         </div>
-        <Link to="/NewQuery" style={{ textDecoration: "none" }}>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            style={{ ...glassBtn(t), padding: "0 18px", height: 38, fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
-          >
-            <Plus style={{ width: 15, height: 15 }} />
-            New Query
-          </motion.button>
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Link to="/NewQuery" style={{ textDecoration: "none" }}>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              style={{ ...glassBtn(t), padding: "0 18px", height: 38, fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+            >
+              <Plus style={{ width: 15, height: 15 }} />
+              New Query
+            </motion.button>
+          </Link>
+        </div>
       </motion.div>
 
       {/* Search */}
@@ -122,6 +132,36 @@ export default function History() {
           ))}
         </div>
       )}
+
+      {/* Account Deletion — Apple requirement */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+        style={{ marginTop: 48, paddingTop: 20, borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}
+      >
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "none", border: "none", cursor: "pointer",
+            fontSize: 13, fontWeight: 500,
+            color: isDark ? "rgba(248,113,113,0.7)" : "rgba(220,38,38,0.6)",
+            padding: "8px 0",
+          }}
+        >
+          <Trash2 style={{ width: 14, height: 14 }} />
+          Delete All My Data
+        </button>
+      </motion.div>
+
+      <AccountDeletionModal
+        isOpen={showDeleteModal}
+        onClose={() => { setShowDeleteModal(false); loadRuns(); }}
+        t={t}
+        isDark={isDark}
+      />
     </div>
+    </PullToRefresh>
   );
 }

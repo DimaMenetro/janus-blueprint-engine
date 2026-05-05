@@ -1,22 +1,33 @@
 import React from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import { ThemeProvider, useTheme } from "@/components/theme/ThemeProvider";
 import { ExecutionProvider } from "@/components/janus/ExecutionContext";
 import { light, dark } from "@/components/ui/LiquidGlass";
 import AmbientOrbs from "@/components/ui/AmbientOrbs";
 import GlassTabBar from "@/components/ui/GlassTabBar";
 import ThemeToggle from "@/components/theme/ThemeToggle";
-import { Zap } from "lucide-react";
+import PageTransition from "@/components/ui/PageTransition";
+import { Zap, ChevronLeft } from "lucide-react";
 import useScrollDensity from "@/hooks/useScrollDensity";
+
+// Routes that show a back button instead of just the logo
+const CHILD_ROUTES = ["/Results", "/ABTest"];
+const BACK_TARGETS = { "/Results": "/history", "/ABTest": "/diagnostics" };
 
 function LayoutInner({ children }) {
   const { isDark } = useTheme();
   const t = isDark ? dark : light;
   const location = useLocation();
+  const navigate = useNavigate();
   const { density, scrollY } = useScrollDensity();
 
   // Determine if page wants accessory content (could be extended per-page)
   const showAccessory = location.pathname === "/results";
+
+  // Back button logic for child routes
+  const isChildRoute = CHILD_ROUTES.some(r => location.pathname.toLowerCase() === r.toLowerCase());
+  const backTarget = Object.entries(BACK_TARGETS).find(([k]) => location.pathname.toLowerCase() === k.toLowerCase())?.[1];
 
   return (
     <div
@@ -43,6 +54,9 @@ function LayoutInner({ children }) {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "10px 20px",
+          paddingTop: "calc(10px + env(safe-area-inset-top, 0px))",
+          paddingLeft: "calc(20px + env(safe-area-inset-left, 0px))",
+          paddingRight: "calc(20px + env(safe-area-inset-right, 0px))",
           background: isDark
             ? `rgba(10,12,18,${density === "dense" ? 0.82 : density === "sparse" ? 0.6 : 0.72})`
             : `rgba(255,255,255,${density === "dense" ? 0.72 : density === "sparse" ? 0.5 : 0.62})`,
@@ -58,13 +72,32 @@ function LayoutInner({ children }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Zap style={{ width: 18, height: 18, color: isDark ? "#a78bfa" : "#3b82f6" }} />
-          <span style={{ fontWeight: 600, fontSize: 15, color: t.title, letterSpacing: "-0.3px" }}>
-            Janus Blueprint
-          </span>
-          <span style={{ fontSize: 11, color: t.muted, marginLeft: 4 }}>
-            CP-002 v1.5
-          </span>
+          {isChildRoute ? (
+            <button
+              onClick={() => navigate(backTarget || -1)}
+              style={{
+                display: "flex", alignItems: "center", gap: 4,
+                background: "none", border: "none", cursor: "pointer",
+                padding: "4px 8px 4px 2px", borderRadius: 10,
+                color: isDark ? "#a78bfa" : "#3b82f6",
+                fontSize: 14, fontWeight: 500,
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <ChevronLeft style={{ width: 20, height: 20 }} />
+              Back
+            </button>
+          ) : (
+            <>
+              <Zap style={{ width: 18, height: 18, color: isDark ? "#a78bfa" : "#3b82f6" }} />
+              <span style={{ fontWeight: 600, fontSize: 15, color: t.title, letterSpacing: "-0.3px" }}>
+                Janus Blueprint
+              </span>
+              <span style={{ fontSize: 11, color: t.muted, marginLeft: 4 }}>
+                CP-002 v1.5
+              </span>
+            </>
+          )}
         </div>
         <ThemeToggle />
       </header>
@@ -74,10 +107,14 @@ function LayoutInner({ children }) {
         style={{
           position: "relative",
           zIndex: 1,
-          paddingBottom: 100, // space for floating tab bar
+          paddingBottom: "calc(100px + env(safe-area-inset-bottom, 0px))",
         }}
       >
-        {children}
+        <AnimatePresence mode="wait">
+          <PageTransition>
+            {children}
+          </PageTransition>
+        </AnimatePresence>
       </div>
 
       {/* ─── FLOATING TAB BAR ─── */}

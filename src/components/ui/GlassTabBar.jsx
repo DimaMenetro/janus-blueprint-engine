@@ -66,9 +66,9 @@ export default function GlassTabBar() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        paddingBottom: 12,
-        paddingLeft: 16,
-        paddingRight: 16,
+        paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
+        paddingLeft: "calc(16px + env(safe-area-inset-left, 0px))",
+        paddingRight: "calc(16px + env(safe-area-inset-right, 0px))",
         pointerEvents: "none",
       }}
     >
