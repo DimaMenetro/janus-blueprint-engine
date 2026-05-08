@@ -4,7 +4,7 @@
  */
 import { glassSurface } from "@/components/ui/LiquidGlass";
 
-export default function RiskTopology({ risks, isDark, t }) {
+export default function RiskTopology({ risks, isDark, t, contentDensity }) {
   if (!risks?.length) return null;
 
   const inkLine = isDark ? "rgba(148,163,184,0.4)" : "rgba(71,85,105,0.3)";

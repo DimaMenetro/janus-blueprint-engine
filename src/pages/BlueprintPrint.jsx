@@ -8,6 +8,7 @@ import { ChevronDown, Loader2, FileText } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { light, dark, glassCard, glassSurface } from "@/components/ui/LiquidGlass";
+import { computeContentDensity } from "@/lib/contentDensity";
 
 import EngineeringGrid from "@/components/blueprint-vis/EngineeringGrid";
 import SchematicHeader from "@/components/blueprint-vis/SchematicHeader";
@@ -50,6 +51,9 @@ export default function BlueprintPrint() {
 
   // Use theme ink colors for sketched elements
   const ink = isDark ? "rgba(148,163,184,0.7)" : "rgba(71,85,105,0.6)";
+
+  // Liquid Glass Step 5: content-density response
+  const contentDensity = selectedRun ? computeContentDensity(selectedRun.blueprint) : "normal";
 
   return (
     <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 20px 100px" }}>
@@ -134,6 +138,7 @@ export default function BlueprintPrint() {
             onViewModeChange={setViewMode}
             isDark={isDark}
             t={t}
+            contentDensity={contentDensity}
           />
 
           <motion.div
@@ -141,7 +146,7 @@ export default function BlueprintPrint() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
             style={{
-              ...glassCard(t),
+              ...glassCard(t, { density: contentDensity }),
               position: "relative",
               padding: "32px 28px",
               overflow: "hidden",
@@ -151,12 +156,12 @@ export default function BlueprintPrint() {
 
             <div style={{ position: "relative", zIndex: 1 }}>
               {/* ─── HEADER PLATE ─── */}
-              <SchematicHeader run={selectedRun} isDark={isDark} t={t} />
+              <SchematicHeader run={selectedRun} isDark={isDark} t={t} contentDensity={contentDensity} />
 
               {/* ─── GOAL STATEMENT ─── */}
               {selectedRun.blueprint?.goal && (
                 <div style={{
-                  ...glassSurface(t),
+                  ...glassSurface(t, { density: contentDensity }),
                   fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
                   fontSize: 14, lineHeight: 1.6,
                   color: t.text,
@@ -174,17 +179,18 @@ export default function BlueprintPrint() {
                   alternatives={selectedRun.blueprint?.alternative_approaches}
                   isDark={isDark}
                   t={t}
+                  contentDensity={contentDensity}
                 />
               )}
 
               {/* ─── DEPENDENCY FLOW GRAPH (visual modes) ─── */}
               {(viewMode === "full" || viewMode === "visual") && (
-                <DependencyFlowGraph steps={selectedRun.blueprint?.steps} isDark={isDark} t={t} />
+                <DependencyFlowGraph steps={selectedRun.blueprint?.steps} isDark={isDark} t={t} contentDensity={contentDensity} />
               )}
 
               {/* ─── INTERACTIVE STEP DETAIL PANEL (stepper modes) ─── */}
               {(viewMode === "full" || viewMode === "stepper") && (
-                <StepDetailPanel steps={selectedRun.blueprint?.steps} isDark={isDark} t={t} />
+                <StepDetailPanel steps={selectedRun.blueprint?.steps} isDark={isDark} t={t} contentDensity={contentDensity} />
               )}
 
               {/* ─── I/O HUB + PHASE ILLUSTRATION (visual modes) ─── */}
@@ -224,7 +230,7 @@ export default function BlueprintPrint() {
                         key={expandedStep}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        style={{ ...glassSurface(t), padding: 16 }}
+                        style={{ ...glassSurface(t, { density: contentDensity }), padding: 16 }}
                       >
                         <IOHubDiagram step={activeStep} isDark={isDark} t={t} />
                         <PhaseIllustration
@@ -232,6 +238,7 @@ export default function BlueprintPrint() {
                           goalContext={selectedRun.blueprint?.goal}
                           isDark={isDark}
                           t={t}
+                          contentDensity={contentDensity}
                         />
                       </motion.div>
                     );
@@ -241,11 +248,11 @@ export default function BlueprintPrint() {
 
               {/* ─── SUCCESS CRITERIA (interactive checklist) ─── */}
               {(viewMode === "full" || viewMode === "stepper") && (
-                <SuccessCriteriaPanel criteria={selectedRun.blueprint?.success_criteria} isDark={isDark} t={t} />
+                <SuccessCriteriaPanel criteria={selectedRun.blueprint?.success_criteria} isDark={isDark} t={t} contentDensity={contentDensity} />
               )}
 
               {/* ─── RISK TOPOLOGY ─── */}
-              <RiskTopology risks={selectedRun.blueprint?.risk_register} isDark={isDark} t={t} />
+              <RiskTopology risks={selectedRun.blueprint?.risk_register} isDark={isDark} t={t} contentDensity={contentDensity} />
 
               {/* ─── FOOTER STAMP ─── */}
               <div style={{

@@ -17,7 +17,7 @@ function effortColor(effort, isDark) {
   return map[(effort || "medium").toLowerCase()] || map.medium;
 }
 
-function StepNode({ step, isExpanded, isLast, isDark, t, onToggle, checkedItems, onCheck }) {
+function StepNode({ step, isExpanded, isLast, isDark, t, onToggle, checkedItems, onCheck, contentDensity }) {
   const hasContent = step.instructions || step.substeps?.length || step.checklist?.length || step.acceptance_tests?.length;
 
   return (
@@ -111,7 +111,7 @@ function StepNode({ step, isExpanded, isLast, isDark, t, onToggle, checkedItems,
               style={{ overflow: "hidden" }}
             >
               <div style={{
-                ...glassSurface(t, { density: "focused" }),
+                ...glassSurface(t, { density: isExpanded ? "focused" : contentDensity }),
                 padding: 14, marginTop: 10,
               }}>
                 {/* Instructions */}
@@ -253,7 +253,7 @@ function StepNode({ step, isExpanded, isLast, isDark, t, onToggle, checkedItems,
   );
 }
 
-export default function StepDetailPanel({ steps, isDark, t }) {
+export default function StepDetailPanel({ steps, isDark, t, contentDensity }) {
   const [expandedSteps, setExpandedSteps] = useState({});
   const [checkedItems, setCheckedItems] = useState({});
 
@@ -313,6 +313,7 @@ export default function StepDetailPanel({ steps, isDark, t }) {
             onToggle={() => toggleStep(step.step)}
             checkedItems={checkedItems}
             onCheck={toggleCheck}
+            contentDensity={contentDensity}
           />
         ))}
       </div>

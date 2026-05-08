@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Lightbulb, ChevronDown, Zap, ThumbsUp, ThumbsDown, XCircle } from "lucide-react";
 import { glassSurface } from "@/components/ui/LiquidGlass";
 
-export default function AssumptionsPanel({ assumptions, alternatives, isDark, t }) {
+export default function AssumptionsPanel({ assumptions, alternatives, isDark, t, contentDensity }) {
   const [showAssumptions, setShowAssumptions] = useState(false);
   const [showAlternatives, setShowAlternatives] = useState(false);
 
@@ -28,7 +28,7 @@ export default function AssumptionsPanel({ assumptions, alternatives, isDark, t 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {/* Assumptions */}
         {hasAssumptions && (
-          <div style={{ ...glassSurface(t), overflow: "hidden" }}>
+          <div style={{ ...glassSurface(t, { density: contentDensity }), overflow: "hidden" }}>
             <button
               onClick={() => setShowAssumptions(!showAssumptions)}
               style={{
@@ -75,7 +75,7 @@ export default function AssumptionsPanel({ assumptions, alternatives, isDark, t 
 
         {/* Alternative Approaches */}
         {hasAlternatives && (
-          <div style={{ ...glassSurface(t), overflow: "hidden" }}>
+          <div style={{ ...glassSurface(t, { density: contentDensity }), overflow: "hidden" }}>
             <button
               onClick={() => setShowAlternatives(!showAlternatives)}
               style={{

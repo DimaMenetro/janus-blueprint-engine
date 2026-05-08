@@ -44,7 +44,7 @@ function effortColor(effort, isDark) {
   return map[(effort || "medium").toLowerCase()] || map.medium;
 }
 
-export default function DependencyFlowGraph({ steps, isDark, t }) {
+export default function DependencyFlowGraph({ steps, isDark, t, contentDensity }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [nodePositions, setNodePositions] = useState({});
@@ -163,7 +163,7 @@ export default function DependencyFlowGraph({ steps, isDark, t }) {
                     onMouseEnter={() => setHoveredNode(node.step)}
                     onMouseLeave={() => setHoveredNode(null)}
                     style={{
-                      ...glassSurface(t, { density: isHovered ? "focused" : undefined }),
+                      ...glassSurface(t, { density: isHovered ? "focused" : contentDensity }),
                       padding: "12px 16px",
                       minWidth: 160, maxWidth: 220,
                       cursor: "default",
@@ -171,7 +171,7 @@ export default function DependencyFlowGraph({ steps, isDark, t }) {
                       borderColor: isHovered ? (isDark ? "rgba(148,163,184,0.25)" : "rgba(71,85,105,0.2)") : undefined,
                       boxShadow: isHovered
                         ? `${glassSurface(t, { density: "focused" }).boxShadow}, 0 0 16px ${isDark ? "rgba(148,163,184,0.08)" : "rgba(71,85,105,0.06)"}`
-                        : glassSurface(t).boxShadow,
+                        : glassSurface(t, { density: contentDensity }).boxShadow,
                     }}>
                     {/* Step badge + title */}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>

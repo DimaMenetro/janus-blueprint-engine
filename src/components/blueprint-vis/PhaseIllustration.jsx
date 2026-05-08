@@ -55,7 +55,7 @@ function buildPrompt(step, goalContext, isDark) {
 // Simple in-memory cache so we don't re-generate on every expand
 const imageCache = {};
 
-export default function PhaseIllustration({ step, goalContext, isDark, t }) {
+export default function PhaseIllustration({ step, goalContext, isDark, t, contentDensity }) {
   // isDark is used in prompt generation for theme-adaptive output
   const [imageUrl, setImageUrl] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -98,7 +98,7 @@ export default function PhaseIllustration({ step, goalContext, isDark, t }) {
   if (!imageUrl && !loading) {
     return (
       <div style={{
-        ...glassSurface(t),
+        ...glassSurface(t, { density: contentDensity }),
         padding: "20px 16px",
         display: "flex", flexDirection: "column", alignItems: "center",
         gap: 10, marginTop: 12,
@@ -140,7 +140,7 @@ export default function PhaseIllustration({ step, goalContext, isDark, t }) {
   if (loading) {
     return (
       <div style={{
-        ...glassSurface(t),
+        ...glassSurface(t, { density: contentDensity }),
         padding: "40px 16px",
         display: "flex", flexDirection: "column", alignItems: "center",
         gap: 10, marginTop: 12,
@@ -165,7 +165,7 @@ export default function PhaseIllustration({ step, goalContext, isDark, t }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       style={{
-        ...glassSurface(t),
+        ...glassSurface(t, { density: contentDensity }),
         padding: 12, marginTop: 12,
         overflow: "hidden",
       }}

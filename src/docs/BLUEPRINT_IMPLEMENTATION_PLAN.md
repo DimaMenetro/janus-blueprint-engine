@@ -47,14 +47,13 @@ Three interactive components now use density-aware glass:
 
 Effect: Interactive elements that receive user attention solidify slightly, creating a depth cue that mirrors how real glass lenses sharpen when you focus through them.
 
-#### Step 5: Data-Density Response 🔲 NOT YET IMPLEMENTED
+#### Step 5: Data-Density Response ✅
 
-- **Objective:** Glass containers on `/BlueprintPrint` dynamically adjust translucency based on enclosed content volume
-- **Scope of Work:**
-  - Identify content metrics within `selectedRun.blueprint` data (e.g., combined count of `steps`, `risk_register`, `alternative_approaches`, `assumptions`, `success_criteria`)
-  - Define thresholds mapping content counts to density states (`"sparse"`, `"normal"`, `"dense"`)
-  - Modify `BlueprintPrint.jsx` to calculate content density and pass resulting `density` parameter to `glassCard(t, { density })`
-  - Test and fine-tune thresholds for visual balance
+- **Utility:** `lib/contentDensity.js` — `computeContentDensity(blueprint)` returns `"normal"` or `"sparse"`
+- **Threshold:** >12 total items (steps + risks + alternatives + assumptions + criteria) → `"sparse"`
+- **Propagation:** Computed once in `BlueprintPrint.jsx`, threaded as `contentDensity` prop to all 9 child components
+- **Focus preservation:** `StepDetailPanel` expanded nodes and `DependencyFlowGraph` hovered nodes still override to `"focused"` — focus always wins over content density
+- **Files modified:** `BlueprintPrint.jsx`, `SchematicHeader`, `AssumptionsPanel`, `DependencyFlowGraph`, `StepDetailPanel`, `SuccessCriteriaPanel`, `BlueprintNavBar`, `PhaseIllustration`, `RiskTopology`
 
 ### B. WebKit Backdrop-Filter Fixes ✅
 
@@ -81,30 +80,9 @@ Effect: Interactive elements that receive user attention solidify slightly, crea
 
 ---
 
-## II. Remaining Work
+## II. Status: ALL STEPS COMPLETE ✅
 
-### Priority 1: Data-Density Response (Liquid Glass Step 5)
-
-This is the final piece of the 5-step liquid glass enhancement plan.
-
-**Implementation approach:**
-1. In `BlueprintPrint.jsx`, after `selectedRun` is set, compute a content density score:
-   ```js
-   const steps = selectedRun.blueprint?.steps?.length || 0;
-   const risks = selectedRun.blueprint?.risk_register?.length || 0;
-   const alts = selectedRun.blueprint?.alternative_approaches?.length || 0;
-   const assumptions = selectedRun.blueprint?.assumptions?.length || 0;
-   const criteria = selectedRun.blueprint?.success_criteria?.length || 0;
-   const totalItems = steps + risks + alts + assumptions + criteria;
-   ```
-2. Map to density:
-   - `totalItems <= 8` → `"normal"` (default)
-   - `totalItems <= 15` → `"sparse"` (slightly more translucent)
-   - `totalItems > 15` → `"sparse"` with additional blur reduction (lightest glass)
-3. Pass to the main content wrapper: `glassCard(t, { density: contentDensity })`
-4. Visual validation: compare a 3-step blueprint vs a 12-step blueprint side by side
-
-**Files to modify:** `pages/BlueprintPrint.jsx` only — the density system in `LiquidGlass.jsx` is already built.
+All 5 steps of the Liquid Glass enhancement plan plus iOS mobile readiness have been implemented. The `/BlueprintPrint` page and its child components now fully participate in the context-aware density system.
 
 ---
 

@@ -13,10 +13,10 @@ const VIEW_MODES = [
   { key: "visual", icon: Map, label: "Visual Only" },
 ];
 
-export default function BlueprintNavBar({ runId, viewMode, onViewModeChange, isDark, t }) {
+export default function BlueprintNavBar({ runId, viewMode, onViewModeChange, isDark, t, contentDensity }) {
   return (
     <div style={{
-      ...glassSurface(t),
+      ...glassSurface(t, { density: contentDensity }),
       padding: "8px 14px",
       marginBottom: 20,
       display: "flex", alignItems: "center", justifyContent: "space-between",

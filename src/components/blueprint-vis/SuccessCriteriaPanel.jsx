@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Circle, Target } from "lucide-react";
 import { glassSurface } from "@/components/ui/LiquidGlass";
 
-export default function SuccessCriteriaPanel({ criteria, isDark, t }) {
+export default function SuccessCriteriaPanel({ criteria, isDark, t, contentDensity }) {
   const [checked, setChecked] = useState({});
 
   if (!criteria?.length) return null;
@@ -53,7 +53,7 @@ export default function SuccessCriteriaPanel({ criteria, isDark, t }) {
         />
       </div>
 
-      <div style={{ ...glassSurface(t), padding: "10px 14px" }}>
+      <div style={{ ...glassSurface(t, { density: contentDensity }), padding: "10px 14px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {criteria.map((criterion, i) => {
             const isChecked = !!checked[i];

@@ -4,7 +4,7 @@
  */
 import { glassSurface } from "@/components/ui/LiquidGlass";
 
-export default function SchematicHeader({ run, isDark, t }) {
+export default function SchematicHeader({ run, isDark, t, contentDensity }) {
   const date = new Date(run.created_date).toLocaleDateString("en-US", {
     year: "numeric", month: "short", day: "numeric",
   });
@@ -20,7 +20,7 @@ export default function SchematicHeader({ run, isDark, t }) {
 
   return (
     <div style={{
-      ...glassSurface(t),
+      ...glassSurface(t, { density: contentDensity }),
       padding: "18px 22px",
       marginBottom: 24,
       position: "relative",
