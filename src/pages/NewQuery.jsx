@@ -22,6 +22,7 @@ export default function NewQuery() {
   const t = isDark ? dark : light;
 
   const [queryText, setQueryText] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState([]);
   const [executionMode, setExecutionMode] = useState("standard");
   const [outputMode, setOutputMode] = useState("Blueprint");
   const [blueprintLevel, setBlueprintLevel] = useState("L2");
@@ -39,7 +40,7 @@ export default function NewQuery() {
 
     try {
       const result = await executeJanus(
-        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled },
+        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, attachedFiles },
         ({ domain, status: progressStatus, completedDomains, totalDomains }) => {
           updateProgress({ domain, status: progressStatus, completedDomains, totalDomains });
           if (progressStatus === "validating") setStatus("validating");
@@ -91,7 +92,7 @@ export default function NewQuery() {
         transition={{ delay: 0.05 }}
         style={{ ...glassCard(t), padding: "24px 22px", display: "flex", flexDirection: "column", gap: 24 }}
       >
-        <QueryForm value={queryText} onChange={setQueryText} t={t} />
+        <QueryForm value={queryText} onChange={setQueryText} files={attachedFiles} onFilesChange={setAttachedFiles} t={t} isDark={isDark} />
         <ExecutionModeSelector value={executionMode} onChange={setExecutionMode} t={t} isDark={isDark} />
         <ParameterGrid
           outputMode={outputMode} setOutputMode={setOutputMode}

@@ -361,13 +361,17 @@ function parseLLMResponse(result, expectedKey) {
 
 // ─── LLM CALL HELPER ─────────────────────────────────────────────────────────
 
-async function callLLM(prompt, domain, refreshEnabled) {
+async function callLLM(prompt, domain, refreshEnabled, fileUrls) {
   const llmParams = { prompt };
   if (domain === "refresh" && refreshEnabled) {
     llmParams.add_context_from_internet = true;
     llmParams.model = "gemini_3_flash";
   } else {
     llmParams.model = "claude_sonnet_4_6";
+  }
+  // Attach files to ALL domain calls so the LLM has full context
+  if (fileUrls?.length) {
+    llmParams.file_urls = fileUrls;
   }
   return await base44.integrations.Core.InvokeLLM(llmParams);
 }
@@ -379,7 +383,7 @@ async function callLLM(prompt, domain, refreshEnabled) {
  * Domain pipeline: refresh? → corpus → cogito (+intersection) → animus (+intersections) → actus (+intersections) → synthesis (named patterns) → blueprint
  */
 export async function executeJanus(params, onProgress, generateMarkdown, buildFullPrompt) {
-  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = params;
+  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, attachedFiles } = params;
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
   const domains = mode.domains;
 
@@ -389,6 +393,8 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     MAX_PROMPT_LENGTH
   );
 
+  const fileUrls = (attachedFiles || []).map(f => f.file_url).filter(Boolean);
+
   const run = await base44.entities.Run.create({
     query_text: queryText,
     full_prompt: fullPromptForStorage,
@@ -397,6 +403,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     blueprint_level: blueprintLevel,
     novelty_dial: noveltyDial,
     refresh_enabled: refreshEnabled,
+    attached_files: attachedFiles || [],
     status: "running",
     validation_errors: [],
     raw_json: "{}"
@@ -423,6 +430,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
         noveltyDial: params.noveltyDial,
         outputMode: params.outputMode,
         onProgress: (p) => onProgress({ ...p, completedDomains: completedCount, totalDomains: totalSteps }),
+        fileUrls,
       });
       if (bpData) {
         mergedData.blueprint = bpData;
@@ -445,7 +453,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     // ── Execute domain LLM call
     let domainResult;
     try {
-      domainResult = await callLLM(domainPrompt, domain, refreshEnabled);
+      domainResult = await callLLM(domainPrompt, domain, refreshEnabled, fileUrls);
     } catch (err) {
       domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
       continue;
@@ -486,7 +494,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
 
         try {
           const pairPrompt = buildIntersectionPrompt(trigger.pair, trigger.model, dA, dB, mergedData[dA], mergedData[dB], queryText);
-          const pairResult = await callLLM(pairPrompt, "intersection", false);
+          const pairResult = await callLLM(pairPrompt, "intersection", false, fileUrls);
           const pairParsed = parseLLMResponse(pairResult, trigger.pair);
 
           if (pairParsed.data) {

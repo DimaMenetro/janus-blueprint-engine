@@ -83,11 +83,10 @@ export function buildCompressedBlueprintContext(source) {
 
 // ─── LLM CALL ────────────────────────────────────────────────────────────────
 
-async function callLLM(prompt) {
-  return await base44.integrations.Core.InvokeLLM({
-    prompt,
-    model: "claude_sonnet_4_6",
-  });
+async function callLLM(prompt, fileUrls) {
+  const params = { prompt, model: "claude_sonnet_4_6" };
+  if (fileUrls?.length) params.file_urls = fileUrls;
+  return await base44.integrations.Core.InvokeLLM(params);
 }
 
 function parseLLMResponse(result, expectedKey) {
@@ -183,7 +182,7 @@ QUERY: ${queryText}`;
  * @param {function} onProgress - progress callback
  * @returns {{ data: object|null, errors: string[] }}
  */
-export async function executeBlueprintSplitCall({ source, queryText, blueprintLevel, noveltyDial, outputMode, onProgress }) {
+export async function executeBlueprintSplitCall({ source, queryText, blueprintLevel, noveltyDial, outputMode, onProgress, fileUrls }) {
   const errors = [];
   const contextBlock = buildCompressedBlueprintContext(source);
   const totalSubCalls = blueprintLevel === "L1" ? 2 : 3;
@@ -194,7 +193,7 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
   let skeleton = null;
   try {
     const prompt = buildSkeletonPrompt(contextBlock, queryText, blueprintLevel, noveltyDial, outputMode);
-    const result = await callLLM(prompt);
+    const result = await callLLM(prompt, fileUrls);
     const parsed = parseLLMResponse(result, "blueprint");
     if (parsed.data) {
       skeleton = parsed.data;
@@ -216,7 +215,7 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
     try {
       const prompt = buildStepExpansionPrompt(skeleton, queryText, blueprintLevel);
       if (prompt) {
-        const result = await callLLM(prompt);
+        const result = await callLLM(prompt, fileUrls);
         const parsed = parseLLMResponse(result, "step_expansions");
         if (parsed.data) {
           const expansions = Array.isArray(parsed.data) ? parsed.data : [];
@@ -250,7 +249,7 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
 
   try {
     const prompt = buildCriteriaRiskPrompt(skeleton, contextBlock, queryText, noveltyDial);
-    const result = await callLLM(prompt);
+    const result = await callLLM(prompt, fileUrls);
     const parsed = parseLLMResponse(result, "criteria_risk");
     if (parsed.data) {
       if (parsed.data.success_criteria) skeleton.success_criteria = parsed.data.success_criteria;
