@@ -9,6 +9,7 @@ import StatusPill from "@/components/janus/StatusPill";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import GlassResultTabs from "@/components/janus/GlassResultTabs";
 import RerunControls from "@/components/janus/RerunControls";
+import ProcessingCard from "@/components/janus/ProcessingCard";
 
 export default function Results() {
   const navigate = useNavigate();
@@ -186,44 +187,9 @@ export default function Results() {
         }}
       />
 
-      {/* Processing indicator */}
+      {/* Server-side processing indicator — Liquid Glass style */}
       {isProcessing && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={{
-            ...glassCard(t),
-            padding: "24px 22px",
-            marginBottom: 20,
-            textAlign: "center",
-          }}
-        >
-          <motion.div
-            animate={{ opacity: [0.4, 1, 0.4] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            style={{ marginBottom: 12 }}
-          >
-            <div style={{
-              width: 40, height: 40, margin: "0 auto",
-              border: `3px solid ${isDark ? "rgba(167,139,250,0.2)" : "rgba(59,130,246,0.15)"}`,
-              borderTopColor: isDark ? "#a78bfa" : "#3b82f6",
-              borderRadius: "50%",
-              animation: "spin 1s linear infinite",
-            }} />
-          </motion.div>
-          <p style={{ fontSize: 15, fontWeight: 600, color: t.title, marginBottom: 4 }}>
-            Janus is processing your query
-          </p>
-          <p style={{ fontSize: 13, color: t.subtitle }}>
-            This runs on the server — you can close the app and come back later.
-            {run.corpus ? " Corpus ✓" : ""}
-            {run.cogito ? " Cogito ✓" : ""}
-            {run.animus ? " Animus ✓" : ""}
-            {run.actus ? " Actus ✓" : ""}
-            {run.synthesis ? " Synthesis ✓" : ""}
-            {run.blueprint ? " Blueprint ✓" : ""}
-          </p>
-        </motion.div>
+        <ProcessingCard run={run} t={t} isDark={isDark} />
       )}
 
       {/* Results tabs */}
