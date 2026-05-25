@@ -19,16 +19,38 @@ export default function Results() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    if (!id) { navigate("/NewQuery"); return; }
+
+    let pollTimer = null;
+
     const loadRun = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const id = params.get("id");
-      if (!id) { navigate("/NewQuery"); return; }
       try { const user = await base44.auth.me(); setIsAdmin(user.role === 'admin'); } catch { setIsAdmin(false); }
       const runs = await base44.entities.Run.filter({ id });
-      if (runs.length > 0) setRun(runs[0]);
+      if (runs.length > 0) {
+        setRun(runs[0]);
+        // If still processing, keep polling every 8 seconds
+        if (runs[0].status === "running" || runs[0].status === "idle" || runs[0].status === "validating") {
+          pollTimer = setTimeout(pollForUpdates, 8000);
+        }
+      }
       setLoading(false);
     };
+
+    const pollForUpdates = async () => {
+      const runs = await base44.entities.Run.filter({ id });
+      if (runs.length > 0) {
+        setRun(runs[0]);
+        if (runs[0].status === "running" || runs[0].status === "idle" || runs[0].status === "validating") {
+          pollTimer = setTimeout(pollForUpdates, 8000);
+        }
+      }
+    };
+
     loadRun();
+
+    return () => { if (pollTimer) clearTimeout(pollTimer); };
   }, [navigate]);
 
   if (loading) {
@@ -60,6 +82,7 @@ export default function Results() {
 
   const mode = EXECUTION_MODES[run.execution_mode?.toUpperCase()] || EXECUTION_MODES.STANDARD;
   const hasFailed = run.status === "failed";
+  const isProcessing = run.status === "running" || run.status === "idle" || run.status === "validating";
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 20px 40px" }}>
@@ -162,6 +185,46 @@ export default function Results() {
           if (refreshed.length > 0) setRun(refreshed[0]);
         }}
       />
+
+      {/* Processing indicator */}
+      {isProcessing && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            ...glassCard(t),
+            padding: "24px 22px",
+            marginBottom: 20,
+            textAlign: "center",
+          }}
+        >
+          <motion.div
+            animate={{ opacity: [0.4, 1, 0.4] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            style={{ marginBottom: 12 }}
+          >
+            <div style={{
+              width: 40, height: 40, margin: "0 auto",
+              border: `3px solid ${isDark ? "rgba(167,139,250,0.2)" : "rgba(59,130,246,0.15)"}`,
+              borderTopColor: isDark ? "#a78bfa" : "#3b82f6",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+            }} />
+          </motion.div>
+          <p style={{ fontSize: 15, fontWeight: 600, color: t.title, marginBottom: 4 }}>
+            Janus is processing your query
+          </p>
+          <p style={{ fontSize: 13, color: t.subtitle }}>
+            This runs on the server — you can close the app and come back later.
+            {run.corpus ? " Corpus ✓" : ""}
+            {run.cogito ? " Cogito ✓" : ""}
+            {run.animus ? " Animus ✓" : ""}
+            {run.actus ? " Actus ✓" : ""}
+            {run.synthesis ? " Synthesis ✓" : ""}
+            {run.blueprint ? " Blueprint ✓" : ""}
+          </p>
+        </motion.div>
+      )}
 
       {/* Results tabs */}
       {!hasFailed && (

@@ -9,12 +9,11 @@ import {
   glassCard, glassBtn, glassError
 } from "@/components/ui/LiquidGlass";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
-import { executeJanus } from "@/components/janus/ExecutionEngine";
 import { useExecution } from "@/components/janus/ExecutionContext";
 import QueryForm from "@/components/janus/QueryForm";
 import ExecutionModeSelector from "@/components/janus/ExecutionModeSelector";
 import ParameterGrid from "@/components/janus/ParameterGrid";
-import { buildPrompt, generateMarkdown } from "@/components/janus/promptUtils";
+import { buildPrompt } from "@/components/janus/promptUtils";
 
 export default function NewQuery() {
   const navigate = useNavigate();
@@ -30,7 +29,7 @@ export default function NewQuery() {
   const [refreshEnabled, setRefreshEnabled] = useState(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const { startExecution, updateProgress, finishExecution, failExecution } = useExecution();
+  const { startExecution, finishExecution, failExecution } = useExecution();
 
   const handleExecute = async () => {
     if (!queryText.trim()) return;
@@ -39,30 +38,35 @@ export default function NewQuery() {
     startExecution(queryText);
 
     try {
-      const result = await executeJanus(
-        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, attachedFiles },
-        ({ domain, status: progressStatus, completedDomains, totalDomains }) => {
-          updateProgress({ domain, status: progressStatus, completedDomains, totalDomains });
-          if (progressStatus === "validating") setStatus("validating");
-        },
-        generateMarkdown,
-        buildPrompt
-      );
+      // 1. Create the Run record
+      const fullPromptForStorage = (buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) + queryText).slice(0, 10000);
 
-      if (result.success) {
-        setStatus("completed");
-        finishExecution(result.runId);
-        navigate(`/results?id=${result.runId}`);
-      } else {
-        setStatus("failed");
-        setErrorMessage("Execution completed with errors:\n\n" + (result.errors || []).join("\n"));
-        updateProgress({ runId: result.runId, status: "failed" });
-        navigate(`/results?id=${result.runId}`);
-      }
+      const run = await base44.entities.Run.create({
+        query_text: queryText,
+        full_prompt: fullPromptForStorage,
+        execution_mode: executionMode,
+        output_mode: outputMode,
+        blueprint_level: blueprintLevel,
+        novelty_dial: noveltyDial,
+        refresh_enabled: refreshEnabled,
+        attached_files: attachedFiles || [],
+        status: "running",
+        validation_errors: [],
+        raw_json: "{}"
+      });
+
+      // 2. Fire the backend function (fire-and-forget — runs server-side)
+      base44.functions.invoke("executeJanus", { runId: run.id }).catch(err => {
+        console.error("Backend execution error:", err);
+      });
+
+      // 3. Navigate immediately — Results page will poll for completion
+      finishExecution(run.id);
+      navigate(`/results?id=${run.id}`);
     } catch (err) {
       setStatus("failed");
       failExecution();
-      setErrorMessage(`Unexpected error: ${err.message || err}`);
+      setErrorMessage(`Failed to start execution: ${err.message || err}`);
     }
   };
 
