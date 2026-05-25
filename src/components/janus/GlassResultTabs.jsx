@@ -10,6 +10,7 @@ import AnimusTab from "@/components/janus/tabs/AnimusTab";
 import ActusTab from "@/components/janus/tabs/ActusTab";
 import SynthesisTab from "@/components/janus/tabs/SynthesisTab";
 import BlueprintTab from "@/components/janus/tabs/BlueprintTab";
+import BlueprintVisTab from "@/components/janus/tabs/BlueprintVisTab";
 import ExportTab from "@/components/janus/tabs/ExportTab";
 
 const tabDefs = {
@@ -34,7 +35,7 @@ export default function GlassResultTabs({ run, mode, t, isDark, isAdmin }) {
       case "animus":    return <AnimusTab data={run.animus} />;
       case "actus":     return <ActusTab data={run.actus} />;
       case "synthesis": return <SynthesisTab data={run.synthesis} />;
-      case "blueprint": return <BlueprintTab data={run.blueprint} blueprintLevel={run.blueprint_level} />;
+      case "blueprint": return <BlueprintVisTab run={run} />;
       case "export":    return <ExportTab run={run} fullPrompt={run.full_prompt} isAdmin={isAdmin} />;
       default:          return null;
     }
