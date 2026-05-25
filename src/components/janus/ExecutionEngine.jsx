@@ -450,25 +450,32 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     const contextForPrompt = { ...mergedData, _intersections: intersections };
     const domainPrompt = buildDomainPrompt(domain, queryText, params, contextForPrompt);
 
-    // ── Execute domain LLM call
+    // ── Execute domain LLM call (with single retry on parse failure)
     let domainResult;
-    try {
-      domainResult = await callLLM(domainPrompt, domain, refreshEnabled, fileUrls);
-    } catch (err) {
-      domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
-      continue;
-    }
+    let domainSuccess = false;
 
-    try {
-      const parsed = parseLLMResponse(domainResult, domain);
-      if (parsed.error) {
-        domainErrors.push(parsed.error);
-      } else {
-        mergedData[domain] = parsed.data;
+    for (let attempt = 0; attempt < 2 && !domainSuccess; attempt++) {
+      try {
+        domainResult = await callLLM(domainPrompt, domain, refreshEnabled, fileUrls);
+      } catch (err) {
+        if (attempt === 0) continue; // Retry once on LLM call failure
+        domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
+        break;
       }
-    } catch (e) {
-      domainErrors.push(`${domain}: Parse error — ${e.message}`);
-      continue;
+
+      try {
+        const parsed = parseLLMResponse(domainResult, domain);
+        if (parsed.error) {
+          if (attempt === 0) continue; // Retry once on parse failure (handles prose-instead-of-JSON)
+          domainErrors.push(parsed.error);
+        } else {
+          mergedData[domain] = parsed.data;
+          domainSuccess = true;
+        }
+      } catch (e) {
+        if (attempt === 0) continue; // Retry once on JSON parse exception
+        domainErrors.push(`${domain}: Parse error — ${e.message}`);
+      }
     }
 
     completedCount++;
