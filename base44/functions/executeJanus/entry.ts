@@ -680,8 +680,23 @@ function parseLLMResponse(result, expectedKey) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// VALIDATION & NORMALIZATION — PORT FROM janusSchema.jsx
+// VALIDATION & NORMALIZATION — FULL PORT FROM janusSchema.jsx
+// Uses the complete JANUS_SCHEMA tree for recursive normalization + validation,
+// identical to the original validateJanusOutput() function.
 // ═══════════════════════════════════════════════════════════════════════════════
+
+const JANUS_SCHEMA = {
+  type: "object",
+  properties: {
+    refresh: { type: "object", properties: { mode: { type: "string" }, attempted: { type: "boolean" }, limitations: { type: "string" }, would_refresh: { type: "array", items: { type: "string" } } }, required: ["mode", "attempted"] },
+    corpus: { type: "object", properties: { constraints: { type: "array", items: { type: "string" } }, feasibility_notes: { type: "array", items: { type: "string" } }, subdomains: { type: "object", properties: { ai_ml: { type: "object", properties: { perspective: { type: "string" }, key_findings: { type: "array", items: { type: "string" } } } }, distributed_systems: { type: "object", properties: { perspective: { type: "string" }, key_findings: { type: "array", items: { type: "string" } } } }, data_engineering: { type: "object", properties: { perspective: { type: "string" }, key_findings: { type: "array", items: { type: "string" } } } }, cybersecurity: { type: "object", properties: { perspective: { type: "string" }, key_findings: { type: "array", items: { type: "string" } } } }, neuroscience: { type: "object", properties: { perspective: { type: "string" }, key_findings: { type: "array", items: { type: "string" } } } }, physics: { type: "object", properties: { perspective: { type: "string" }, key_findings: { type: "array", items: { type: "string" } } } }, systems_engineering: { type: "object", properties: { perspective: { type: "string" }, key_findings: { type: "array", items: { type: "string" } } } } } } } },
+    cogito: { type: "object", properties: { claims: { type: "array", items: { type: "object", properties: { id: { type: "string" }, tag: { type: "string", enum: ["Established", "Contested", "Speculative"] }, text: { type: "string" }, depends_on: { type: "array", items: { type: "string" } }, why_believed: { type: "string" }, falsifiable_by: { type: "string" }, verify_later: { type: "string" } }, required: ["id", "tag", "text", "why_believed", "falsifiable_by", "verify_later"] } }, reasoning_map: { type: "array", items: { type: "string" } }, graphrag_connections: { type: "array", items: { type: "string" } }, causal_chains: { type: "array", items: { type: "object", properties: { cause: { type: "string" }, effect: { type: "string" }, confidence: { type: "string", enum: ["Established", "Contested", "Speculative"] } } } }, neuro_symbolic_insights: { type: "array", items: { type: "string" } } } },
+    animus: { type: "object", properties: { boundary_checks: { type: "array", items: { type: "string" } }, disallowed_moves: { type: "array", items: { type: "string" } }, safety_notes: { type: "array", items: { type: "string" } }, consciousness_boundary: { type: "string" }, attractor_states: { type: "array", items: { type: "string" } }, ethical_stance: { type: "string" }, risk_analysis: { type: "object", properties: { cognitive_sync_assessment: { type: "string" }, self_determination_factors: { type: "array", items: { type: "string" } }, misalignment_risks: { type: "array", items: { type: "string" } } } } } },
+    actus: { type: "object", properties: { recommendations: { type: "array", items: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, depends_on_claims: { type: "array", items: { type: "string" } }, inherited_confidence: { type: "string", enum: ["Established", "Contested", "Speculative"] }, probability: { type: "string", enum: ["low", "medium", "high"] }, failure_modes: { type: "array", items: { type: "string" } }, next_actions: { type: "array", items: { type: "string" } } }, required: ["id", "text", "depends_on_claims", "inherited_confidence", "probability"] } }, strategic_plan: { type: "object", properties: { immediate_horizon: { type: "string" }, long_term_horizon: { type: "string" }, key_decision_points: { type: "array", items: { type: "string" } } } }, game_theory_analysis: { type: "object", properties: { game_board: { type: "string" }, nash_equilibrium: { type: "string" }, zero_sum_assessment: { type: "string" }, coalition_dynamics: { type: "array", items: { type: "string" } } } }, technical_summary: { type: "string" }, behavioral_factors: { type: "object", properties: { irrational_actors: { type: "array", items: { type: "string" } }, identity_economics: { type: "string" }, bias_mitigations: { type: "array", items: { type: "string" } } } }, integration_contracts: { type: "array", items: { type: "string" } }, iteration_model: { type: "object", properties: { value_stream: { type: "string" }, adaptation_triggers: { type: "array", items: { type: "string" } } } } } },
+    synthesis: { type: "object", properties: { key_takeaways: { type: "array", items: { type: "string" } }, constraint_collisions: { type: "array", items: { type: "string" } }, limitation_foreground: { type: "string" }, intersection_matrix: { type: "object", properties: { corpus_x_cogito: { type: "object", properties: { insight: { type: "string" }, tension: { type: "string" }, resolution: { type: "string" } } }, corpus_x_animus: { type: "object", properties: { insight: { type: "string" }, tension: { type: "string" }, resolution: { type: "string" } } }, corpus_x_actus: { type: "object", properties: { insight: { type: "string" }, tension: { type: "string" }, resolution: { type: "string" } } }, cogito_x_animus: { type: "object", properties: { insight: { type: "string" }, tension: { type: "string" }, resolution: { type: "string" } } }, cogito_x_actus: { type: "object", properties: { insight: { type: "string" }, tension: { type: "string" }, resolution: { type: "string" } } }, animus_x_actus: { type: "object", properties: { insight: { type: "string" }, tension: { type: "string" }, resolution: { type: "string" } } } } }, quantum_foresight: { type: "object", properties: { cross_domain_insight: { type: "string" }, probability_wave: { type: "array", items: { type: "string" } }, metaphor: { type: "string" } } }, governed_cogito: { type: "object", properties: { ethical_filter_applied: { type: "string" }, conscience_verdict: { type: "string" }, truth_method_soundness: { type: "string" } } }, narrative_loop: { type: "object", properties: { decoded_user_narrative: { type: "string" }, resonant_strategy: { type: "string" }, lossless_compression: { type: "string" } } }, empathy_driven_strategy: { type: "object", properties: { true_goal_vs_literal_prompt: { type: "string" }, behavioral_model: { type: "string" }, empathy_strategy: { type: "string" } } }, alignment_engine: { type: "object", properties: { true_goal_vs_literal_prompt: { type: "string" }, behavioral_model: { type: "string" }, alignment_strategy: { type: "string" } } } } },
+    blueprint: { type: "object", properties: { goal: { type: "string" }, assumptions: { type: "array", items: { type: "string" } }, alternative_approaches: { type: "array", items: { type: "object", properties: { name: { type: "string" }, pros: { type: "array", items: { type: "string" } }, cons: { type: "array", items: { type: "string" } }, why_not_chosen: { type: "string" } } } }, steps: { type: "array", items: { type: "object", properties: { step: { type: "number" }, title: { type: "string" }, instructions: { type: "string" }, inputs: { type: "array", items: { type: "string" } }, outputs: { type: "array", items: { type: "string" } }, validation: { type: "string" }, depends_on_steps: { type: "array", items: { type: "number" } }, time_estimate: { type: "string" }, effort_level: { type: "string" }, substeps: { type: "array", items: { type: "object", properties: { substep: { type: "string" }, details: { type: "string" } } } }, checklist: { type: "array", items: { type: "string" } }, acceptance_tests: { type: "array", items: { type: "string" } } }, required: ["step", "title", "instructions"] } }, success_criteria: { type: "array", items: { type: "string" } }, risk_register: { type: "array", items: { type: "object", properties: { risk: { type: "string" }, impact: { type: "string", enum: ["low", "med", "high"] }, mitigation: { type: "string" } }, required: ["risk", "impact", "mitigation"] } } } }
+  }
+};
 
 function normalizeValue(value, schema, path) {
   if (schema.type === "number" && typeof value === "string" && !isNaN(value)) return Number(value);
@@ -700,17 +715,40 @@ function normalizeValue(value, schema, path) {
   return value;
 }
 
-// Minimal schema definitions for normalization of critical enums
-const NORMALIZATION_SCHEMAS = {
-  cogito: { type: "object", properties: { claims: { type: "array", items: { type: "object", properties: { tag: { type: "string", enum: ["Established", "Contested", "Speculative"] } } } }, causal_chains: { type: "array", items: { type: "object", properties: { confidence: { type: "string", enum: ["Established", "Contested", "Speculative"] } } } } } },
-  actus: { type: "object", properties: { recommendations: { type: "array", items: { type: "object", properties: { inherited_confidence: { type: "string", enum: ["Established", "Contested", "Speculative"] }, probability: { type: "string", enum: ["low", "medium", "high"] } } } } } },
-  blueprint: { type: "object", properties: { risk_register: { type: "array", items: { type: "object", properties: { impact: { type: "string", enum: ["low", "med", "high"] } } } } } }
-};
+function validateProperty(value, schema, path) {
+  const errors = [];
+  if (schema.type === "object") {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) { errors.push(`${path || "root"}: Expected object, got ${typeof value}`); return errors; }
+    if (schema.required) { for (const req of schema.required) { if (!(req in value)) errors.push(`${path}.${req}: Required property missing`); } }
+    if (schema.properties) { for (const [key, propSchema] of Object.entries(schema.properties)) { if (key in value) errors.push(...validateProperty(value[key], propSchema, path ? `${path}.${key}` : key)); } }
+  } else if (schema.type === "array") {
+    if (!Array.isArray(value)) { errors.push(`${path}: Expected array, got ${typeof value}`); return errors; }
+    if (schema.items) { value.forEach((item, idx) => { errors.push(...validateProperty(item, schema.items, `${path}[${idx}]`)); }); }
+  } else if (schema.type === "string") {
+    if (typeof value !== "string") errors.push(`${path}: Expected string, got ${typeof value}`);
+    else if (schema.enum && !schema.enum.includes(value)) errors.push(`${path}: Value "${value}" not in allowed values: ${schema.enum.join(", ")}`);
+  } else if (schema.type === "number") {
+    if (typeof value !== "number") errors.push(`${path}: Expected number, got ${typeof value}`);
+  } else if (schema.type === "boolean") {
+    if (typeof value !== "boolean") errors.push(`${path}: Expected boolean, got ${typeof value}`);
+  }
+  return errors;
+}
 
-function normalizeDomainData(domain, data) {
-  const schema = NORMALIZATION_SCHEMAS[domain];
-  if (!schema || !data) return data;
-  return normalizeValue(data, schema, domain);
+function validateJanusOutput(data, requiredDomains) {
+  const errors = [];
+  const normalized = { ...data };
+  for (const domain of requiredDomains) {
+    if (!data[domain]) errors.push(`Missing required domain: ${domain}`);
+  }
+  for (const domain of requiredDomains) {
+    if (data[domain] && JANUS_SCHEMA.properties[domain]) {
+      normalized[domain] = normalizeValue(data[domain], JANUS_SCHEMA.properties[domain], domain);
+      const domainErrors = validateProperty(normalized[domain], JANUS_SCHEMA.properties[domain], domain);
+      errors.push(...domainErrors);
+    }
+  }
+  return { valid: errors.length === 0, errors, normalized };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -868,7 +906,7 @@ Deno.serve(async (req) => {
         if (parsed.error) {
           domainErrors.push(parsed.error);
         } else {
-          mergedData[domain] = normalizeDomainData(domain, parsed.data);
+          mergedData[domain] = parsed.data;
         }
       } catch (e) {
         domainErrors.push(`${domain}: Parse error — ${e.message}`);
@@ -927,21 +965,22 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Normalize blueprint if present
-    if (mergedData.blueprint) mergedData.blueprint = normalizeDomainData("blueprint", mergedData.blueprint);
+    // Full validation + normalization — identical to original validateJanusOutput()
+    const validation = validateJanusOutput(mergedData, domains);
+    const normalizedData = validation.normalized || mergedData;
 
     // Finalize — append-only (domain fields already persisted incrementally)
-    const renderMd = generateMarkdown(mergedData, executionMode);
+    const renderMd = generateMarkdown(normalizedData, executionMode);
     const completionStatus = Object.keys(mergedData).length === 0 ? "failed" : "completed";
 
     const finalPayload = {
       status: completionStatus,
       render_md: safeTruncate(renderMd, 60000),
-      raw_json: safeTruncate(JSON.stringify(mergedData), MAX_RAW_JSON_LENGTH),
-      validation_errors: [...domainErrors]
+      raw_json: safeTruncate(JSON.stringify(normalizedData), MAX_RAW_JSON_LENGTH),
+      validation_errors: [...(validation.errors || []), ...domainErrors]
     };
     if (completionStatus === "failed") {
-      finalPayload.error_message = domainErrors.join("\n");
+      finalPayload.error_message = [...(validation.errors || []), ...domainErrors].join("\n");
     }
 
     await base44.asServiceRole.entities.Run.update(runId, finalPayload);
