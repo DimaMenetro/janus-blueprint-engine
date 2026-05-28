@@ -55,27 +55,6 @@
       "default": false,
       "description": "Whether external refresh was requested"
     },
-    "attached_files": {
-      "type": "array",
-      "description": "Files attached to the query for additional LLM context",
-      "items": {
-        "type": "object",
-        "properties": {
-          "file_url": {
-            "type": "string",
-            "description": "The uploaded file URL"
-          },
-          "file_name": {
-            "type": "string",
-            "description": "Original file name"
-          },
-          "file_size": {
-            "type": "number",
-            "description": "File size in bytes"
-          }
-        }
-      }
-    },
     "status": {
       "type": "string",
       "enum": [

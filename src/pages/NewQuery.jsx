@@ -9,11 +9,12 @@ import {
   glassCard, glassBtn, glassError
 } from "@/components/ui/LiquidGlass";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
+import { executeJanus } from "@/components/janus/ExecutionEngine";
 import { useExecution } from "@/components/janus/ExecutionContext";
 import QueryForm from "@/components/janus/QueryForm";
 import ExecutionModeSelector from "@/components/janus/ExecutionModeSelector";
 import ParameterGrid from "@/components/janus/ParameterGrid";
-import { buildPrompt } from "@/components/janus/promptUtils";
+import { buildPrompt, generateMarkdown } from "@/components/janus/promptUtils";
 
 export default function NewQuery() {
   const navigate = useNavigate();
@@ -21,7 +22,6 @@ export default function NewQuery() {
   const t = isDark ? dark : light;
 
   const [queryText, setQueryText] = useState("");
-  const [attachedFiles, setAttachedFiles] = useState([]);
   const [executionMode, setExecutionMode] = useState("standard");
   const [outputMode, setOutputMode] = useState("Blueprint");
   const [blueprintLevel, setBlueprintLevel] = useState("L2");
@@ -29,7 +29,7 @@ export default function NewQuery() {
   const [refreshEnabled, setRefreshEnabled] = useState(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const { startExecution, finishExecution, failExecution } = useExecution();
+  const { startExecution, updateProgress, finishExecution, failExecution } = useExecution();
 
   const handleExecute = async () => {
     if (!queryText.trim()) return;
@@ -38,35 +38,30 @@ export default function NewQuery() {
     startExecution(queryText);
 
     try {
-      // 1. Create the Run record
-      const fullPromptForStorage = (buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) + queryText).slice(0, 10000);
+      const result = await executeJanus(
+        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled },
+        ({ domain, status: progressStatus, completedDomains, totalDomains }) => {
+          updateProgress({ domain, status: progressStatus, completedDomains, totalDomains });
+          if (progressStatus === "validating") setStatus("validating");
+        },
+        generateMarkdown,
+        buildPrompt
+      );
 
-      const run = await base44.entities.Run.create({
-        query_text: queryText,
-        full_prompt: fullPromptForStorage,
-        execution_mode: executionMode,
-        output_mode: outputMode,
-        blueprint_level: blueprintLevel,
-        novelty_dial: noveltyDial,
-        refresh_enabled: refreshEnabled,
-        attached_files: attachedFiles || [],
-        status: "running",
-        validation_errors: [],
-        raw_json: "{}"
-      });
-
-      // 2. Fire the backend function (fire-and-forget — runs server-side)
-      base44.functions.invoke("executeJanus", { runId: run.id }).catch(err => {
-        console.error("Backend execution error:", err);
-      });
-
-      // 3. Navigate immediately — Results page will poll for completion
-      finishExecution(run.id);
-      navigate(`/results?id=${run.id}`);
+      if (result.success) {
+        setStatus("completed");
+        finishExecution(result.runId);
+        navigate(`/results?id=${result.runId}`);
+      } else {
+        setStatus("failed");
+        setErrorMessage("Execution completed with errors:\n\n" + (result.errors || []).join("\n"));
+        updateProgress({ runId: result.runId, status: "failed" });
+        navigate(`/results?id=${result.runId}`);
+      }
     } catch (err) {
       setStatus("failed");
       failExecution();
-      setErrorMessage(`Failed to start execution: ${err.message || err}`);
+      setErrorMessage(`Unexpected error: ${err.message || err}`);
     }
   };
 
@@ -96,7 +91,7 @@ export default function NewQuery() {
         transition={{ delay: 0.05 }}
         style={{ ...glassCard(t), padding: "24px 22px", display: "flex", flexDirection: "column", gap: 24 }}
       >
-        <QueryForm value={queryText} onChange={setQueryText} files={attachedFiles} onFilesChange={setAttachedFiles} t={t} isDark={isDark} />
+        <QueryForm value={queryText} onChange={setQueryText} t={t} />
         <ExecutionModeSelector value={executionMode} onChange={setExecutionMode} t={t} isDark={isDark} />
         <ParameterGrid
           outputMode={outputMode} setOutputMode={setOutputMode}

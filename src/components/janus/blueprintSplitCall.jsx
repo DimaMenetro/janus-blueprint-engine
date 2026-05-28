@@ -83,10 +83,11 @@ export function buildCompressedBlueprintContext(source) {
 
 // ─── LLM CALL ────────────────────────────────────────────────────────────────
 
-async function callLLM(prompt, fileUrls) {
-  const params = { prompt, model: "claude_sonnet_4_6" };
-  if (fileUrls?.length) params.file_urls = fileUrls;
-  return await base44.integrations.Core.InvokeLLM(params);
+async function callLLM(prompt) {
+  return await base44.integrations.Core.InvokeLLM({
+    prompt,
+    model: "claude_sonnet_4_6",
+  });
 }
 
 function parseLLMResponse(result, expectedKey) {
@@ -119,12 +120,9 @@ No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
 }
 
-// ─── CHUNK SIZE for step expansion batches ────────────────────────────────────
-// Keeps each LLM call well under the 600s timeout ceiling.
-// 4 steps per chunk is safe for L3 (heaviest: substeps + checklists + acceptance_tests).
-const EXPANSION_CHUNK_SIZE = 4;
+function buildStepExpansionPrompt(skeleton, queryText, blueprintLevel) {
+  const stepSummary = skeleton.steps.map(s => `  Step ${s.step}: ${s.title} — ${s.instructions.slice(0, 150)}`).join("\n");
 
-function buildStepExpansionPrompt(skeleton, stepsSubset, queryText, blueprintLevel) {
   // Only request fields that this blueprint level needs
   const fields = [];
   if (blueprintLevel !== "L1") fields.push('"time_estimate": "estimated duration", "effort_level": "low|medium|high"');
@@ -133,23 +131,19 @@ function buildStepExpansionPrompt(skeleton, stepsSubset, queryText, blueprintLev
 
   if (fields.length === 0) return null; // L1 doesn't need expansion
 
-  const stepSummary = stepsSubset.map(s => `  Step ${s.step}: ${s.title} — ${s.instructions.slice(0, 150)}`).join("\n");
-  const stepNums = stepsSubset.map(s => s.step).join(", ");
-
-  return `INITIATE PROTOCOL: JANUSSMEv2.0 — BLUEPRINT SUB-CALL 2/3: STEP EXPANSION (steps ${stepNums})
+  return `INITIATE PROTOCOL: JANUSSMEv2.0 — BLUEPRINT SUB-CALL 2/3: STEP EXPANSION
 You are the Janus Blueprint Module expanding each step with detailed sub-information.
 Level: ${blueprintLevel}
 
-═══ BLUEPRINT GOAL ═══
-${skeleton.goal}
-
-═══ STEPS TO EXPAND ═══
+═══ BLUEPRINT SKELETON (from prior call) ═══
+Goal: ${skeleton.goal}
+Steps:
 ${stepSummary}
 
 YOUR TASK: For EACH step number listed above, produce the expansion fields. Match step numbers exactly.
 
-Output ONLY valid JSON: { "step_expansions": [{"step": ${stepsSubset[0].step}, ${fields.join(", ")}}] }
-Each object in the array MUST have a "step" field matching the step number listed above.
+Output ONLY valid JSON: { "step_expansions": [{"step": 1, ${fields.join(", ")}}, {"step": 2, ${fields.join(", ")}}] }
+Each object in the array MUST have a "step" field matching the step number from the skeleton.
 No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
 }
@@ -189,11 +183,10 @@ QUERY: ${queryText}`;
  * @param {function} onProgress - progress callback
  * @returns {{ data: object|null, errors: string[] }}
  */
-export async function executeBlueprintSplitCall({ source, queryText, blueprintLevel, noveltyDial, outputMode, onProgress, fileUrls }) {
+export async function executeBlueprintSplitCall({ source, queryText, blueprintLevel, noveltyDial, outputMode, onProgress }) {
   const errors = [];
   const contextBlock = buildCompressedBlueprintContext(source);
-  const stepCount = blueprintLevel === "L1" ? 0 : Math.ceil((source.blueprint?.steps?.length || 10) / EXPANSION_CHUNK_SIZE);
-  const totalSubCalls = blueprintLevel === "L1" ? 2 : (1 + stepCount + 1); // skeleton + expansion chunks + criteria
+  const totalSubCalls = blueprintLevel === "L1" ? 2 : 3;
 
   // ── Sub-call 1: Skeleton
   onProgress({ domain: "blueprint:skeleton", status: "running", detail: "Generating roadmap skeleton...", completedDomains: 0, totalDomains: totalSubCalls });
@@ -201,7 +194,7 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
   let skeleton = null;
   try {
     const prompt = buildSkeletonPrompt(contextBlock, queryText, blueprintLevel, noveltyDial, outputMode);
-    const result = await callLLM(prompt, fileUrls);
+    const result = await callLLM(prompt);
     const parsed = parseLLMResponse(result, "blueprint");
     if (parsed.data) {
       skeleton = parsed.data;
@@ -216,57 +209,39 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
     return { data: null, errors };
   }
 
-  // ── Sub-call 2: Chunked Step Expansion (skip for L1 — no substeps/checklists needed)
-  // Splits steps into batches of EXPANSION_CHUNK_SIZE to avoid 600s timeout on large blueprints.
+  // ── Sub-call 2: Step Expansion (skip for L1 — no substeps/checklists needed)
   if (blueprintLevel !== "L1") {
-    const allSteps = skeleton.steps || [];
-    const chunks = [];
-    for (let i = 0; i < allSteps.length; i += EXPANSION_CHUNK_SIZE) {
-      chunks.push(allSteps.slice(i, i + EXPANSION_CHUNK_SIZE));
-    }
+    onProgress({ domain: "blueprint:expansion", status: "running", detail: "Expanding steps with detail...", completedDomains: 1, totalDomains: totalSubCalls });
 
-    const expansionMap = {};
+    try {
+      const prompt = buildStepExpansionPrompt(skeleton, queryText, blueprintLevel);
+      if (prompt) {
+        const result = await callLLM(prompt);
+        const parsed = parseLLMResponse(result, "step_expansions");
+        if (parsed.data) {
+          const expansions = Array.isArray(parsed.data) ? parsed.data : [];
+          // Merge expansions back into skeleton steps
+          const expansionMap = {};
+          expansions.forEach(exp => { if (exp.step) expansionMap[exp.step] = exp; });
 
-    for (let ci = 0; ci < chunks.length; ci++) {
-      const chunk = chunks[ci];
-      const stepNums = chunk.map(s => s.step).join(", ");
-      onProgress({
-        domain: "blueprint:expansion",
-        status: "running",
-        detail: `Expanding steps ${stepNums} (chunk ${ci + 1}/${chunks.length})...`,
-        completedDomains: 1,
-        totalDomains: totalSubCalls
-      });
-
-      try {
-        const prompt = buildStepExpansionPrompt(skeleton, chunk, queryText, blueprintLevel);
-        if (prompt) {
-          const result = await callLLM(prompt, fileUrls);
-          const parsed = parseLLMResponse(result, "step_expansions");
-          if (parsed.data) {
-            const expansions = Array.isArray(parsed.data) ? parsed.data : [];
-            expansions.forEach(exp => { if (exp.step) expansionMap[exp.step] = exp; });
-          } else {
-            errors.push(`blueprint:expansion (steps ${stepNums}): ${parsed.error}`);
-          }
+          skeleton.steps = skeleton.steps.map(step => {
+            const exp = expansionMap[step.step];
+            if (!exp) return step;
+            const merged = { ...step };
+            if (exp.time_estimate) merged.time_estimate = exp.time_estimate;
+            if (exp.effort_level) merged.effort_level = exp.effort_level;
+            if (exp.substeps) merged.substeps = exp.substeps;
+            if (exp.checklist) merged.checklist = exp.checklist;
+            if (exp.acceptance_tests) merged.acceptance_tests = exp.acceptance_tests;
+            return merged;
+          });
+        } else {
+          errors.push(`blueprint:expansion: ${parsed.error}`);
         }
-      } catch (e) {
-        errors.push(`blueprint:expansion (steps ${stepNums}): ${e.message}`);
       }
+    } catch (e) {
+      errors.push(`blueprint:expansion: ${e.message}`);
     }
-
-    // Merge all collected expansions back into skeleton steps
-    skeleton.steps = skeleton.steps.map(step => {
-      const exp = expansionMap[step.step];
-      if (!exp) return step;
-      const merged = { ...step };
-      if (exp.time_estimate) merged.time_estimate = exp.time_estimate;
-      if (exp.effort_level) merged.effort_level = exp.effort_level;
-      if (exp.substeps) merged.substeps = exp.substeps;
-      if (exp.checklist) merged.checklist = exp.checklist;
-      if (exp.acceptance_tests) merged.acceptance_tests = exp.acceptance_tests;
-      return merged;
-    });
   }
 
   // ── Sub-call 3: Criteria & Risk
@@ -275,7 +250,7 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
 
   try {
     const prompt = buildCriteriaRiskPrompt(skeleton, contextBlock, queryText, noveltyDial);
-    const result = await callLLM(prompt, fileUrls);
+    const result = await callLLM(prompt);
     const parsed = parseLLMResponse(result, "criteria_risk");
     if (parsed.data) {
       if (parsed.data.success_criteria) skeleton.success_criteria = parsed.data.success_criteria;

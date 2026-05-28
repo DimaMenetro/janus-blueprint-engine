@@ -9,7 +9,6 @@ import StatusPill from "@/components/janus/StatusPill";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import GlassResultTabs from "@/components/janus/GlassResultTabs";
 import RerunControls from "@/components/janus/RerunControls";
-import ProcessingCard from "@/components/janus/ProcessingCard";
 
 export default function Results() {
   const navigate = useNavigate();
@@ -20,38 +19,16 @@ export default function Results() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("id");
-    if (!id) { navigate("/NewQuery"); return; }
-
-    let pollTimer = null;
-
     const loadRun = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id");
+      if (!id) { navigate("/NewQuery"); return; }
       try { const user = await base44.auth.me(); setIsAdmin(user.role === 'admin'); } catch { setIsAdmin(false); }
       const runs = await base44.entities.Run.filter({ id });
-      if (runs.length > 0) {
-        setRun(runs[0]);
-        // If still processing, keep polling every 8 seconds
-        if (runs[0].status === "running" || runs[0].status === "idle" || runs[0].status === "validating") {
-          pollTimer = setTimeout(pollForUpdates, 8000);
-        }
-      }
+      if (runs.length > 0) setRun(runs[0]);
       setLoading(false);
     };
-
-    const pollForUpdates = async () => {
-      const runs = await base44.entities.Run.filter({ id });
-      if (runs.length > 0) {
-        setRun(runs[0]);
-        if (runs[0].status === "running" || runs[0].status === "idle" || runs[0].status === "validating") {
-          pollTimer = setTimeout(pollForUpdates, 8000);
-        }
-      }
-    };
-
     loadRun();
-
-    return () => { if (pollTimer) clearTimeout(pollTimer); };
   }, [navigate]);
 
   if (loading) {
@@ -83,7 +60,6 @@ export default function Results() {
 
   const mode = EXECUTION_MODES[run.execution_mode?.toUpperCase()] || EXECUTION_MODES.STANDARD;
   const hasFailed = run.status === "failed";
-  const isProcessing = run.status === "running" || run.status === "idle" || run.status === "validating";
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 20px 40px" }}>
@@ -186,11 +162,6 @@ export default function Results() {
           if (refreshed.length > 0) setRun(refreshed[0]);
         }}
       />
-
-      {/* Server-side processing indicator — Liquid Glass style */}
-      {isProcessing && (
-        <ProcessingCard run={run} t={t} isDark={isDark} />
-      )}
 
       {/* Results tabs */}
       {!hasFailed && (

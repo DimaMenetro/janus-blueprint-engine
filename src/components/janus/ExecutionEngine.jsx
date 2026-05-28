@@ -361,17 +361,13 @@ function parseLLMResponse(result, expectedKey) {
 
 // ─── LLM CALL HELPER ─────────────────────────────────────────────────────────
 
-async function callLLM(prompt, domain, refreshEnabled, fileUrls) {
+async function callLLM(prompt, domain, refreshEnabled) {
   const llmParams = { prompt };
   if (domain === "refresh" && refreshEnabled) {
     llmParams.add_context_from_internet = true;
     llmParams.model = "gemini_3_flash";
   } else {
     llmParams.model = "claude_sonnet_4_6";
-  }
-  // Attach files to ALL domain calls so the LLM has full context
-  if (fileUrls?.length) {
-    llmParams.file_urls = fileUrls;
   }
   return await base44.integrations.Core.InvokeLLM(llmParams);
 }
@@ -383,7 +379,7 @@ async function callLLM(prompt, domain, refreshEnabled, fileUrls) {
  * Domain pipeline: refresh? → corpus → cogito (+intersection) → animus (+intersections) → actus (+intersections) → synthesis (named patterns) → blueprint
  */
 export async function executeJanus(params, onProgress, generateMarkdown, buildFullPrompt) {
-  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, attachedFiles } = params;
+  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = params;
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
   const domains = mode.domains;
 
@@ -393,8 +389,6 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     MAX_PROMPT_LENGTH
   );
 
-  const fileUrls = (attachedFiles || []).map(f => f.file_url).filter(Boolean);
-
   const run = await base44.entities.Run.create({
     query_text: queryText,
     full_prompt: fullPromptForStorage,
@@ -403,7 +397,6 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     blueprint_level: blueprintLevel,
     novelty_dial: noveltyDial,
     refresh_enabled: refreshEnabled,
-    attached_files: attachedFiles || [],
     status: "running",
     validation_errors: [],
     raw_json: "{}"
@@ -430,7 +423,6 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
         noveltyDial: params.noveltyDial,
         outputMode: params.outputMode,
         onProgress: (p) => onProgress({ ...p, completedDomains: completedCount, totalDomains: totalSteps }),
-        fileUrls,
       });
       if (bpData) {
         mergedData.blueprint = bpData;
@@ -450,32 +442,25 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     const contextForPrompt = { ...mergedData, _intersections: intersections };
     const domainPrompt = buildDomainPrompt(domain, queryText, params, contextForPrompt);
 
-    // ── Execute domain LLM call (with single retry on parse failure)
+    // ── Execute domain LLM call
     let domainResult;
-    let domainSuccess = false;
+    try {
+      domainResult = await callLLM(domainPrompt, domain, refreshEnabled);
+    } catch (err) {
+      domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
+      continue;
+    }
 
-    for (let attempt = 0; attempt < 2 && !domainSuccess; attempt++) {
-      try {
-        domainResult = await callLLM(domainPrompt, domain, refreshEnabled, fileUrls);
-      } catch (err) {
-        if (attempt === 0) continue; // Retry once on LLM call failure
-        domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
-        break;
+    try {
+      const parsed = parseLLMResponse(domainResult, domain);
+      if (parsed.error) {
+        domainErrors.push(parsed.error);
+      } else {
+        mergedData[domain] = parsed.data;
       }
-
-      try {
-        const parsed = parseLLMResponse(domainResult, domain);
-        if (parsed.error) {
-          if (attempt === 0) continue; // Retry once on parse failure (handles prose-instead-of-JSON)
-          domainErrors.push(parsed.error);
-        } else {
-          mergedData[domain] = parsed.data;
-          domainSuccess = true;
-        }
-      } catch (e) {
-        if (attempt === 0) continue; // Retry once on JSON parse exception
-        domainErrors.push(`${domain}: Parse error — ${e.message}`);
-      }
+    } catch (e) {
+      domainErrors.push(`${domain}: Parse error — ${e.message}`);
+      continue;
     }
 
     completedCount++;
@@ -501,7 +486,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
 
         try {
           const pairPrompt = buildIntersectionPrompt(trigger.pair, trigger.model, dA, dB, mergedData[dA], mergedData[dB], queryText);
-          const pairResult = await callLLM(pairPrompt, "intersection", false, fileUrls);
+          const pairResult = await callLLM(pairPrompt, "intersection", false);
           const pairParsed = parseLLMResponse(pairResult, trigger.pair);
 
           if (pairParsed.data) {
