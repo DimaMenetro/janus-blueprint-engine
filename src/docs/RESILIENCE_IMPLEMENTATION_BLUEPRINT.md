@@ -155,7 +155,7 @@ Each phase must pass its acceptance test before the next begins.
 
 ---
 
-### **PHASE 1: Foundation — `llmTimeout.js`** [STATUS: ☐ NOT STARTED]
+### **PHASE 1: Foundation — `llmTimeout.js`** [STATUS: ✅ COMPLETE — 2026-05-31]
 
 **Deliverable:** A single new file `components/janus/llmTimeout.js` exporting:
 
@@ -502,13 +502,37 @@ These are intentionally deferred. **Slow is smooth. Ship the foundation.**
 
 When resuming after compaction, check off completed phases here:
 
-- [ ] **Phase 1** — `llmTimeout.js` created and tested
+- [x] **Phase 1** — `llmTimeout.js` created and tested  *(2026-05-31, AT 1.A + 1.B passed)*
 - [ ] **Phase 2** — `entities/Run.json` extended with 3 fields
 - [ ] **Phase 3** — `ExecutionEngine.js` wired to resilient caller
 - [ ] **Phase 4** — `blueprintSplitCall.js` wired
 - [ ] **Phase 5** — `rerunEngine.js` wired
 - [ ] **Phase 6** — `ExecutionContext.js` extended with retry state
 - [ ] **Phase 7** — Live end-to-end validation run completed
+
+---
+
+## 9. PHASE COMPLETION LOG
+
+### Phase 1 — Complete (2026-05-31)
+**Deliverable:** `components/janus/llmTimeout.js` created (163 lines).
+
+**Exports:**
+- `callLLMResilient(invokeParams, options)` — drop-in resilient caller
+- `TIMEOUT_MATRIX` — per-call-type timeout config (16 labels mapped)
+- `LLMTimeoutError`, `LLMCallError` — labeled error classes
+
+**Acceptance:**
+- ✅ AT 1.A — File exists, exports correct API, signature compatible with InvokeLLM
+- ✅ AT 1.B — Zero production files modified; pure additive
+
+**Files NOT touched (verified):**
+- `ExecutionEngine.js`, `blueprintSplitCall.js`, `rerunEngine.js`, `entities/Run.json`, `ExecutionContext.js`, any UI component
+
+**Notes for next phase:**
+- The `onRetry` callback shape is `({ callLabel, attempt, error, willRetry, nextDelayMs })` — Phase 3/6 must wire this into both `domainErrors` accumulation and `retry_log` persistence
+- `isEmptyResponse` treats `{}` as failure — be aware in Phase 3 that this catches the previous "Missing key in response" silently
+- Backoff blocks the for-loop on the same tick — this is intentional (single-threaded JS), but means a slow LLM + 2 retries can add up to ~12s of pure backoff overhead per failed call
 
 ---
 
