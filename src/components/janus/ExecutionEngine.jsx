@@ -7,6 +7,7 @@ import { base44 } from "@/api/base44Client";
 import { EXECUTION_MODES, validateJanusOutput } from "./janusSchema";
 import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity, buildSynthesisPrompt } from "./domainSME";
 import { executeBlueprintSplitCall } from "./blueprintSplitCall";
+import { callLLMResilient } from "./llmTimeout";
 
 const MAX_RAW_JSON_LENGTH = 200000; // Full fidelity for cephalon consumption
 const MAX_PROMPT_LENGTH = 10000;
@@ -360,8 +361,12 @@ function parseLLMResponse(result, expectedKey) {
 }
 
 // ─── LLM CALL HELPER ─────────────────────────────────────────────────────────
+// IMP-001-R-D-RES Phase 3: Delegates to callLLMResilient for timeout + retry.
+// Signature preserved (prompt, domain, refreshEnabled) for backward compatibility
+// with existing call sites. Optional 4th arg `callLabel` overrides the auto-derived
+// label; optional 5th arg `onRetry` receives retry events for retry_log persistence.
 
-async function callLLM(prompt, domain, refreshEnabled) {
+async function callLLM(prompt, domain, refreshEnabled, callLabel, onRetry) {
   const llmParams = { prompt };
   if (domain === "refresh" && refreshEnabled) {
     llmParams.add_context_from_internet = true;
@@ -369,7 +374,13 @@ async function callLLM(prompt, domain, refreshEnabled) {
   } else {
     llmParams.model = "claude_sonnet_4_6";
   }
-  return await base44.integrations.Core.InvokeLLM(llmParams);
+  // Derive a stable callLabel if caller didn't supply one
+  const label = callLabel || (
+    domain === "refresh" ? "refresh:websweep"
+    : domain === "intersection" ? "intersection:unlabeled"
+    : `domain:${domain}`
+  );
+  return await callLLMResilient(llmParams, { callLabel: label, onRetry });
 }
 
 // ─── MAIN EXECUTION ──────────────────────────────────────────────────────────
@@ -409,9 +420,43 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   let completedCount = 0;
   const totalSteps = domains.length + (domains.includes("synthesis") ? 6 : 0); // 6 intersection pairs for full mode
 
+  // ── IMP-001-R-D-RES Phase 3: Heartbeat + retry-log helpers ─────────────────
+  // In-memory shadow of retry_log; persisted via read-modify-write to avoid an
+  // extra DB read on every retry event. Single-tab single-user per run, so no
+  // race condition concern.
+  const retryLog = [];
+
+  async function heartbeat(stepLabel) {
+    try {
+      await base44.entities.Run.update(runId, {
+        current_step: stepLabel,
+        last_heartbeat: new Date().toISOString(),
+      });
+    } catch (_e) {
+      // Heartbeat failure must NEVER break the pipeline. Swallow silently.
+    }
+  }
+
+  async function recordRetry({ callLabel, attempt, error, willRetry, nextDelayMs }) {
+    retryLog.push({
+      timestamp: new Date().toISOString(),
+      call_label: callLabel,
+      attempt,
+      error,
+      will_retry: willRetry,
+      next_delay_ms: nextDelayMs,
+    });
+    try {
+      await base44.entities.Run.update(runId, { retry_log: [...retryLog] });
+    } catch (_e) {
+      // Retry-log persistence is diagnostic only. Never break pipeline.
+    }
+  }
+
   // Step 2: Execute each domain sequentially
   for (const domain of domains) {
     onProgress({ domain, status: "running", completedDomains: completedCount, totalDomains: totalSteps });
+    await heartbeat(domain === "refresh" ? "refresh:websweep" : `domain:${domain}`);
 
     // ── BLUEPRINT: Use split-call architecture (Option 1)
     if (domain === "blueprint") {
@@ -442,10 +487,10 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     const contextForPrompt = { ...mergedData, _intersections: intersections };
     const domainPrompt = buildDomainPrompt(domain, queryText, params, contextForPrompt);
 
-    // ── Execute domain LLM call
+    // ── Execute domain LLM call (Phase 3: resilient — timeout + retry inside callLLM)
     let domainResult;
     try {
-      domainResult = await callLLM(domainPrompt, domain, refreshEnabled);
+      domainResult = await callLLM(domainPrompt, domain, refreshEnabled, undefined, recordRetry);
     } catch (err) {
       domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
       continue;
@@ -483,10 +528,11 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
         if (!mergedData[dA] || !mergedData[dB]) continue; // Skip if prerequisite missing
 
         onProgress({ domain: `synthesis:${trigger.pair}`, status: "running", completedDomains: completedCount, totalDomains: totalSteps });
+        await heartbeat(`intersection:${trigger.pair}`);
 
         try {
           const pairPrompt = buildIntersectionPrompt(trigger.pair, trigger.model, dA, dB, mergedData[dA], mergedData[dB], queryText);
-          const pairResult = await callLLM(pairPrompt, "intersection", false);
+          const pairResult = await callLLM(pairPrompt, "intersection", false, `intersection:${trigger.pair}`, recordRetry);
           const pairParsed = parseLLMResponse(pairResult, trigger.pair);
 
           if (pairParsed.data) {

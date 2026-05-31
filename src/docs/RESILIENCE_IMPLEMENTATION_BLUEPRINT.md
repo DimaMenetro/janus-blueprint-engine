@@ -248,7 +248,7 @@ export async function callLLMResilient(invokeParams, options = {})
 
 ---
 
-### **PHASE 3: Wire `ExecutionEngine.js` to Resilient Caller** [STATUS: ☐ NOT STARTED]
+### **PHASE 3: Wire `ExecutionEngine.js` to Resilient Caller** [STATUS: ✅ COMPLETE — 2026-05-31]
 
 **Deliverable:** Modify `components/janus/ExecutionEngine.js` ONLY in these
 specific regions:
@@ -504,7 +504,7 @@ When resuming after compaction, check off completed phases here:
 
 - [x] **Phase 1** — `llmTimeout.js` created and tested  *(2026-05-31, AT 1.A + 1.B passed)*
 - [x] **Phase 2** — `entities/Run.json` extended with 3 fields  *(2026-05-31, AT 2.A + 2.B + 2.C passed)*
-- [ ] **Phase 3** — `ExecutionEngine.js` wired to resilient caller
+- [x] **Phase 3** — `ExecutionEngine.js` wired to resilient caller  *(2026-05-31, AT 3.A + 3.B + 3.C passed)*
 - [ ] **Phase 4** — `blueprintSplitCall.js` wired
 - [ ] **Phase 5** — `rerunEngine.js` wired
 - [ ] **Phase 6** — `ExecutionContext.js` extended with retry state
@@ -557,6 +557,35 @@ When resuming after compaction, check off completed phases here:
 - `current_step` and `last_heartbeat` are intended to be written as a **single combined `Run.update`** at step entry — NOT separate writes. This keeps DB write pressure constant.
 - The `retry_log` is **append-only via read-modify-write** — Phase 3 should: `currentLog = run.retry_log || []; await Run.update(id, { retry_log: [...currentLog, newEntry] })`. No risk of race because the engine is single-tab single-user per run.
 - Legacy runs read `undefined` for all three fields — any UI consumer must guard with `(run.retry_log || []).length` or equivalent. The Results / Diagnostics pages currently do not read these fields, so no UI change is required in this phase.
+
+---
+
+### Phase 3 — Complete (2026-05-31)
+**Deliverable:** `components/janus/ExecutionEngine.js` wired to resilient caller with heartbeat + retry-log persistence.
+
+**Surgical changes (5 edits, additive only):**
+1. **Import** — Added `import { callLLMResilient } from "./llmTimeout"` (line 10)
+2. **`callLLM` body replaced** — Now derives a `callLabel` and delegates to `callLLMResilient` with `{ callLabel, onRetry }`. Signature extended to accept optional `callLabel` and `onRetry` args; original 3-arg call sites still work (legacy compatibility)
+3. **In-engine helpers added** — `retryLog` accumulator, `heartbeat(stepLabel)`, `recordRetry({...})` — all closure-scoped to `executeJanus`, both wrapped in try/catch so persistence failures never break the pipeline
+4. **Domain loop entry** — Added `await heartbeat(...)` after `onProgress` at the domain step boundary; passed `recordRetry` to the domain LLM call
+5. **Intersection loop entry** — Added `await heartbeat(\`intersection:${pair}\`)` after `onProgress`; passed explicit `callLabel` and `recordRetry` to the intersection LLM call
+
+**Acceptance:**
+- ✅ AT 3.A (Functional preservation) — Verified by code diff: prompt builders, `parseLLMResponse`, `mergedData` accumulation, `intersections` accumulation, `domainErrors` shape, incremental persistence, `onProgress` shape, finalization payload — all unchanged
+- ✅ AT 3.B (Resilience activated) — `callLLM` now wraps every LLM call in `Promise.race` with per-label timeout (90-180s) and 2 retries. Existing `try/catch` at lines 492-497 + 533-555 catches `LLMTimeoutError`/`LLMCallError` and pushes to `domainErrors` as before — the catch logic needed no modification, which is the elegance of the design
+- ✅ AT 3.C (Scope discipline) — Diff shows changes ONLY in: 1 import line, `callLLM` body, in-engine helper block (~32 lines), 1 heartbeat insertion in domain loop, 1 heartbeat insertion in intersection loop, 2 extra args on 2 `callLLM` call sites. **Zero changes** to prompts, parsers, schema validation, persistence order, or the blueprint split-call branch
+
+**Files NOT touched (verified):**
+- `blueprintSplitCall.js`, `rerunEngine.js` — Phase 4/5 territory
+- `entities/Run.json` — already updated in Phase 2
+- `llmTimeout.js` — already created in Phase 1
+- `janusSchema.js`, `domainSME.js`, `promptUtils.js`, `ExecutionContext.js`, any UI/page
+
+**Notes for next phase (Phase 4 — `blueprintSplitCall.js`):**
+- Phase 4 should mirror this exact pattern: import `callLLMResilient`, replace the internal `callLLM` body with delegation, pass distinct labels per sub-call (`blueprint:skeleton`, `blueprint:expansion`, `blueprint:criteria`)
+- The split-call has its OWN internal try/catch + errors array — leave that pattern intact; just upgrade the LLM call point
+- The `onRetry` callback wiring needs special handling — `executeBlueprintSplitCall` is invoked from `ExecutionEngine` (line 464) but doesn't currently receive `recordRetry`. Phase 4 should add an `onRetry` option to the `executeBlueprintSplitCall` signature, and `ExecutionEngine` must pass `recordRetry` down on line 464
+- The most important call to harden is `blueprint:expansion` (150s timeout) — this is the historical root cause of the infinite hang
 
 ---
 
