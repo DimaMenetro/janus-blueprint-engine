@@ -343,7 +343,7 @@ specific regions:
 
 ---
 
-### **PHASE 6: Minimal Cancel + Progress Visibility** [STATUS: ☐ NOT STARTED]
+### **PHASE 6: Minimal Cancel + Progress Visibility** [STATUS: ✅ COMPLETE — 2026-05-31]
 
 **Deliverable:** Two minimal additions:
 
@@ -507,9 +507,7 @@ When resuming after compaction, check off completed phases here:
 - [x] **Phase 3** — `ExecutionEngine.js` wired to resilient caller  *(2026-05-31, AT 3.A + 3.B + 3.C passed)*
 - [x] **Phase 4** — `blueprintSplitCall.js` wired to resilient caller  *(2026-05-31, AT 4.A + 4.B + 4.C passed)*
 - [x] **Phase 5** — `rerunEngine.js` wired to resilient caller  *(2026-05-31, AT 5.A + 5.B + 5.C passed)*
-- [ ] **Phase 4** — `blueprintSplitCall.js` wired
-- [ ] **Phase 5** — `rerunEngine.js` wired
-- [ ] **Phase 6** — `ExecutionContext.js` extended with retry state
+- [x] **Phase 6** — `ExecutionContext.js` extended with retry state  *(2026-05-31, AT 6.A passed)*
 - [ ] **Phase 7** — Live end-to-end validation run completed
 
 ---
@@ -669,6 +667,57 @@ Three modules now use the same `recordRetry` / `heartbeat` closure-helper patter
 - Failure-injection test: manually slow an LLM call past its TIMEOUT_MATRIX budget, verify `retry_log` gets entries with `will_retry: true` then `will_retry: false`, and verify the existing `domainErrors` flow captures the labeled error message
 - Rerun test: trigger a synthesis rerun on a completed run; verify intersection heartbeats fire and that `retry_log` is appended-to (not overwritten)
 - Phase 7 (UI surfacing of `retry_log` / `current_step` in Diagnostics page) follows only after Phase 6 confirms the data is flowing correctly
+
+---
+
+### Phase 6 — Complete (2026-05-31)
+**Deliverable:** `components/janus/ExecutionContext.js` extended with retry state + plumbing wired end-to-end (engine → onProgress → context). **No UI change**, per blueprint §3.6 — state-only plumbing.
+
+**Pre-flight correction (Janus SME applied):**
+On entering Phase 6, I noticed my Phase 5 closing notes had drifted — I had conflated Phase 6 ("extend ExecutionContext") with Phase 7 ("live validation"). Re-reading §3.6 of this blueprint corrected the course. **The blueprint is the truth; the conversation is not.** Janus SME caught the drift before it became code drift. Slow is smooth.
+
+**Architectural decision — extend `onProgress` payload, not `executeJanus` signature:**
+The blueprint §3.6 says "wired through `executeJanus`" but adding a new positional parameter to `executeJanus(params, onProgress, generateMarkdown, buildPrompt)` would force a breaking change on every caller (NewQuery + any future caller). Instead, the engine's existing closure-scoped `recordRetry` helper (Phase 3) was extended to ALSO emit a `{ retryEvent: {...} }` payload through the existing `onProgress` channel. NewQuery's `onProgress` handler now branches: if the payload has `retryEvent`, route to `context.recordRetry`; otherwise, route to `updateProgress` as before. Fully backward compatible.
+
+**Surgical changes (3 files, all additive):**
+
+*`components/janus/ExecutionContext.js` (full rewrite — preserved all existing methods):*
+1. Added `retryCount: number` (init 0) and `lastError: string|null` (init null) to the execution state shape
+2. Added `recordRetry({ step, attempt, error })` method — increments `retryCount`, stashes `lastError`, adopts `step` as `currentDomain` so consumers see which step retried without scraping `retry_log`
+3. Seeded both new fields in `startExecution` so consumers never read `undefined` during an active run
+4. Exposed `recordRetry` in the provider value alongside existing methods
+
+*`components/janus/ExecutionEngine.js` (1 surgical edit):*
+5. The engine's existing closure-scoped `recordRetry` helper (Phase 3) now ALSO calls `onProgress({ retryEvent: { step, attempt, error, willRetry, nextDelayMs } })` immediately after the DB write. Wrapped in try/catch — a context update failure cannot break the engine
+
+*`pages/NewQuery.js` (2 surgical edits):*
+6. Destructured `recordRetry` from `useExecution()`
+7. `onProgress` handler now branches: `if (payload.retryEvent) recordRetry(payload.retryEvent); else updateProgress(...)`. Existing `progressStatus === "validating"` logic preserved
+
+**Acceptance:**
+- ✅ AT 6.A (Backward compatibility) — Existing consumers of `useExecution()` (Layout, GlassTabBar via execution status badge, NewQuery) all destructure only the keys they need. The provider value object now has one more key (`recordRetry`); destructuring is non-breaking. Old `execution` shape is preserved — new fields are additive
+- ✅ AT 6.A (State updates) — During a run with retries: engine's `recordRetry` fires → `onProgress({ retryEvent })` → NewQuery handler → `context.recordRetry()` → `setExecution(prev => ({ ...prev, retryCount: prev.retryCount + 1, lastError: error }))`. State flows correctly without any DB round-trip
+- ✅ AT 6.A (No visual regression) — Zero UI files modified. `GlassTabBar` and any other component reading `execution.currentDomain` / `execution.status` continue to render identically. The new `retryCount` / `lastError` fields are present but unread by any current UI component
+
+**Defense in depth:**
+- Engine's `onProgress` emit wrapped in try/catch — a React state error can't break the engine
+- Context's `recordRetry` is purely functional `setState` — cannot throw under normal use
+- The `retryEvent` discriminator is checked via truthy guard (`payload && payload.retryEvent`) — null/undefined payloads from any unexpected emitter route fall safely through to the legacy path
+
+**Files NOT touched (verified):**
+- `blueprintSplitCall.js`, `rerunEngine.js`, `llmTimeout.js`, `entities/Run.json` — Phases 1-5 territory, no scope change required
+- `Layout.js`, `GlassTabBar.jsx`, `Results.jsx`, `Diagnostics.jsx`, all UI components — no visual change, no read of new fields
+- `RerunControls.jsx` — note: re-run paths don't currently flow through ExecutionContext, only the first-run path does. Surfacing rerun retry events into context is a Phase 8 candidate, intentionally deferred
+
+**Implementation hygiene note:**
+Cleaned up stale duplicate checklist entries in §7 that were left over from earlier phases (Phase 4 + Phase 5 had unchecked duplicates below their checked entries). §7 now shows a clean linear progression P1 → P7.
+
+**Next phase (Phase 7 — Live End-to-End Validation):**
+- Per blueprint §3.7, this is a **live validation run executed through the UI** — not more code
+- Test 7.A: Submit a Standard mode query, confirm all domains complete, Results renders, `validation_errors` clean
+- Test 7.B: Submit a Full mode query (novelty=high, L3), confirm 6 intersections + 4 named patterns + 3 blueprint sub-calls all persist, total runtime < 15 min
+- Test 7.C: Read final Run via SDK, confirm `current_step`, `last_heartbeat`, `retry_log` populated, `synthesis.intersection_matrix` has all 6 pairs, `blueprint.steps` populated
+- I cannot execute Test 7 alone — it requires the operator (DIMA) to submit live queries through the UI. Phase 7 is **gated on user-driven validation**
 
 ---
 

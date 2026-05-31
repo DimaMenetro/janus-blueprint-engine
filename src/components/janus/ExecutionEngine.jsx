@@ -451,6 +451,14 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     } catch (_e) {
       // Retry-log persistence is diagnostic only. Never break pipeline.
     }
+    // Phase 6 (IMP-001-R-D-RES): mirror the retry into the in-memory ExecutionContext
+    // via the existing onProgress channel. NewQuery routes payloads with `retryEvent`
+    // to context.recordRetry(). Non-breaking: legacy onProgress consumers ignore it.
+    try {
+      onProgress({ retryEvent: { step: callLabel, attempt, error, willRetry, nextDelayMs } });
+    } catch (_e) {
+      // UI bubble-up failure must never break the engine.
+    }
   }
 
   // Step 2: Execute each domain sequentially

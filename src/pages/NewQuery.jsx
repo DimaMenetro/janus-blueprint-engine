@@ -29,7 +29,7 @@ export default function NewQuery() {
   const [refreshEnabled, setRefreshEnabled] = useState(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
-  const { startExecution, updateProgress, finishExecution, failExecution } = useExecution();
+  const { startExecution, updateProgress, recordRetry, finishExecution, failExecution } = useExecution();
 
   const handleExecute = async () => {
     if (!queryText.trim()) return;
@@ -40,7 +40,15 @@ export default function NewQuery() {
     try {
       const result = await executeJanus(
         { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled },
-        ({ domain, status: progressStatus, completedDomains, totalDomains }) => {
+        (payload) => {
+          // Phase 6: route retry events into the context's recordRetry; everything
+          // else flows through updateProgress as before. Destructure inside so the
+          // engine can extend the payload shape additively without breaking callers.
+          if (payload && payload.retryEvent) {
+            recordRetry(payload.retryEvent);
+            return;
+          }
+          const { domain, status: progressStatus, completedDomains, totalDomains } = payload;
           updateProgress({ domain, status: progressStatus, completedDomains, totalDomains });
           if (progressStatus === "validating") setStatus("validating");
         },
