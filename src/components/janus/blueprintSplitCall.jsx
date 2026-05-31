@@ -7,6 +7,7 @@
 // Call 3: Criteria & Risk — success_criteria, risk_register, alternative_approaches
 
 import { base44 } from "@/api/base44Client";
+import { callLLMResilient } from "./llmTimeout";
 
 // ─── COMPRESSED CONTEXT BUILDER (Option 2 — input compression) ───────────────
 // Builds a compressed upstream context for blueprint calls.
@@ -82,12 +83,17 @@ export function buildCompressedBlueprintContext(source) {
 }
 
 // ─── LLM CALL ────────────────────────────────────────────────────────────────
+// IMP-001-R-D-RES Phase 4: Delegates to callLLMResilient for timeout + retry.
+// `callLabel` is REQUIRED here (no auto-derivation) because the three sub-calls
+// have distinct timeout budgets in TIMEOUT_MATRIX (skeleton=120s, expansion=150s,
+// criteria=90s). `onRetry` is forwarded so retry events surface in the Run's
+// retry_log via the engine's recordRetry helper.
 
-async function callLLM(prompt) {
-  return await base44.integrations.Core.InvokeLLM({
-    prompt,
-    model: "claude_sonnet_4_6",
-  });
+async function callLLM(prompt, callLabel, onRetry) {
+  return await callLLMResilient(
+    { prompt, model: "claude_sonnet_4_6" },
+    { callLabel, onRetry }
+  );
 }
 
 function parseLLMResponse(result, expectedKey) {
@@ -181,20 +187,34 @@ QUERY: ${queryText}`;
  * @param {string} noveltyDial - "low" | "medium" | "high"
  * @param {string} outputMode
  * @param {function} onProgress - progress callback
+ * @param {function} [onRetry] - optional retry-event callback (forwarded to callLLMResilient).
+ *   Receives { callLabel, attempt, error, willRetry, nextDelayMs }. Wired by the
+ *   engine to its recordRetry helper so retries land in the Run's retry_log.
+ * @param {function} [onHeartbeat] - optional heartbeat callback (stepLabel) =>
+ *   void/Promise. Fired at each sub-call boundary (skeleton/expansion/criteria)
+ *   so the engine can persist current_step + last_heartbeat on the Run.
+ *   Module-pure: this file performs NO DB writes itself.
  * @returns {{ data: object|null, errors: string[] }}
  */
-export async function executeBlueprintSplitCall({ source, queryText, blueprintLevel, noveltyDial, outputMode, onProgress }) {
+export async function executeBlueprintSplitCall({ source, queryText, blueprintLevel, noveltyDial, outputMode, onProgress, onRetry, onHeartbeat }) {
+  // Safe heartbeat wrapper — never break the pipeline if caller didn't supply one
+  // or if the supplied callback throws.
+  const beat = async (label) => {
+    if (!onHeartbeat) return;
+    try { await onHeartbeat(label); } catch (_e) { /* swallow — diagnostic only */ }
+  };
   const errors = [];
   const contextBlock = buildCompressedBlueprintContext(source);
   const totalSubCalls = blueprintLevel === "L1" ? 2 : 3;
 
   // ── Sub-call 1: Skeleton
   onProgress({ domain: "blueprint:skeleton", status: "running", detail: "Generating roadmap skeleton...", completedDomains: 0, totalDomains: totalSubCalls });
+  await beat("blueprint:skeleton");
 
   let skeleton = null;
   try {
     const prompt = buildSkeletonPrompt(contextBlock, queryText, blueprintLevel, noveltyDial, outputMode);
-    const result = await callLLM(prompt);
+    const result = await callLLM(prompt, "blueprint:skeleton", onRetry);
     const parsed = parseLLMResponse(result, "blueprint");
     if (parsed.data) {
       skeleton = parsed.data;
@@ -210,13 +230,15 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
   }
 
   // ── Sub-call 2: Step Expansion (skip for L1 — no substeps/checklists needed)
+  // NOTE: This is the historical root-cause hang site (150s timeout in TIMEOUT_MATRIX).
   if (blueprintLevel !== "L1") {
     onProgress({ domain: "blueprint:expansion", status: "running", detail: "Expanding steps with detail...", completedDomains: 1, totalDomains: totalSubCalls });
+    await beat("blueprint:expansion");
 
     try {
       const prompt = buildStepExpansionPrompt(skeleton, queryText, blueprintLevel);
       if (prompt) {
-        const result = await callLLM(prompt);
+        const result = await callLLM(prompt, "blueprint:expansion", onRetry);
         const parsed = parseLLMResponse(result, "step_expansions");
         if (parsed.data) {
           const expansions = Array.isArray(parsed.data) ? parsed.data : [];
@@ -247,10 +269,11 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
   // ── Sub-call 3: Criteria & Risk
   const criteriaStep = blueprintLevel === "L1" ? 1 : 2;
   onProgress({ domain: "blueprint:criteria", status: "running", detail: "Generating success criteria & risk register...", completedDomains: criteriaStep, totalDomains: totalSubCalls });
+  await beat("blueprint:criteria");
 
   try {
     const prompt = buildCriteriaRiskPrompt(skeleton, contextBlock, queryText, noveltyDial);
-    const result = await callLLM(prompt);
+    const result = await callLLM(prompt, "blueprint:criteria", onRetry);
     const parsed = parseLLMResponse(result, "criteria_risk");
     if (parsed.data) {
       if (parsed.data.success_criteria) skeleton.success_criteria = parsed.data.success_criteria;

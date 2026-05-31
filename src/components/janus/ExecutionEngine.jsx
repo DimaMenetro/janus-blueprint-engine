@@ -468,6 +468,8 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
         noveltyDial: params.noveltyDial,
         outputMode: params.outputMode,
         onProgress: (p) => onProgress({ ...p, completedDomains: completedCount, totalDomains: totalSteps }),
+        onRetry: recordRetry,    // Phase 4: forward retry events into Run.retry_log
+        onHeartbeat: heartbeat,  // Phase 4: forward sub-call boundaries into Run.current_step
       });
       if (bpData) {
         mergedData.blueprint = bpData;

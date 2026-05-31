@@ -297,7 +297,7 @@ specific regions:
 
 ---
 
-### **PHASE 4: Wire `blueprintSplitCall.js` to Resilient Caller** [STATUS: ☐ NOT STARTED]
+### **PHASE 4: Wire `blueprintSplitCall.js` to Resilient Caller** [STATUS: ✅ COMPLETE — 2026-05-31]
 
 **Deliverable:** Modify `components/janus/blueprintSplitCall.js`:
 
@@ -505,6 +505,7 @@ When resuming after compaction, check off completed phases here:
 - [x] **Phase 1** — `llmTimeout.js` created and tested  *(2026-05-31, AT 1.A + 1.B passed)*
 - [x] **Phase 2** — `entities/Run.json` extended with 3 fields  *(2026-05-31, AT 2.A + 2.B + 2.C passed)*
 - [x] **Phase 3** — `ExecutionEngine.js` wired to resilient caller  *(2026-05-31, AT 3.A + 3.B + 3.C passed)*
+- [x] **Phase 4** — `blueprintSplitCall.js` wired to resilient caller  *(2026-05-31, AT 4.A + 4.B + 4.C passed)*
 - [ ] **Phase 4** — `blueprintSplitCall.js` wired
 - [ ] **Phase 5** — `rerunEngine.js` wired
 - [ ] **Phase 6** — `ExecutionContext.js` extended with retry state
@@ -586,6 +587,42 @@ When resuming after compaction, check off completed phases here:
 - The split-call has its OWN internal try/catch + errors array — leave that pattern intact; just upgrade the LLM call point
 - The `onRetry` callback wiring needs special handling — `executeBlueprintSplitCall` is invoked from `ExecutionEngine` (line 464) but doesn't currently receive `recordRetry`. Phase 4 should add an `onRetry` option to the `executeBlueprintSplitCall` signature, and `ExecutionEngine` must pass `recordRetry` down on line 464
 - The most important call to harden is `blueprint:expansion` (150s timeout) — this is the historical root cause of the infinite hang
+
+---
+
+### Phase 4 — Complete (2026-05-31)
+**Deliverable:** `components/janus/blueprintSplitCall.js` wired to resilient caller. The historical root-cause hang site (`blueprint:expansion`) is now bounded by a 150s timeout with 2 retries.
+
+**Architectural decision — callback injection over coupling:**
+The split-call module remains **persistence-pure**. It does not import `base44.entities.Run`, does not know `runId` exists. Two optional callbacks were added — `onRetry` and `onHeartbeat` — mirroring the existing `onProgress` pattern. The engine, which owns the Run, wires these callbacks to its `recordRetry` and `heartbeat` helpers. This preserves module boundaries: the split-call orchestrates LLM calls; the engine owns persistence.
+
+**Surgical changes (7 edits, additive only):**
+
+*In `components/janus/blueprintSplitCall.js` (6 edits):*
+1. **Import** — Added `import { callLLMResilient } from "./llmTimeout"`
+2. **`callLLM` body replaced** — Now requires explicit `callLabel` (no auto-derivation; each sub-call has its own timeout budget) and forwards `onRetry`
+3. **Function signature extended** — `executeBlueprintSplitCall` accepts optional `onRetry` and `onHeartbeat`. Internal `beat(label)` helper wraps `onHeartbeat` in try/catch so callback failures never break the pipeline
+4. **Skeleton sub-call** — Added `await beat("blueprint:skeleton")`; LLM call now passes label + onRetry
+5. **Expansion sub-call** — Added `await beat("blueprint:expansion")` + root-cause comment marking the historical hang site; LLM call now passes label + onRetry
+6. **Criteria sub-call** — Added `await beat("blueprint:criteria")`; LLM call now passes label + onRetry
+
+*In `components/janus/ExecutionEngine.js` (1 edit):*
+7. **Caller wiring** — The single call to `executeBlueprintSplitCall` (in the blueprint branch of the domain loop) now passes `onRetry: recordRetry` and `onHeartbeat: heartbeat`. Comments mark each as "Phase 4" for traceability
+
+**Acceptance:**
+- ✅ AT 4.A (Functional preservation) — Prompts (skeleton/expansion/criteria), parser, skeleton-mutation merge logic, errors-array shape, return signature `{ data, errors }`, L1-skips-expansion logic, criteriaStep numbering, `onProgress` shape — all unchanged
+- ✅ AT 4.B (Resilience activated) — All 3 sub-calls now use distinct labels resolving to distinct timeouts via `TIMEOUT_MATRIX`: skeleton=120s, expansion=150s (the hang site), criteria=90s — each with 2 retries and bounded exponential backoff. Existing try/catch at each sub-call site naturally captures `LLMTimeoutError` / `LLMCallError`
+- ✅ AT 4.C (Module purity preserved) — `blueprintSplitCall.js` still imports only `base44Client` (for the InvokeLLM type — actually now unused; flagged for future cleanup but kept to avoid churn) and `callLLMResilient`. Zero DB write logic added. All persistence flows through callbacks back to the engine
+
+**Files NOT touched (verified):**
+- `rerunEngine.js` — Phase 5 territory; uses its OWN `callLLM` helper with InvokeLLM directly; will be addressed next
+- `llmTimeout.js`, `entities/Run.json` — already created/extended in Phases 1+2
+- All prompts, parsers, UI files
+
+**Notes for next phase (Phase 5 — `rerunEngine.js`):**
+- `rerunEngine.js` (per file summary) has its own LLM invocation utility used for synthesis and blueprint re-runs from a stored Run. Same pattern applies: import `callLLMResilient`, replace the local `callLLM` body, label each call site with `rerun:<target>` (already defined in TIMEOUT_MATRIX)
+- The re-run is triggered from `pages/Results` via `RerunControls` — the caller path is different (no engine closure with `recordRetry`/`heartbeat`). Phase 5 will need to decide whether re-runs should also persist `current_step` / `retry_log` on the Run. **Recommendation:** yes — build a parallel pair of helpers inside `rerunEngine.js` itself, since re-runs know the `runId` they're operating on
+- `executeBlueprintSplitCall` is also invoked from `rerunEngine.js` (when rerunning a blueprint). Now that it accepts `onRetry`/`onHeartbeat`, the rerun path can opt into the same observability simply by passing those callbacks
 
 ---
 
