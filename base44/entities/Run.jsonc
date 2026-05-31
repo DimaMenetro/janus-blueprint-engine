@@ -90,6 +90,99 @@
           "items": {
             "type": "string"
           }
+        },
+        "subdomain_updates": {
+          "type": "object",
+          "description": "Per-subdomain fresh internet research findings (24 keys)",
+          "properties": {
+            "distributed_systems": {
+              "type": "string"
+            },
+            "data_engineering": {
+              "type": "string"
+            },
+            "cybersecurity": {
+              "type": "string"
+            },
+            "systems_engineering": {
+              "type": "string"
+            },
+            "theoretical_physics": {
+              "type": "string"
+            },
+            "ai_ml": {
+              "type": "string"
+            },
+            "neuroscience": {
+              "type": "string"
+            },
+            "unified_ai_cognitive": {
+              "type": "string"
+            },
+            "knowledge_graphs": {
+              "type": "string"
+            },
+            "epistemology": {
+              "type": "string"
+            },
+            "computational_linguistics": {
+              "type": "string"
+            },
+            "graphrag_reasoning": {
+              "type": "string"
+            },
+            "neuro_symbolic": {
+              "type": "string"
+            },
+            "philosophy_of_mind": {
+              "type": "string"
+            },
+            "jungian_psychology": {
+              "type": "string"
+            },
+            "ethical_ai": {
+              "type": "string"
+            },
+            "hci_empathy": {
+              "type": "string"
+            },
+            "ai_safety": {
+              "type": "string"
+            },
+            "game_theory": {
+              "type": "string"
+            },
+            "mlops_product": {
+              "type": "string"
+            },
+            "agile_scrum": {
+              "type": "string"
+            },
+            "technical_writing": {
+              "type": "string"
+            },
+            "behavioral_economics": {
+              "type": "string"
+            },
+            "api_design": {
+              "type": "string"
+            }
+          }
+        },
+        "key_developments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sources_consulted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "training_data_cutoff_note": {
+          "type": "string"
         }
       }
     },
@@ -106,6 +199,124 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "subdomains": {
+          "type": "object",
+          "description": "Section I \u2014 7 subdomain expert perspectives",
+          "properties": {
+            "distributed_systems": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "string"
+                },
+                "key_findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "data_engineering": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "string"
+                },
+                "key_findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "cybersecurity": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "string"
+                },
+                "key_findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "systems_engineering": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "string"
+                },
+                "key_findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "theoretical_physics": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "string"
+                },
+                "key_findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "physics": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "string"
+                },
+                "key_findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "ai_ml": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "string"
+                },
+                "key_findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "neuroscience": {
+              "type": "object",
+              "properties": {
+                "perspective": {
+                  "type": "string"
+                },
+                "key_findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -150,6 +361,35 @@
           "items": {
             "type": "string"
           }
+        },
+        "graphrag_connections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "causal_chains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cause": {
+                "type": "string"
+              },
+              "effect": {
+                "type": "string"
+              },
+              "confidence": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "neuro_symbolic_insights": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -172,6 +412,38 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "consciousness_boundary": {
+          "type": "string"
+        },
+        "attractor_states": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ethical_stance": {
+          "type": "string"
+        },
+        "risk_analysis": {
+          "type": "object",
+          "properties": {
+            "cognitive_sync_assessment": {
+              "type": "string"
+            },
+            "self_determination_factors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "misalignment_risks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         }
       }
@@ -216,6 +488,86 @@
               }
             }
           }
+        },
+        "strategic_plan": {
+          "type": "object",
+          "properties": {
+            "immediate_horizon": {
+              "type": "string"
+            },
+            "long_term_horizon": {
+              "type": "string"
+            },
+            "key_decision_points": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "game_theory_analysis": {
+          "type": "object",
+          "properties": {
+            "game_board": {
+              "type": "string"
+            },
+            "nash_equilibrium": {
+              "type": "string"
+            },
+            "zero_sum_assessment": {
+              "type": "string"
+            },
+            "coalition_dynamics": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "technical_summary": {
+          "type": "string"
+        },
+        "behavioral_factors": {
+          "type": "object",
+          "properties": {
+            "irrational_actors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "identity_economics": {
+              "type": "string"
+            },
+            "bias_mitigations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "integration_contracts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "iteration_model": {
+          "type": "object",
+          "properties": {
+            "value_stream": {
+              "type": "string"
+            },
+            "adaptation_triggers": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },
@@ -236,6 +588,170 @@
         },
         "limitation_foreground": {
           "type": "string"
+        },
+        "intersection_matrix": {
+          "type": "object",
+          "description": "6 cross-domain intersection pairs \u2014 emergent wisdom at domain boundaries",
+          "properties": {
+            "corpus_x_cogito": {
+              "type": "object",
+              "properties": {
+                "insight": {
+                  "type": "string"
+                },
+                "tension": {
+                  "type": "string"
+                },
+                "resolution": {
+                  "type": "string"
+                }
+              }
+            },
+            "corpus_x_animus": {
+              "type": "object",
+              "properties": {
+                "insight": {
+                  "type": "string"
+                },
+                "tension": {
+                  "type": "string"
+                },
+                "resolution": {
+                  "type": "string"
+                }
+              }
+            },
+            "corpus_x_actus": {
+              "type": "object",
+              "properties": {
+                "insight": {
+                  "type": "string"
+                },
+                "tension": {
+                  "type": "string"
+                },
+                "resolution": {
+                  "type": "string"
+                }
+              }
+            },
+            "cogito_x_animus": {
+              "type": "object",
+              "properties": {
+                "insight": {
+                  "type": "string"
+                },
+                "tension": {
+                  "type": "string"
+                },
+                "resolution": {
+                  "type": "string"
+                }
+              }
+            },
+            "cogito_x_actus": {
+              "type": "object",
+              "properties": {
+                "insight": {
+                  "type": "string"
+                },
+                "tension": {
+                  "type": "string"
+                },
+                "resolution": {
+                  "type": "string"
+                }
+              }
+            },
+            "animus_x_actus": {
+              "type": "object",
+              "properties": {
+                "insight": {
+                  "type": "string"
+                },
+                "tension": {
+                  "type": "string"
+                },
+                "resolution": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "quantum_foresight": {
+          "type": "object",
+          "properties": {
+            "cross_domain_insight": {
+              "type": "string"
+            },
+            "probability_wave": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "metaphor": {
+              "type": "string"
+            }
+          }
+        },
+        "governed_cogito": {
+          "type": "object",
+          "properties": {
+            "ethical_filter_applied": {
+              "type": "string"
+            },
+            "conscience_verdict": {
+              "type": "string"
+            },
+            "truth_method_soundness": {
+              "type": "string"
+            }
+          }
+        },
+        "narrative_loop": {
+          "type": "object",
+          "properties": {
+            "decoded_user_narrative": {
+              "type": "string"
+            },
+            "resonant_strategy": {
+              "type": "string"
+            },
+            "lossless_compression": {
+              "type": "string"
+            }
+          }
+        },
+        "empathy_driven_strategy": {
+          "type": "object",
+          "properties": {
+            "true_goal_vs_literal_prompt": {
+              "type": "string"
+            },
+            "behavioral_model": {
+              "type": "string"
+            },
+            "empathy_strategy": {
+              "type": "string"
+            }
+          }
+        },
+        "alignment_engine": {
+          "type": "object",
+          "description": "Legacy alias for empathy_driven_strategy \u2014 preserved for backward compatibility",
+          "properties": {
+            "true_goal_vs_literal_prompt": {
+              "type": "string"
+            },
+            "behavioral_model": {
+              "type": "string"
+            },
+            "alignment_strategy": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -383,6 +899,48 @@
     "error_message": {
       "type": "string",
       "description": "Error message if validation failed"
+    },
+    "current_step": {
+      "type": "string",
+      "description": "IMP-001-R-D-RES Phase 2 \u2014 Stable label of the most recently entered pipeline step (e.g. 'domain:corpus', 'blueprint:expansion', 'synthesis'). Used for resumability and live diagnostics. Optional; absent on legacy runs."
+    },
+    "last_heartbeat": {
+      "type": "string",
+      "format": "date-time",
+      "description": "IMP-001-R-D-RES Phase 2 \u2014 ISO timestamp updated each time the engine enters a new step or completes a retry. Allows external observers to detect stalled runs. Optional; absent on legacy runs."
+    },
+    "retry_log": {
+      "type": "array",
+      "description": "IMP-001-R-D-RES Phase 2 \u2014 Append-only log of LLM retry events for this run. Each entry captures a timeout or transient failure that was recovered (or exhausted). Optional; absent on legacy runs.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "call_label": {
+            "type": "string",
+            "description": "Stable label from TIMEOUT_MATRIX (e.g. 'blueprint:expansion')"
+          },
+          "attempt": {
+            "type": "number",
+            "description": "1-indexed attempt number when the failure occurred"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message captured from the failed attempt"
+          },
+          "will_retry": {
+            "type": "boolean",
+            "description": "Whether the resilient caller scheduled another attempt"
+          },
+          "next_delay_ms": {
+            "type": "number",
+            "description": "Backoff delay before the next attempt (0 if exhausted)"
+          }
+        }
+      }
     }
   },
   "required": [

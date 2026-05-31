@@ -203,7 +203,7 @@ export async function callLLMResilient(invokeParams, options = {})
 
 ---
 
-### **PHASE 2: Schema Additive Expansion** [STATUS: ☐ NOT STARTED]
+### **PHASE 2: Schema Additive Expansion** [STATUS: ✅ COMPLETE — 2026-05-31]
 
 **Deliverable:** Add 3 fields to `entities/Run.json`:
 
@@ -503,7 +503,7 @@ These are intentionally deferred. **Slow is smooth. Ship the foundation.**
 When resuming after compaction, check off completed phases here:
 
 - [x] **Phase 1** — `llmTimeout.js` created and tested  *(2026-05-31, AT 1.A + 1.B passed)*
-- [ ] **Phase 2** — `entities/Run.json` extended with 3 fields
+- [x] **Phase 2** — `entities/Run.json` extended with 3 fields  *(2026-05-31, AT 2.A + 2.B + 2.C passed)*
 - [ ] **Phase 3** — `ExecutionEngine.js` wired to resilient caller
 - [ ] **Phase 4** — `blueprintSplitCall.js` wired
 - [ ] **Phase 5** — `rerunEngine.js` wired
@@ -533,6 +533,30 @@ When resuming after compaction, check off completed phases here:
 - The `onRetry` callback shape is `({ callLabel, attempt, error, willRetry, nextDelayMs })` — Phase 3/6 must wire this into both `domainErrors` accumulation and `retry_log` persistence
 - `isEmptyResponse` treats `{}` as failure — be aware in Phase 3 that this catches the previous "Missing key in response" silently
 - Backoff blocks the for-loop on the same tick — this is intentional (single-threaded JS), but means a slow LLM + 2 retries can add up to ~12s of pure backoff overhead per failed call
+
+---
+
+### Phase 2 — Complete (2026-05-31)
+**Deliverable:** `entities/Run.json` extended with 3 additive optional fields.
+
+**Fields added (none in `required`):**
+- `current_step` (string) — stable label of most recently entered step
+- `last_heartbeat` (string, date-time) — ISO timestamp updated per step entry / retry
+- `retry_log` (array of objects) — append-only log; each entry: `{ timestamp, call_label, attempt, error, will_retry, next_delay_ms }`
+
+**Acceptance:**
+- ✅ AT 2.A — Schema persisted via `write_file` (12,393 chars), valid JSON, no parse errors
+- ✅ AT 2.B — `required` array unchanged: `["query_text", "execution_mode", "output_mode"]`; all existing properties (`refresh`, `corpus`, `cogito`, `animus`, `actus`, `synthesis`, `blueprint`, `raw_json`, `render_md`, `error_message`, `validation_errors`, `status`, etc.) preserved with identical shape
+- ✅ AT 2.C (Live read) — `base44.entities.Run.list()` returns existing legacy run record cleanly with all prior data intact (synthesis, alignment_engine, governed_cogito, intersection_matrix all readable)
+
+**Files NOT touched (verified):**
+- `ExecutionEngine.js`, `blueprintSplitCall.js`, `rerunEngine.js`, `llmTimeout.js`, `ExecutionContext.js`, `janusSchema.js`, any UI component
+
+**Notes for next phase:**
+- The `retry_log` item shape uses snake_case (`call_label`, `will_retry`, `next_delay_ms`) for schema-storage consistency, while the in-memory `onRetry` callback uses camelCase (`callLabel`, `willRetry`, `nextDelayMs`). Phase 3 must translate between the two when persisting.
+- `current_step` and `last_heartbeat` are intended to be written as a **single combined `Run.update`** at step entry — NOT separate writes. This keeps DB write pressure constant.
+- The `retry_log` is **append-only via read-modify-write** — Phase 3 should: `currentLog = run.retry_log || []; await Run.update(id, { retry_log: [...currentLog, newEntry] })`. No risk of race because the engine is single-tab single-user per run.
+- Legacy runs read `undefined` for all three fields — any UI consumer must guard with `(run.retry_log || []).length` or equivalent. The Results / Diagnostics pages currently do not read these fields, so no UI change is required in this phase.
 
 ---
 
