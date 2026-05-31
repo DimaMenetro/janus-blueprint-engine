@@ -327,7 +327,7 @@ specific regions:
 
 ---
 
-### **PHASE 5: Wire `rerunEngine.js` to Resilient Caller** [STATUS: ☐ NOT STARTED]
+### **PHASE 5: Wire `rerunEngine.js` to Resilient Caller** [STATUS: ✅ COMPLETE — 2026-05-31]
 
 **Deliverable:** Modify `components/janus/rerunEngine.js`:
 
@@ -506,6 +506,7 @@ When resuming after compaction, check off completed phases here:
 - [x] **Phase 2** — `entities/Run.json` extended with 3 fields  *(2026-05-31, AT 2.A + 2.B + 2.C passed)*
 - [x] **Phase 3** — `ExecutionEngine.js` wired to resilient caller  *(2026-05-31, AT 3.A + 3.B + 3.C passed)*
 - [x] **Phase 4** — `blueprintSplitCall.js` wired to resilient caller  *(2026-05-31, AT 4.A + 4.B + 4.C passed)*
+- [x] **Phase 5** — `rerunEngine.js` wired to resilient caller  *(2026-05-31, AT 5.A + 5.B + 5.C passed)*
 - [ ] **Phase 4** — `blueprintSplitCall.js` wired
 - [ ] **Phase 5** — `rerunEngine.js` wired
 - [ ] **Phase 6** — `ExecutionContext.js` extended with retry state
@@ -623,6 +624,51 @@ The split-call module remains **persistence-pure**. It does not import `base44.e
 - `rerunEngine.js` (per file summary) has its own LLM invocation utility used for synthesis and blueprint re-runs from a stored Run. Same pattern applies: import `callLLMResilient`, replace the local `callLLM` body, label each call site with `rerun:<target>` (already defined in TIMEOUT_MATRIX)
 - The re-run is triggered from `pages/Results` via `RerunControls` — the caller path is different (no engine closure with `recordRetry`/`heartbeat`). Phase 5 will need to decide whether re-runs should also persist `current_step` / `retry_log` on the Run. **Recommendation:** yes — build a parallel pair of helpers inside `rerunEngine.js` itself, since re-runs know the `runId` they're operating on
 - `executeBlueprintSplitCall` is also invoked from `rerunEngine.js` (when rerunning a blueprint). Now that it accepts `onRetry`/`onHeartbeat`, the rerun path can opt into the same observability simply by passing those callbacks
+
+---
+
+### Phase 5 — Complete (2026-05-31)
+**Deliverable:** `components/janus/rerunEngine.js` wired to resilient caller. Both rerun paths (synthesis + blueprint) now have bounded LLM timeouts and surface retry events into the Run's `retry_log` / `current_step` / `last_heartbeat` fields — exactly like the main execution path.
+
+**Architectural decision — public API contract preserved:**
+The public API of `rerunSynthesis(runId, onProgress)` and `rerunBlueprint(runId, onProgress)` is **unchanged**. Resilience is an internal upgrade — callers in `components/janus/RerunControls.jsx` (and any in-app agent that triggers reruns) work without modification.
+
+Unlike `blueprintSplitCall.js` which is persistence-pure, `rerunEngine.js` already owns `runId` and writes directly to the Run entity. So heartbeat + retry-log persistence helpers were built **inline inside each public function** rather than injected as callbacks. The same closure-scoped pattern from `ExecutionEngine.js` (Phase 3) is repeated here, scoped per-rerun.
+
+**Surgical changes (7 edits, additive only):**
+
+*In `components/janus/rerunEngine.js` (5 edits):*
+1. **Import** — Added `import { callLLMResilient } from "./llmTimeout"`
+2. **`callLLM` body replaced** — Now requires `callLabel` + forwards `onRetry`. Signature extended; legacy 1-arg call sites would still work but all sites now pass labels
+3. **`rerunSynthesis` — helpers block** — Closure-scoped `retryLog` (seeded from existing `run.retry_log` for append-only continuity across reruns), `heartbeat(stepLabel)`, `recordRetry({...})`. All persistence wrapped in try/catch
+4. **`rerunSynthesis` — intersection loop** — Added `await heartbeat(\`rerun:intersection:${pair}\`)` before each pair's LLM call; LLM call now passes `intersection:<pair>` label (matches ExecutionEngine's 90s budget exactly) + `recordRetry`
+5. **`rerunSynthesis` — named patterns step** — Added `await heartbeat("rerun:synthesis:patterns")`; LLM call now passes `rerun:synthesis` label (120s) + `recordRetry`
+6. **`rerunBlueprint` — helpers block** — Same closure-scoped trio. Built fresh per-rerun (rather than extracted to a shared util) because both functions have their own error accumulator + finalization logic; extracting would have added coupling for no gain
+7. **`rerunBlueprint` — split-call wiring** — Passes `onRetry: recordRetry` + `onHeartbeat: heartbeat` into `executeBlueprintSplitCall`. The Phase-4-hardened split-call already accepts these — free win on the most important hang site
+
+**Label selection rationale:**
+- *Intersection reruns* use the specific `intersection:<pair>` labels (not the generic `rerun:intersection`) — matches ExecutionEngine's exact timeout budget so re-running has identical resilience characteristics to first-running
+- *Synthesis named patterns rerun* uses `rerun:synthesis` (120s) — there's no corresponding label in the first-run path because named patterns are bundled into `domain:synthesis` there. `rerun:synthesis` is the right label
+- *Blueprint rerun* inherits its labels from `blueprintSplitCall.js` (skeleton/expansion/criteria) via the Phase-4 callback wiring — no new labels needed
+
+**Acceptance:**
+- ✅ AT 5.A (Functional preservation) — Public API `(runId, onProgress) → { success, errors }` unchanged. All prompts unchanged. Validation/normalization/render_md/finalization writes unchanged. Status logic unchanged. Append-only `retry_log` continuity across multiple reruns preserved (seeded from existing array)
+- ✅ AT 5.B (Resilience activated) — Intersection calls bounded at 90s × 2 retries each. Named-patterns call bounded at 120s × 2 retries. Blueprint split-call already bounded per Phase 4 — now also surfaces retries into `retry_log` via the new callback wiring. Empty-response detection in `callLLMResilient` catches stale-response failures that previously hung silently
+- ✅ AT 5.C (Persistence isolation) — Heartbeat/retry-log writes are fire-and-forget with try/catch swallowing — a transient DB write failure cannot kill an in-flight rerun. The main `Run.update` writes for `synthesis` / `blueprint` / `status` / `render_md` retain their original semantics
+
+**Files NOT touched (verified):**
+- `RerunControls.jsx`, `pages/Results.jsx` — UI callers; no API change required
+- `executeBlueprintSplitCall` — Phase 4 already accepts the new callbacks
+- All prompt builders, parsers, schema validation
+
+**Phase 5 cross-cutting observation:**
+Three modules now use the same `recordRetry` / `heartbeat` closure-helper pattern (ExecutionEngine, rerunSynthesis, rerunBlueprint). This is a candidate for extraction to `components/janus/resilienceHelpers.js` in a future hygiene pass — but **NOT now**. The duplication is currently isolated, readable, and clearly Phase-tagged. Extraction would be premature DRY before Phase 6 validation confirms the pattern is correct in production.
+
+**Next phase (Phase 6 — Validation & Verification):**
+- End-to-end test: trigger a Standard mode run, observe `current_step` advancing through `domain:corpus` → `domain:cogito` → ... → `blueprint:expansion`, with `last_heartbeat` timestamps updating
+- Failure-injection test: manually slow an LLM call past its TIMEOUT_MATRIX budget, verify `retry_log` gets entries with `will_retry: true` then `will_retry: false`, and verify the existing `domainErrors` flow captures the labeled error message
+- Rerun test: trigger a synthesis rerun on a completed run; verify intersection heartbeats fire and that `retry_log` is appended-to (not overwritten)
+- Phase 7 (UI surfacing of `retry_log` / `current_step` in Diagnostics page) follows only after Phase 6 confirms the data is flowing correctly
 
 ---
 

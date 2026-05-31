@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "./janusSchema";
 import { generateMarkdown } from "./promptUtils";
 import { executeBlueprintSplitCall } from "./blueprintSplitCall";
+import { callLLMResilient } from "./llmTimeout";
 
 // ─── Re-use the LLM call + prompt builders from ExecutionEngine ───
 // We import the module dynamically to avoid circular deps, but the functions
@@ -17,11 +18,15 @@ function safeTruncate(str, max) {
   return str.slice(0, max) + "\n\n[TRUNCATED — original was " + str.length + " chars]";
 }
 
-async function callLLM(prompt) {
-  return await base44.integrations.Core.InvokeLLM({
-    prompt,
-    model: "claude_sonnet_4_6",
-  });
+// IMP-001-R-D-RES Phase 5: Delegates to callLLMResilient for timeout + retry.
+// `callLabel` selects the per-call timeout from TIMEOUT_MATRIX. `onRetry` is
+// forwarded so retry events surface in the Run's retry_log via the per-rerun
+// recordRetry helper built inside each public function.
+async function callLLM(prompt, callLabel, onRetry) {
+  return await callLLMResilient(
+    { prompt, model: "claude_sonnet_4_6" },
+    { callLabel, onRetry }
+  );
 }
 
 function parseLLMResponse(result, expectedKey) {
@@ -217,14 +222,44 @@ export async function rerunSynthesis(runId, onProgress) {
   const intersections = {};
   const errors = [];
 
+  // ─── Phase 5: Resilience persistence helpers (closure-scoped to runId) ───
+  // Mirror of the pattern in ExecutionEngine. Heartbeat writes current_step +
+  // last_heartbeat; recordRetry appends to retry_log via read-modify-write.
+  // Both wrapped in try/catch so persistence failures never break the rerun.
+  const retryLog = Array.isArray(run.retry_log) ? [...run.retry_log] : [];
+  const heartbeat = async (stepLabel) => {
+    try {
+      await base44.entities.Run.update(runId, {
+        current_step: stepLabel,
+        last_heartbeat: new Date().toISOString(),
+      });
+    } catch (_e) { /* diagnostic only */ }
+  };
+  const recordRetry = ({ callLabel, attempt, error, willRetry, nextDelayMs }) => {
+    try {
+      retryLog.push({
+        timestamp: new Date().toISOString(),
+        call_label: callLabel,
+        attempt,
+        error,
+        will_retry: willRetry,
+        next_delay_ms: nextDelayMs,
+      });
+      // Fire-and-forget — we don't await here because onRetry is sync-ish in callLLMResilient
+      base44.entities.Run.update(runId, { retry_log: retryLog }).catch(() => {});
+    } catch (_e) { /* diagnostic only */ }
+  };
+
   // Step 1: Recompute all 6 intersection pairs
   for (let i = 0; i < INTERSECTION_PAIRS.length; i++) {
     const { pair, domains: [dA, dB], model } = INTERSECTION_PAIRS[i];
     onProgress({ domain: `synthesis:${pair}`, status: "running", detail: `Computing intersection ${i + 1}/6: ${pair}`, completedDomains: i, totalDomains: 8 });
+    await heartbeat(`rerun:intersection:${pair}`);
 
     try {
       const prompt = buildIntersectionPrompt(pair, model, dA, dB, run[dA], run[dB], queryText);
-      const result = await callLLM(prompt);
+      // Use the specific intersection label (matches ExecutionEngine timeout budget — 90s)
+      const result = await callLLM(prompt, `intersection:${pair}`, recordRetry);
       const parsed = parseLLMResponse(result, pair);
       if (parsed.data) {
         intersections[pair] = parsed.data;
@@ -243,10 +278,11 @@ export async function rerunSynthesis(runId, onProgress) {
 
   // Step 2: Compute named patterns
   onProgress({ domain: "synthesis:patterns", status: "running", detail: "Computing 4 named emergent patterns...", completedDomains: 6, totalDomains: 8 });
+  await heartbeat("rerun:synthesis:patterns");
 
   try {
     const patternPrompt = buildSynthesisNamedPatternsPrompt(intersections, queryText);
-    const patternResult = await callLLM(patternPrompt);
+    const patternResult = await callLLM(patternPrompt, "rerun:synthesis", recordRetry);
     const patternParsed = parseLLMResponse(patternResult, "synthesis");
 
     if (patternParsed.data) {
@@ -313,7 +349,32 @@ export async function rerunBlueprint(runId, onProgress) {
 
   const errors = [];
 
+  // ─── Phase 5: Same resilience persistence helpers for blueprint rerun ───
+  const retryLog = Array.isArray(run.retry_log) ? [...run.retry_log] : [];
+  const heartbeat = async (stepLabel) => {
+    try {
+      await base44.entities.Run.update(runId, {
+        current_step: stepLabel,
+        last_heartbeat: new Date().toISOString(),
+      });
+    } catch (_e) { /* diagnostic only */ }
+  };
+  const recordRetry = ({ callLabel, attempt, error, willRetry, nextDelayMs }) => {
+    try {
+      retryLog.push({
+        timestamp: new Date().toISOString(),
+        call_label: callLabel,
+        attempt,
+        error,
+        will_retry: willRetry,
+        next_delay_ms: nextDelayMs,
+      });
+      base44.entities.Run.update(runId, { retry_log: retryLog }).catch(() => {});
+    } catch (_e) { /* diagnostic only */ }
+  };
+
   // Use split-call architecture — 3 focused sub-calls instead of one monolithic call
+  // Phase 5: pass onRetry + onHeartbeat callbacks (split-call already accepts these from Phase 4)
   const { data: bpData, errors: bpErrors } = await executeBlueprintSplitCall({
     source: run,
     queryText: run.query_text,
@@ -321,6 +382,8 @@ export async function rerunBlueprint(runId, onProgress) {
     noveltyDial: run.novelty_dial || "medium",
     outputMode: run.output_mode || "Blueprint",
     onProgress,
+    onRetry: recordRetry,
+    onHeartbeat: heartbeat,
   });
 
   errors.push(...bpErrors);
