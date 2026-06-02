@@ -134,9 +134,16 @@ export const TIMEOUT_MATRIX = {
 
   // Core SME domains — complex JSON output
   "domain:corpus":         120000,
-  "domain:cogito":         120000,
+  // IMP-002 Phase -1.5 Path X — cogito raised from 120s → 240s. Two consecutive
+  // Standard runs (6a1f3dc0… and 6a1f44f4…) exhausted 3×120s attempts on this
+  // domain due to prompt size (corpus + intersections accumulate here). 240s
+  // matches blueprint:expansion budget and is empirically grounded.
+  "domain:cogito":         240000,
   "domain:animus":          90000,
-  "domain:actus":          120000,
+  // IMP-002 Phase -1.5 Path X — actus raised from 120s → 240s. Inherits the
+  // same accumulated context as cogito, plus animus injection. Same failure
+  // pattern observed across both retry runs.
+  "domain:actus":          240000,
   "domain:synthesis":      120000,
 
   // Intersection pairs — smaller scope
