@@ -3,7 +3,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // TEMPORARY instrumentation for Phase -1 only. Wraps executeJanus with the
 // prompt-hash recorder enabled, awaits all hash writes, then persists hashes
-// to Run._debug_prompt_hashes. Removed entirely at subtask -1.8.
+// to Run.debug_prompt_hashes (renamed from _debug_prompt_hashes — Base44
+// rejects entity fields with leading underscores). Removed entirely at
+// subtask -1.8.
 //
 // Guarantees (per Daionae directive on -1.5 approval):
 //   1. AWAITABLE FLUSH — all async digest+record promises are awaited via
@@ -32,7 +34,7 @@ import { buildPrompt, generateMarkdown } from "./promptUtils";
 
 /**
  * Run executeJanus with prompt-hash capture enabled, then persist the hash
- * list into Run._debug_prompt_hashes. The recorder is unconditionally
+ * list into Run.debug_prompt_hashes. The recorder is unconditionally
  * uninstalled and the queue cleared in a `finally` block.
  *
  * @param {object} params - Same shape as executeJanus params
@@ -95,7 +97,7 @@ export async function captureGoldenRun(params, onProgress = () => {}, opts = {})
   if (runResult?.runId) {
     try {
       await base44.entities.Run.update(runResult.runId, {
-        _debug_prompt_hashes: hashes,
+        debug_prompt_hashes: hashes,
       });
     } catch (e) {
       persistError = e?.message || String(e);
@@ -107,7 +109,7 @@ export async function captureGoldenRun(params, onProgress = () => {}, opts = {})
     success: !!runResult?.success,
     errors: [
       ...(runResult?.errors || []),
-      ...(persistError ? [`_debug_prompt_hashes persist failed: ${persistError}`] : []),
+      ...(persistError ? [`debug_prompt_hashes persist failed: ${persistError}`] : []),
     ],
     hashCount: hashes.length,
     flushed: hashes.length,

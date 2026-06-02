@@ -942,9 +942,9 @@
         }
       }
     },
-    "_debug_prompt_hashes": {
+    "debug_prompt_hashes": {
       "type": "array",
-      "description": "IMP-002-R-D-SRV Phase -1 \u2014 TEMPORARY field used only during golden run capture. Stores SHA-256 hashes of each LLM prompt issued during the run, in invocation order, for fidelity comparison across browser and server execution paths. WILL BE REMOVED at end of Phase -1 (subtask -1.8). Do not depend on this field. Optional; absent on any run not captured during Phase -1.",
+      "description": "IMP-002-R-D-SRV Phase -1 \u2014 TEMPORARY field used only during golden run capture. Stores SHA-256 hashes of each LLM prompt issued during the run, in invocation order, for fidelity comparison across browser and server execution paths. Renamed from _debug_prompt_hashes to comply with Base44 entity field naming (no leading underscore). WILL BE REMOVED at end of Phase -1 (subtask -1.8). Do not depend on this field. Optional; absent on any run not captured during Phase -1.",
       "items": {
         "type": "object",
         "properties": {

@@ -366,7 +366,7 @@ behavioral regression** vs current production.
 **Deliverable:** Captured golden runs + comparison utility.
 
 **Method:**
-1. **Temporarily** add an optional `_debug_prompt_hashes` field to Run schema
+1. **Temporarily** add an optional `debug_prompt_hashes` field to Run schema (no leading underscore — Base44 entity field naming constraint)
    (or write to a side-table). Wrap `callLLMResilient` with a passthrough that
    writes SHA-256 hashes of each prompt to this field. **Marked clearly as
    temporary; removed after Phase -1.**
@@ -394,7 +394,7 @@ behavioral regression** vs current production.
 both status `completed`.
 **Acceptance Test -1.B:** Self-diff returns "perfect match."
 **Acceptance Test -1.C:** Prompt-hash capture wrapper removed; verified by
-grep + a follow-up Standard run that does not write `_debug_prompt_hashes`.
+grep + a follow-up Standard run that does not write `debug_prompt_hashes`.
 
 **Gate:** MUST pass before any other phase.
 

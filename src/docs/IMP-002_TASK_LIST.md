@@ -26,7 +26,7 @@
 
 **Goal:** Establish immutable baselines before any refactor begins.
 
-- [ ] **-1.1** Add **temporary** optional field `_debug_prompt_hashes` to
+- [ ] **-1.1** Add **temporary** optional field `debug_prompt_hashes` to
   `entities/Run.json` (clearly marked as temp; will be removed at -1.7)
 - [ ] **-1.2** Create `functions/captureGoldenRun.js` — backend function that
   reads a specified Run by ID and writes its complete JSON to `docs/golden_runs/`
@@ -39,7 +39,7 @@
   - `validation_errors` content
   - `error_message`: presence-only (not byte-identical)
 - [ ] **-1.4** Add **temporary** passthrough wrapper around `callLLMResilient`
-  that writes SHA-256 of each prompt to `_debug_prompt_hashes` (clearly
+  that writes SHA-256 of each prompt to `debug_prompt_hashes` (clearly
   marked; will be removed at -1.7)
 - [ ] **-1.5** Submit Standard golden query via current browser path:
   *"Design a resilient distributed cache layer for high-traffic API responses."*
@@ -51,18 +51,18 @@
   `docs/golden_runs/FULL_v1.json`
 - [ ] **-1.7** Run `compareToGolden` on each captured run against itself
   (sanity check the comparator returns "perfect match")
-- [ ] **-1.8** **Remove** the temporary `_debug_prompt_hashes` field from
+- [ ] **-1.8** **Remove** the temporary `debug_prompt_hashes` field from
   schema and the temporary prompt-hash wrapper from the engine. Verify
   removal cleanly.
 - [ ] **-1.9** Run one more Standard query post-removal to confirm no
-  collateral damage; confirm `_debug_prompt_hashes` is absent
+  collateral damage; confirm `debug_prompt_hashes` is absent
 
 **Acceptance Tests:**
 - [ ] **AT -1.A** — Two golden runs exist in `docs/golden_runs/`, both
   status `completed`
 - [ ] **AT -1.B** — Self-diff via `compareToGolden` returns "perfect match"
 - [ ] **AT -1.C** — Temporary capture wrapper removed; verified by grep +
-  post-removal Standard run shows no `_debug_prompt_hashes` field
+  post-removal Standard run shows no `debug_prompt_hashes` field
 
 **PHASE -1 COMPLETE WHEN:** All subtasks above checked AND AT -1.A + -1.B + -1.C pass
 

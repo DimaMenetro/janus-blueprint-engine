@@ -161,7 +161,7 @@ export default function GoldenRunCapture() {
           )}
           <div style={{ fontSize: 10, color: t.muted, marginTop: 4 }}>
             Next: call <code>captureGoldenRun</code> backend function with this runId to archive the
-            baseline JSON. Hashes are stored on <code>Run._debug_prompt_hashes</code>. Raw prompts are
+            baseline JSON. Hashes are stored on <code>Run.debug_prompt_hashes</code>. Raw prompts are
             never persisted by this flow.
           </div>
         </div>

@@ -11,7 +11,7 @@
  *     Run property
  *   - Array lengths for steps, intersections, claims, recommendations,
  *     subdomains, etc.
- *   - Prompt hashes from _debug_prompt_hashes (if both records carry them)
+ *   - Prompt hashes from debug_prompt_hashes (if both records carry them)
  *   - render_md byte-length delta within ±1% tolerance
  *   - validation_errors content equality
  *   - error_message presence-only (NOT byte-identical — stack traces
@@ -73,7 +73,7 @@ const OPTIONAL_FIELDS = [
   'current_step',
   'last_heartbeat',
   'retry_log',
-  '_debug_prompt_hashes',
+  'debug_prompt_hashes',
 ];
 
 // Array-length parity checks. Each entry: { path, label }
@@ -277,21 +277,22 @@ function compareRuns(golden, candidate) {
     });
   }
 
-  // ─── 9. _debug_prompt_hashes parity (Phase -1 only) ───
+  // ─── 9. debug_prompt_hashes parity (Phase -1 only) ───
   // If both runs carry prompt hashes, compare them call-by-call.
   // If only one carries them, that's a mismatch (expected during Phase -1
   // self-diff, but a signal during cross-environment comparisons).
-  const gHashes = Array.isArray(golden?._debug_prompt_hashes)
-    ? golden._debug_prompt_hashes
+  // (Renamed from _debug_prompt_hashes — Base44 rejects leading-underscore fields.)
+  const gHashes = Array.isArray(golden?.debug_prompt_hashes)
+    ? golden.debug_prompt_hashes
     : null;
-  const cHashes = Array.isArray(candidate?._debug_prompt_hashes)
-    ? candidate._debug_prompt_hashes
+  const cHashes = Array.isArray(candidate?.debug_prompt_hashes)
+    ? candidate.debug_prompt_hashes
     : null;
   if (gHashes && cHashes) {
     totalChecks++;
     if (gHashes.length !== cHashes.length) {
       diffs.push({
-        path: '_debug_prompt_hashes',
+        path: 'debug_prompt_hashes',
         kind: 'prompt_hash_count_mismatch',
         expected: gHashes.length,
         actual: cHashes.length,
@@ -302,7 +303,7 @@ function compareRuns(golden, candidate) {
         const c = cHashes[i] || {};
         if (g.call_label !== c.call_label) {
           diffs.push({
-            path: `_debug_prompt_hashes[${i}].call_label`,
+            path: `debug_prompt_hashes[${i}].call_label`,
             kind: 'prompt_hash_label_mismatch',
             expected: g.call_label,
             actual: c.call_label,
@@ -310,7 +311,7 @@ function compareRuns(golden, candidate) {
         }
         if (g.prompt_hash_sha256 !== c.prompt_hash_sha256) {
           diffs.push({
-            path: `_debug_prompt_hashes[${i}].prompt_hash_sha256`,
+            path: `debug_prompt_hashes[${i}].prompt_hash_sha256`,
             kind: 'prompt_hash_mismatch',
             expected: g.prompt_hash_sha256,
             actual: c.prompt_hash_sha256,
