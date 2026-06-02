@@ -38,17 +38,27 @@ import { base44 } from "@/api/base44Client";
 // ─────────────────────────────────────────────────────────────────────────────
 
 let __promptHashRecorder = null;
+// IMP-002 Phase -1.5 — Awaitable queue of in-flight digest+record promises.
+// Each call to __recordPromptHashIfEnabled enqueues its returned promise here
+// so the capture-flow caller can await all writes before exporting. The queue
+// is module-scoped (acceptable ONLY as Phase -1 temporary instrumentation)
+// and MUST be cleared in a finally block by the capture flow to prevent
+// leakage across runs in warm runtimes. Removal at subtask -1.8.
+let __pendingHashWrites = [];
 
 /**
  * IMP-002-R-D-SRV Phase -1 ONLY.
- * Install (or clear) a callback that receives `{ callLabel, prompt_sha256,
- * prompt_length, timestamp }` for every successful LLM call.
+ * Install (or clear) a callback that receives `{ call_label, prompt_hash_sha256,
+ * prompt_length, attempt, timestamp }` for every successful LLM call.
  *
  * Pass `null` to disable. Default state is disabled.
  *
+ * The recorder is invoked asynchronously (digest is async). Use
+ * `flushPromptHashes()` before reading any recorded data to ensure all
+ * in-flight writes have completed.
+ *
  * Failures inside the recorder are swallowed — recording must NEVER affect
- * pipeline behavior. Recording happens fire-and-forget after a successful
- * call returns.
+ * pipeline behavior.
  *
  * @param {((entry: object) => void) | null} fn
  */
@@ -56,28 +66,63 @@ export function setPromptHashRecorder(fn) {
   __promptHashRecorder = typeof fn === "function" ? fn : null;
 }
 
-async function __recordPromptHashIfEnabled(callLabel, invokeParams, attempt) {
+/**
+ * IMP-002-R-D-SRV Phase -1 ONLY.
+ * Await all pending prompt-hash digest+record operations, bounded by `timeoutMs`.
+ * Returns the number of writes that completed within the bound. Never throws —
+ * any settled rejection is counted as completed.
+ *
+ * The capture flow MUST call this after `executeJanus` resolves and BEFORE
+ * exporting/comparing the Run, so async fire-and-forget writes cannot lag past
+ * the export boundary.
+ *
+ * @param {number} [timeoutMs=5000]
+ * @returns {Promise<{ flushed: number, timedOut: boolean }>}
+ */
+export async function flushPromptHashes(timeoutMs = 5000) {
+  const pending = __pendingHashWrites;
+  if (pending.length === 0) return { flushed: 0, timedOut: false };
+  let timedOut = false;
+  const timer = new Promise((resolve) => setTimeout(() => { timedOut = true; resolve(); }, timeoutMs));
+  await Promise.race([Promise.allSettled(pending), timer]);
+  return { flushed: pending.length, timedOut };
+}
+
+/**
+ * IMP-002-R-D-SRV Phase -1 ONLY.
+ * Clear the in-flight queue. The capture flow MUST call this from a `finally`
+ * block (alongside `setPromptHashRecorder(null)`) to prevent module-level
+ * state leakage across runs in warm runtimes.
+ */
+export function clearPromptHashQueue() {
+  __pendingHashWrites = [];
+}
+
+function __recordPromptHashIfEnabled(callLabel, invokeParams, attempt) {
   const recorder = __promptHashRecorder;
   if (!recorder) return;
-  try {
-    const promptStr = typeof invokeParams?.prompt === "string" ? invokeParams.prompt : "";
-    const encoder = new TextEncoder();
-    const buf = await crypto.subtle.digest("SHA-256", encoder.encode(promptStr));
-    const bytes = new Uint8Array(buf);
-    let hex = "";
-    for (let i = 0; i < bytes.length; i++) {
-      hex += bytes[i].toString(16).padStart(2, "0");
+  const writePromise = (async () => {
+    try {
+      const promptStr = typeof invokeParams?.prompt === "string" ? invokeParams.prompt : "";
+      const encoder = new TextEncoder();
+      const buf = await crypto.subtle.digest("SHA-256", encoder.encode(promptStr));
+      const bytes = new Uint8Array(buf);
+      let hex = "";
+      for (let i = 0; i < bytes.length; i++) {
+        hex += bytes[i].toString(16).padStart(2, "0");
+      }
+      recorder({
+        call_label: callLabel,
+        prompt_hash_sha256: hex,
+        prompt_length: promptStr.length,
+        attempt: attempt,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (_e) {
+      // Hashing or recorder failure must never break the pipeline.
     }
-    recorder({
-      call_label: callLabel,
-      prompt_hash_sha256: hex,
-      prompt_length: promptStr.length,
-      attempt: attempt,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (_e) {
-    // Hashing or recorder failure must never break the pipeline.
-  }
+  })();
+  __pendingHashWrites.push(writePromise);
 }
 
 // ─── TIMEOUT MATRIX ──────────────────────────────────────────────────────────

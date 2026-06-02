@@ -6,6 +6,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { light, dark, glassCard, glassSurface, glassBtn } from "@/components/ui/LiquidGlass";
 import { navigationLogger } from "@/components/diagnostics/NavigationLogger";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
+import GoldenRunCapture from "@/components/diagnostics/GoldenRunCapture";
 
 const STATUS_CONFIG = {
   PASS: { icon: CheckCircle2, label: "PASS", color: (d) => d ? "#4ade80" : "#16a34a", bg: (d) => d ? "rgba(74,222,128,0.1)" : "rgba(240,253,244,0.6)" },
@@ -116,6 +117,9 @@ export default function Diagnostics() {
           <span style={{ fontSize: 11, color: t.muted }}>Current: <span style={{ fontFamily: "monospace", color: t.title }}>{location.pathname}</span></span>
         </div>
       </motion.div>
+
+      {/* IMP-002 Phase -1.5 — Golden Run Capture (TEMP, removed at -1.8) */}
+      <GoldenRunCapture />
 
       {/* Route tests */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}
