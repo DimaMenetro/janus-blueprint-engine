@@ -20,6 +20,65 @@
 
 import { base44 } from "@/api/base44Client";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// IMP-002-R-D-SRV Phase -1 — TEMPORARY prompt-hash capture hook
+// ─────────────────────────────────────────────────────────────────────────────
+// Used ONLY during Phase -1 golden run capture to record the SHA-256 of every
+// prompt that successfully produced a result. The recorder is opt-in: when
+// `__promptHashRecorder` is null (the default), this wrapper is a no-op and
+// behavior is byte-identical to the pre-Phase-1 code.
+//
+// REMOVAL CHECKLIST (subtask -1.8):
+//   - Delete `__promptHashRecorder` module variable
+//   - Delete `setPromptHashRecorder` export
+//   - Delete `__recordPromptHashIfEnabled` helper
+//   - Delete the single `__recordPromptHashIfEnabled(...)` call inside
+//     callLLMResilient (search for the "IMP-002 Phase -1" marker)
+//   - Delete this comment block
+// ─────────────────────────────────────────────────────────────────────────────
+
+let __promptHashRecorder = null;
+
+/**
+ * IMP-002-R-D-SRV Phase -1 ONLY.
+ * Install (or clear) a callback that receives `{ callLabel, prompt_sha256,
+ * prompt_length, timestamp }` for every successful LLM call.
+ *
+ * Pass `null` to disable. Default state is disabled.
+ *
+ * Failures inside the recorder are swallowed — recording must NEVER affect
+ * pipeline behavior. Recording happens fire-and-forget after a successful
+ * call returns.
+ *
+ * @param {((entry: object) => void) | null} fn
+ */
+export function setPromptHashRecorder(fn) {
+  __promptHashRecorder = typeof fn === "function" ? fn : null;
+}
+
+async function __recordPromptHashIfEnabled(callLabel, invokeParams) {
+  const recorder = __promptHashRecorder;
+  if (!recorder) return;
+  try {
+    const promptStr = typeof invokeParams?.prompt === "string" ? invokeParams.prompt : "";
+    const encoder = new TextEncoder();
+    const buf = await crypto.subtle.digest("SHA-256", encoder.encode(promptStr));
+    const bytes = new Uint8Array(buf);
+    let hex = "";
+    for (let i = 0; i < bytes.length; i++) {
+      hex += bytes[i].toString(16).padStart(2, "0");
+    }
+    recorder({
+      call_label: callLabel,
+      prompt_sha256: hex,
+      prompt_length: promptStr.length,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (_e) {
+    // Hashing or recorder failure must never break the pipeline.
+  }
+}
+
 // ─── TIMEOUT MATRIX ──────────────────────────────────────────────────────────
 // Per-call-type timeout in milliseconds. Keys are stable labels passed by
 // callers. Unknown labels fall back to DEFAULT_TIMEOUT_MS.
@@ -132,6 +191,9 @@ export async function callLLMResilient(invokeParams, options = {}) {
       if (isEmptyResponse(result)) {
         throw new Error(`${callLabel}: Empty response from LLM`);
       }
+
+      // IMP-002 Phase -1 TEMP — opt-in prompt-hash capture (no-op when recorder unset)
+      __recordPromptHashIfEnabled(callLabel, invokeParams);
 
       return result;
     } catch (err) {
