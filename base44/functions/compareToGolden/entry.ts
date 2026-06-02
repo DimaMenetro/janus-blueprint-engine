@@ -308,12 +308,12 @@ function compareRuns(golden, candidate) {
             actual: c.call_label,
           });
         }
-        if (g.prompt_sha256 !== c.prompt_sha256) {
+        if (g.prompt_hash_sha256 !== c.prompt_hash_sha256) {
           diffs.push({
-            path: `_debug_prompt_hashes[${i}].prompt_sha256`,
+            path: `_debug_prompt_hashes[${i}].prompt_hash_sha256`,
             kind: 'prompt_hash_mismatch',
-            expected: g.prompt_sha256,
-            actual: c.prompt_sha256,
+            expected: g.prompt_hash_sha256,
+            actual: c.prompt_hash_sha256,
             call_label: g.call_label,
           });
         }

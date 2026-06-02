@@ -952,13 +952,17 @@
             "type": "string",
             "description": "Stable label from TIMEOUT_MATRIX identifying the LLM call"
           },
-          "prompt_sha256": {
+          "prompt_hash_sha256": {
             "type": "string",
             "description": "Hex-encoded SHA-256 of the prompt string sent to InvokeLLM"
           },
           "prompt_length": {
             "type": "number",
             "description": "Character length of the prompt (sanity check)"
+          },
+          "attempt": {
+            "type": "number",
+            "description": "1-indexed attempt number on which this prompt successfully produced a non-empty result"
           },
           "timestamp": {
             "type": "string",

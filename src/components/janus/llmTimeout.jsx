@@ -56,7 +56,7 @@ export function setPromptHashRecorder(fn) {
   __promptHashRecorder = typeof fn === "function" ? fn : null;
 }
 
-async function __recordPromptHashIfEnabled(callLabel, invokeParams) {
+async function __recordPromptHashIfEnabled(callLabel, invokeParams, attempt) {
   const recorder = __promptHashRecorder;
   if (!recorder) return;
   try {
@@ -70,8 +70,9 @@ async function __recordPromptHashIfEnabled(callLabel, invokeParams) {
     }
     recorder({
       call_label: callLabel,
-      prompt_sha256: hex,
+      prompt_hash_sha256: hex,
       prompt_length: promptStr.length,
+      attempt: attempt,
       timestamp: new Date().toISOString(),
     });
   } catch (_e) {
@@ -193,7 +194,7 @@ export async function callLLMResilient(invokeParams, options = {}) {
       }
 
       // IMP-002 Phase -1 TEMP — opt-in prompt-hash capture (no-op when recorder unset)
-      __recordPromptHashIfEnabled(callLabel, invokeParams);
+      __recordPromptHashIfEnabled(callLabel, invokeParams, attempt);
 
       return result;
     } catch (err) {
