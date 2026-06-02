@@ -16,7 +16,7 @@ import { light, dark, glassCard, glassSurface, glassBtn } from "@/components/ui/
 import { captureGoldenRun } from "@/components/janus/phase1Capture";
 
 const DEFAULT_QUERY =
-  "Design a minimal but production-grade health check for a distributed key-value store.";
+  "Design a resilient distributed cache layer for high-traffic API responses.";
 
 export default function GoldenRunCapture() {
   const { isDark } = useTheme();
