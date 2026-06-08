@@ -155,9 +155,9 @@ export const TIMEOUT_MATRIX = {
   "intersection:animus_x_actus":    90000,
 
   // Blueprint sub-calls — expansion is the largest (root cause of historical hang)
-  "blueprint:skeleton":    120000,
-  "blueprint:expansion":   150000,
-  "blueprint:criteria":     90000,
+  "blueprint:skeleton":    240000,
+  "blueprint:expansion":   240000,
+  "blueprint:criteria":    180000,
 
   // Rerun labels mirror their domain counterparts
   "rerun:intersection":     90000,
