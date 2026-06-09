@@ -1,0 +1,157 @@
+{
+  "label": "STANDARD_v1",
+  "schema_version": "1.0",
+  "captured_at": "2026-06-09T13:22:17.302Z",
+  "run_id": "6a280c9bf2d582da07c32fda",
+  "run_meta": {
+    "query_text": "Design a resilient distributed cache layer for high-traffic API responses.",
+    "execution_mode": "standard",
+    "output_mode": "Blueprint",
+    "blueprint_level": "L2",
+    "novelty_dial": "medium",
+    "refresh_enabled": false,
+    "status": "completed",
+    "created_date": "2026-06-09T12:52:43.882000",
+    "updated_date": "2026-06-09T13:15:03.376000"
+  },
+  "gates": {
+    "g1_status_completed": true,
+    "g2_all_domains_present": true,
+    "g3_render_md_present": true,
+    "g4_raw_json_nontrivial": true,
+    "g5_hashes_present": true,
+    "g6_all_labels_present": true,
+    "g7_all_hex_valid": true,
+    "g8_no_fatal_errors": true
+  },
+  "all_pass": true,
+  "gate_details": {
+    "missing_labels": [],
+    "invalid_hash_count": 0,
+    "fatal_error_count": 0
+  },
+  "field_sizes": {
+    "render_md": 60040,
+    "raw_json": 189628
+  },
+  "content_hashes": {
+    "render_md_sha256": "4166dd9ca8d40ad1a37ef876e6a423ce22f47e4c4d8d7330750151e7a7fa098c",
+    "raw_json_sha256": "d4e902f4ca3669b3eead6f2c95d4628cb0589bc417bb8b6b85a6d5ee5ab7fca8"
+  },
+  "structural_fingerprint": {
+    "corpus": {
+      "constraints_count": 6,
+      "feasibility_notes_count": 5,
+      "subdomain_keys": [
+        "ai_ml",
+        "cybersecurity",
+        "data_engineering",
+        "distributed_systems",
+        "neuroscience",
+        "physics",
+        "systems_engineering",
+        "theoretical_physics"
+      ]
+    },
+    "cogito": {
+      "claims_count": 15,
+      "reasoning_map_count": 13,
+      "graphrag_connections_count": 15,
+      "causal_chains_count": 10,
+      "neuro_symbolic_insights_count": 8
+    },
+    "animus": {
+      "boundary_checks_count": 15,
+      "disallowed_moves_count": 8,
+      "safety_notes_count": 8,
+      "attractor_states_count": 5,
+      "has_risk_analysis": true
+    },
+    "actus": {
+      "recommendations_count": 10,
+      "has_strategic_plan": true,
+      "has_game_theory_analysis": true,
+      "integration_contracts_count": 8
+    },
+    "synthesis": null,
+    "blueprint": {
+      "assumptions_count": 10,
+      "alternative_approaches_count": 0,
+      "steps_count": 9,
+      "success_criteria_count": 23,
+      "risk_register_count": 22,
+      "has_goal": true
+    }
+  },
+  "prompt_hashes": [
+    {
+      "prompt_hash_sha256": "41e853791d2d05e557da13af8f666acd9f3df04200124cdf0a946cb760915128",
+      "call_label": "domain:corpus",
+      "prompt_length": 7837,
+      "attempt": 1,
+      "timestamp": "2026-06-09T12:54:32.919Z"
+    },
+    {
+      "prompt_hash_sha256": "9bfd21f0290ae3ec76fef9e828c8fa163a2ba10733f109c59ae0b03661d9957d",
+      "call_label": "domain:cogito",
+      "prompt_length": 25708,
+      "attempt": 1,
+      "timestamp": "2026-06-09T12:57:48.843Z"
+    },
+    {
+      "prompt_hash_sha256": "b09305745dc603ee1747dad0430aef83cd33a98897c2e601826b392edda37ffc",
+      "call_label": "domain:animus",
+      "prompt_length": 18420,
+      "attempt": 2,
+      "timestamp": "2026-06-09T13:00:45.390Z"
+    },
+    {
+      "prompt_hash_sha256": "996e85f80861ba328267ad2dec5b5ac4879e951738704eb7f25080d9bd0abd51",
+      "call_label": "domain:actus",
+      "prompt_length": 22029,
+      "attempt": 2,
+      "timestamp": "2026-06-09T13:08:36.794Z"
+    },
+    {
+      "prompt_hash_sha256": "5520f16a67e59a91b0dc9239daa17a9764516c7a498e88cd672d7daf21244775",
+      "call_label": "blueprint:skeleton",
+      "prompt_length": 6916,
+      "attempt": 1,
+      "timestamp": "2026-06-09T13:10:34.892Z"
+    },
+    {
+      "prompt_hash_sha256": "2abe7b8345eebe334f05ea7d911906bd2ce49b06c3ac88e5d00296b551cf8a7a",
+      "call_label": "blueprint:expansion",
+      "prompt_length": 3236,
+      "attempt": 1,
+      "timestamp": "2026-06-09T13:13:04.110Z"
+    },
+    {
+      "prompt_hash_sha256": "d7a7ffb125472007beacd17208cef50fb4a73607381fcbac09b647fe1b88a98f",
+      "call_label": "blueprint:criteria",
+      "prompt_length": 7233,
+      "attempt": 1,
+      "timestamp": "2026-06-09T13:15:01.428Z"
+    }
+  ],
+  "retry_log": [
+    {
+      "call_label": "domain:animus",
+      "error": "domain:animus: LLM call exceeded timeout of 90000ms",
+      "will_retry": true,
+      "attempt": 1,
+      "next_delay_ms": 3000,
+      "timestamp": "2026-06-09T12:59:20.087Z"
+    },
+    {
+      "call_label": "domain:actus",
+      "error": "domain:actus: LLM call exceeded timeout of 240000ms",
+      "will_retry": true,
+      "attempt": 1,
+      "next_delay_ms": 3000,
+      "timestamp": "2026-06-09T13:04:46.715Z"
+    }
+  ],
+  "validation_errors": [],
+  "_notes": "Full Run payload retrievable via base44.asServiceRole.entities.Run.get(run_id). compareToGolden supports runId-based fetch for byte-level comparison. Do not delete the Run record referenced by this card without first migrating to an embedded archive."
+}
