@@ -7,6 +7,9 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+// IMP-002 Emergency Backend Lane — explicit imports (not auto-registered in pages.config)
+import BackendRun from './pages/BackendRun';
+import BackendRuns from './pages/BackendRuns';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -58,6 +61,13 @@ const AuthenticatedApp = () => {
           }
         />
       ))}
+      {/* IMP-002 Emergency Backend Lane — explicit routes, layout-wrapped like the loop */}
+      <Route path="/BackendRun" element={
+        <LayoutWrapper currentPageName="BackendRun"><BackendRun /></LayoutWrapper>
+      } />
+      <Route path="/BackendRuns" element={
+        <LayoutWrapper currentPageName="BackendRuns"><BackendRuns /></LayoutWrapper>
+      } />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

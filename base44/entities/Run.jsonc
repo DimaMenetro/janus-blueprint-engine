@@ -59,12 +59,43 @@
       "type": "string",
       "enum": [
         "idle",
+        "queued",
         "running",
         "validating",
         "completed",
         "failed"
       ],
-      "default": "idle"
+      "default": "idle",
+      "description": "Run lifecycle status. 'queued' added by IMP-002 emergency backend lane."
+    },
+    "execution_owner": {
+      "type": "string",
+      "description": "IMP-002 emergency backend lane \u2014 which side owns execution. 'browser' (legacy /NewQuery path) | 'server' (functions/runJanusPipeline). Optional; absent on legacy runs."
+    },
+    "queued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "IMP-002 \u2014 ISO timestamp when the Run was first inserted as queued. Optional; only set for server-owned runs."
+    },
+    "claimed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "IMP-002 \u2014 ISO timestamp when functions/runJanusPipeline atomically claimed this Run for execution. Optional."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "IMP-002 \u2014 ISO timestamp when pipeline execution actually began (post-claim). Optional."
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "IMP-002 \u2014 ISO timestamp when the Run reached a terminal status (completed or failed). Optional."
+    },
+    "reaper_strikes": {
+      "type": "number",
+      "default": 0,
+      "description": "IMP-002 \u2014 count of times an automated reaper has flagged this Run as stalled. Reserved for future use; reaper itself is deferred from emergency scope."
     },
     "validation_errors": {
       "type": "array",
@@ -911,7 +942,7 @@
     },
     "retry_log": {
       "type": "array",
-      "description": "IMP-001-R-D-RES Phase 2 \u2014 Append-only log of LLM retry events for this run. Each entry captures a timeout or transient failure that was recovered (or exhausted). Optional; absent on legacy runs.",
+      "description": "IMP-001-R-D-RES Phase 2 \u2014 Append-only log of LLM retry events for this run.",
       "items": {
         "type": "object",
         "properties": {
@@ -944,25 +975,21 @@
     },
     "debug_prompt_hashes": {
       "type": "array",
-      "description": "IMP-002-R-D-SRV Phase -1 \u2014 TEMPORARY field used only during golden run capture. Stores SHA-256 hashes of each LLM prompt issued during the run, in invocation order, for fidelity comparison across browser and server execution paths. Renamed from _debug_prompt_hashes to comply with Base44 entity field naming (no leading underscore). WILL BE REMOVED at end of Phase -1 (subtask -1.8). Do not depend on this field. Optional; absent on any run not captured during Phase -1.",
+      "description": "IMP-002-R-D-SRV Phase -1 \u2014 TEMPORARY field used only during golden run capture. Stores SHA-256 hashes of each LLM prompt issued during the run. WILL BE REMOVED at end of Phase -1 (subtask -1.8). Optional.",
       "items": {
         "type": "object",
         "properties": {
           "call_label": {
-            "type": "string",
-            "description": "Stable label from TIMEOUT_MATRIX identifying the LLM call"
+            "type": "string"
           },
           "prompt_hash_sha256": {
-            "type": "string",
-            "description": "Hex-encoded SHA-256 of the prompt string sent to InvokeLLM"
+            "type": "string"
           },
           "prompt_length": {
-            "type": "number",
-            "description": "Character length of the prompt (sanity check)"
+            "type": "number"
           },
           "attempt": {
-            "type": "number",
-            "description": "1-indexed attempt number on which this prompt successfully produced a non-empty result"
+            "type": "number"
           },
           "timestamp": {
             "type": "string",
