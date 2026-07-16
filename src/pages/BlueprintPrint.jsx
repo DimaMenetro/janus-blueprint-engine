@@ -27,20 +27,28 @@ export default function BlueprintPrint() {
 
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [selectedRun, setSelectedRun] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [expandedStep, setExpandedStep] = useState(null);
   const [viewMode, setViewMode] = useState("full");
 
-  useEffect(() => {
-    async function fetchRuns() {
-      const allRuns = await base44.entities.Run.list("-created_date", 50);
-      const withBlueprint = allRuns.filter(r => r.blueprint && r.status === "completed");
-      setRuns(withBlueprint);
+  // Completed runs carry large domain payloads — filter server-side and keep the
+  // batch small so the response can't time out ("Network Error").
+  const fetchRuns = async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const completed = await base44.entities.Run.filter({ status: "completed" }, "-created_date", 15);
+      setRuns(completed.filter(r => r.blueprint));
+    } catch (e) {
+      setLoadError(e?.message || "Network error while loading runs");
+    } finally {
       setLoading(false);
     }
-    fetchRuns();
-  }, []);
+  };
+
+  useEffect(() => { fetchRuns(); }, []);
 
   const queryLabel = (run) => {
     const q = run.query_text || "Untitled";
@@ -272,8 +280,25 @@ export default function BlueprintPrint() {
         </>
       )}
 
+      {/* Load error state with retry */}
+      {loadError && !loading && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          style={{ ...glassSurface(t), padding: "24px 20px", textAlign: "center", marginBottom: 24 }}>
+          <p style={{ fontSize: 13, color: isDark ? "#f87171" : "#dc2626", margin: "0 0 12px" }}>
+            Failed to load runs: {loadError}
+          </p>
+          <button onClick={fetchRuns} style={{
+            padding: "8px 20px", borderRadius: 12, fontSize: 12, fontWeight: 600, cursor: "pointer",
+            color: t.title, background: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.6)",
+            border: `1px solid ${isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
+          }}>
+            Retry
+          </button>
+        </motion.div>
+      )}
+
       {/* Empty state */}
-      {!selectedRun && !loading && (
+      {!selectedRun && !loading && !loadError && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           style={{ ...glassSurface(t), padding: "60px 20px", textAlign: "center" }}>
           <FileText style={{ width: 32, height: 32, color: t.muted, margin: "0 auto 12px" }} />
