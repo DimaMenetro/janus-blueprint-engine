@@ -76,13 +76,46 @@ Fully documented in DOC-BP-IMP-001; summarized here for continuity:
 
 **Status: ALL COMPLETE** (per DOC-BP-IMP-001, Section II).
 
-### Phase 4: Interruption — Backend Refactor Takes Priority (~May–July 2026)
+### Phase 4: Pre-Interruption Design Work (RECOVERED — ~May 2026)
 
-- All effort shifted to the IMP-002 emergency backend lane (server-owned pipeline
-  execution: `runJanusPipeline`, `/BackendRun`, `/BackendRuns`, golden-run capture).
+Recovered July 20, 2026 from an operator-preserved session transcript. Two plans were
+fully designed and analyzed but **never executed** — the backend refactor interrupted
+them at the "awaiting confirmation" stage:
+
+**4a. Fluid Typography Plan (Responsive Text Scaling)**
+- Replace fixed pixel font sizes with a fluid type system using CSS `clamp()`:
+  - `--fluid-title: clamp(18px, 4vw, 24px)`
+  - `--fluid-body: clamp(11px, 2.5vw, 14px)`
+  - `--fluid-label: clamp(9px, 2vw, 11px)`
+- Ratios stay locked (titles ~1.6× body); the schematic shrinks to legible minimums
+  on iPhone and expands on iPad/large displays. No media-query bloat, no breaking changes.
+
+**4b. The Unified Blueprint (BlueprintTab Replacement)**
+- Comparative analysis completed: `BlueprintPrint` was verified as a **direct and
+  comprehensive superset** of the production `BlueprintTab` in `/Results` — every
+  BlueprintTab data point (goal, assumptions, alternatives, steps with
+  effort/time/dependencies/substeps/checklists/acceptance tests/I/O/validation,
+  success criteria, risk register) is covered, plus the interactive visualizations.
+- Decision reached: `BlueprintPrint` **can fully replace** `BlueprintTab` as the
+  official blueprint display, consolidating the UX and eliminating redundancy.
+- Status at interruption: analysis complete, **awaiting operator confirmation** —
+  confirmation never given because the session pivoted to a stalled-run incident.
+
+**4c. The Stalled-Run Incident (trigger for the backend refactor)**
+- A browser-executed blueprint run appeared stuck at step 8/13; diagnosis showed the
+  backend synthesis had completed but the `raw_json` field was left **empty**, so the
+  frontend had nothing to render — the run was effectively lost.
+- Diagnosis confirmed runs must not depend on the operator's phone screen staying
+  awake → this directly motivated the IMP-002 server-owned execution lane
+  (`runJanusPipeline`, `/BackendRun`, `/BackendRuns`, golden-run capture).
+- Note: the display-side answer to truncated/empty `raw_json` was later addressed via
+  `reconstructFullJson` / `reconstructFullMarkdown` (rebuilding exports from domain
+  fields), but 4a and 4b remained unexecuted.
+
+### Phase 4.5: Interruption — Backend Refactor Takes Priority (~May–July 2026)
+
+- All effort shifted to the IMP-002 emergency backend lane.
 - No feature work landed on `/BlueprintPrint` during this window.
-- Design discussions from immediately before this interruption were **not codified**
-  into any artifact — this is the documentation gap DOC-BP-IMP-002 closes.
 
 ### Phase 5: Stability Fix (July 16, 2026)
 
@@ -112,7 +145,28 @@ Fully documented in DOC-BP-IMP-001; summarized here for continuity:
 
 ---
 
-## III. Forward Implementation Plan — Phase 6 (PROPOSED, UNRATIFIED)
+## III. Forward Implementation Plan
+
+### Phase 5A — RECOVERED DESIGN WORK (designed pre-refactor, pending ratification)
+
+These are the genuine "where we left off" items, recovered from the Phase 4 transcript.
+Both are zero-integration-credit.
+
+**5A.1 Fluid Typography System**
+- Implement the `clamp()`-based fluid type variables (see Phase 4a spec) and apply
+  them across `/BlueprintPrint` and its 10 child components
+- Acceptance: schematic legible on iPhone-width viewport; ratios preserved at all sizes
+
+**5A.2 The Unified Blueprint — Replace `BlueprintTab` with the schematic view**
+- Route the Blueprint tab in `/Results` to render the schematic component family
+  (superset verification already complete, Phase 4b)
+- Retire or redirect the standalone sandbox once parity is confirmed
+- Acceptance: `/Results` blueprint tab shows the full schematic; no BlueprintTab data
+  point lost; sandbox behavior preserved during transition
+- ⚠️ Was awaiting operator confirmation at time of interruption — **still requires
+  explicit go-ahead** before execution (per SOP-011-O-D-RAM)
+
+### Phase 6 — NEW CANDIDATES (PROPOSED, UNRATIFIED)
 
 > ⚠️ These items are **candidate features**, not recovered design decisions. They were
 > proposed July 18–20, 2026 based on the current state inventory above. Ratify, amend,
@@ -138,8 +192,9 @@ All items are **zero-integration-credit** — they operate on existing completed
 - Text filter over query labels in the dropdown (client-side, no extra fetching)
 - Acceptance: typing narrows the run list instantly
 
-**Suggested execution order:** 6.3 → 6.2 → 6.1 → 6.4 (graph usability first, export last
-so it captures the improved visuals).
+**Suggested execution order:** Phase 5A first (5A.1 typography → 5A.2 unification, upon
+your confirmation), then 6.3 → 6.2 → 6.1 → 6.4 (graph usability first, export last so it
+captures the improved visuals).
 
 ---
 
