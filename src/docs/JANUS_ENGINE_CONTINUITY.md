@@ -48,7 +48,7 @@ cogito→1 pair, animus→2 pairs, actus→3 pairs. Full mode = 13 steps (7 doma
   writes). `raw_json` (200k cap) and `render_md` (60k cap) are caches; the domain fields
   are the source of truth. Exports rebuild from domain fields via
   `reconstructFullJson` / `reconstructFullMarkdown` (exportUtils.jsx).
-- **Resilience (IMP-001, complete):** callLLMResilient wraps every call with a per-label
+- **Resilience (IMP-001, complete through Phase 6; Phase 7 formal sign-off pending — see §4.6):** callLLMResilient wraps every call with a per-label
   TIMEOUT_MATRIX budget, 3 total attempts, 3s/9s backoff. Heartbeats persist
   current_step + last_heartbeat; retries persist to retry_log and mirror into
   ExecutionContext via onProgress.
@@ -107,18 +107,119 @@ cogito→1 pair, animus→2 pairs, actus→3 pairs. Full mode = 13 steps (7 doma
 - **[LIMIT-1]** BlueprintPrint fetches only 15 most recent completed runs (deliberate —
   payload-size fix, July 2026).
 
+## 4.6 RECONCILED IMPLEMENTATION REGISTER (verified against live code, 2026-08-02)
+
+> Method: every plan's claimed status was checked against source files, the Run schema,
+> deployed functions, registered routes, and preserved artifacts. **Checkboxes in the
+> plan documents are NOT current** — this register supersedes them operationally while
+> the originals are retained as provenance.
+
+### IMP-001-R-D-RES — Pipeline Resilience
+- Phases 1–6: **COMPLETE & CODE-VERIFIED** (llmTimeout.jsx exists w/ TIMEOUT_MATRIX +
+  retry; ExecutionEngine/blueprintSplitCall/rerunEngine all delegate to callLLMResilient;
+  Run schema has current_step/last_heartbeat/retry_log; ExecutionContext has
+  retryCount/lastError/recordRetry). Per-phase completion logs in the doc are accurate.
+- Phase 7 (live validation): **NEVER FORMALLY SIGNED OFF.** Partial evidence exists —
+  completed Standard runs (incl. STANDARD_v1 golden) prove 7.A-equivalent behavior;
+  7.B (Full mode) and 7.C (field inspection sign-off) unrecorded. Doc header still says
+  "PLAN — NOT YET EXECUTED" — **stale**, contradicted by its own §7 checklist and code.
+- Verdict: plan RETAINED as historical record; operationally superseded by this register.
+
+### IMP-002-R-D-SRV — Server Execution (the big divergence)
+Plan checklist shows ALL phases unchecked. Actual verified state:
+- **Phase -1 (golden harness): PARTIAL.** captureGoldenRun + compareToGolden deployed;
+  `docs/golden_runs/STANDARD_v1.json` exists. **FULL_v1.json was never captured.**
+  Teardown subtasks -1.8/-1.9 NOT done: `debug_prompt_hashes` still in Run schema and
+  the temp prompt-hash recorder still lives in llmTimeout.jsx (DEBT-1 confirmed).
+- **Phase 0 (budget probe): NOT DONE.** probeExecutionBudget.js does not exist; no
+  findings; Path A vs HARD decision never made. **RISK-1 remains unquantified — this is
+  the plan's own unresolved decision gate.**
+- **Phase 1 (engine DI + rehydration audit): SUPERSEDED, never executed as planned.**
+  Instead of dependency-injecting the browser engine, the "IMP-002 Emergency Backend
+  Lane" shipped runJanusPipeline as a self-contained byte-preserved PORT of the engine.
+  Consequence: DEBT-2 (dual-maintenance) exists by decision, not accident — but that
+  decision was **never written back into the plan**. REHYDRATION_BOUNDARY_AUDIT.md was
+  never produced (its classification table survives only inside the blueprint §Phase 1;
+  its ARTERY finding — blueprint sub-calls not independently checkpointed — remains TRUE
+  in current code).
+- **Phase 2 (queue schema): COMPLETE & VERIFIED.** queued status, execution_owner,
+  queued_at/claimed_at/started_at/completed_at, reaper_strikes all present, additive,
+  required[] unchanged.
+- **Phase 3 (orchestrator): IMPLEMENTED, NOT VALIDATED.** runJanusPipeline deployed with
+  idempotent claim. Deviations from plan: non-queued claim returns 200 no-op (not 409);
+  auth = any authenticated user (no created_by_id/admin check, no system-token mode —
+  AT 3.E unmet by design absence). ATs 3.A–3.D have no recorded evidence.
+- **Phase 4 (dispatcher): IMPLEMENTED AS DEVIATION.** Direct invocation from a NEW
+  /BackendRun page (+ /BackendRuns list) instead of flag-gated NewQuery. executionMode.js
+  / USE_SERVER_EXECUTION feature flag **never created**. NewQuery untouched.
+- **Phase 4.5 (blueprint checkpointing): NOT DONE** (blueprint sub-calls still
+  closure-staged — verified in both engine copies). Gate decision (Phase 0) never made.
+- **Phase 5 (observer mode): NOT DONE** — coexistence is via parallel pages, not flag.
+- **Phase 6 (reaper): NOT DONE.** reapStaleRuns.js absent; reaper_strikes never written.
+- **Phases 7/8 + cutover: NOT DONE.**
+- Verdict: plan REMAINS VALID as roadmap skeleton but requires a Revision 3.0 amendment
+  recording the emergency-lane deviation. Do NOT restart Phases 2–4 (done/deviated);
+  do NOT mark -1/0 complete (they aren't).
+
+### BLUEPRINT_IMPLEMENTATION_PLAN (Liquid Glass + iOS readiness)
+- **COMPLETE & STILL EFFECTIVE.** LiquidGlass token/factory system, density-aware
+  rendering (useScrollDensity/contentDensity), safe-area handling, WebKit fixes all
+  present and in active use across Layout + BlueprintPrint. RETAIN as visual spec.
+
+### DOC-BP-IMP-002 (BlueprintPrint history & plan)
+- **CURRENT** (maintained through 2026-07-20). Phase 5A (fluid typography, BlueprintTab
+  unification) = recovered design, **pending ratification**. Phase 6 candidates =
+  **proposed, unratified**. Historical suggested order NOT binding.
+
+### Stale/incorrect entries requiring no rework (documentation truth only)
+- IMP-001 header status line; IMP-002 §8 checklist (Phases 2–4 actually done/deviated);
+  IMP-002 "Status: PLANNING". Corrected here; originals preserved as provenance.
+
+### Pending operator decisions
+1. **PQ-1** — SME roster alignment to CP-002 v2.0 Ideal Form (protocol-level).
+2. **BlueprintTab → schematic unification** (5A.2) — explicit authorization required.
+3. **IMP-002 architectural fork ratification:** keep the emergency-lane port (accept
+   DEBT-2, amend plan) vs return to the DI architecture. Affects every future engine change.
+4. **FULL_v1 golden capture** — costs one Full-mode run of credits; needed before any
+   fidelity-gated change to Full-mode behavior.
+
+### Dependency spine (backend → UX)
+Phase 0 probe → (decides) resume vs step-chained execution → reaper → unified entry
+(server default) → THEN UI consolidation (5A) rides on a stable execution substrate.
+UI work (fluid typography) is independent and can interleave.
+
+### Current implementation baseline
+Browser lane fully functional (IMP-001-hardened). Server lane functional for
+queued-run execution via /BackendRun with unknown wall-clock ceiling, no resume, no
+reaper, permissive auth. Golden harness: Standard baseline only, teardown pending.
+
 ## 5. Work Registers
 
 ### Active Implementation Tranche
-**TR-1 — Interrupted-Run Resume (server lane)** — recommended 2026-08-02, awaiting
-DIMA go-ahead. Scope: runJanusPipeline accepts a stalled 'running' run (heartbeat older
-than threshold) as claimable; on claim, rehydrate mergedData + intersections from the
-Run's already-persisted domain fields and skip completed steps; BackendRun page gains a
-"Resume" action for stalled runs. Must-not-regress: fresh queued-run execution, prompt
-bytes, idempotent claim of active runs, browser lane untouched.
-Completion tests: (1) fresh queued run executes as before; (2) a run killed after Corpus
-+Cogito resumes and only executes remaining steps; (3) claiming an actively-running run
-(recent heartbeat) is still a no-op; (4) resumed run's final artifact validates.
+**TR-0 — Probe & Baseline Closure** — recommended 2026-08-02 post-reconciliation,
+awaiting DIMA go-ahead. Rationale: the original IMP-002 plan correctly made Phase 0 the
+decision gate for resume-vs-checkpoint architecture; that gate was skipped by the
+emergency lane and RISK-1 is still unquantified. Probing first prevents building TR-1
+(resume) on the wrong assumption. Scope:
+  (a) create + run `probeExecutionBudget` (heartbeat loop + LLM pings, per plan §Phase 0);
+      document max wall-clock, death signature, per-call latency in this record;
+  (b) Phase -1 teardown: remove temp prompt-hash recorder from llmTimeout.jsx and
+      `debug_prompt_hashes` from Run schema (subtask -1.8); -1.9 verification rides on
+      DIMA's next organic Standard run (no dedicated credit spend);
+  (c) record the Path A vs checkpoint-layer decision here.
+Must-not-regress: both execution lanes untouched except the recorder removal (a no-op
+when unset); prompt bytes unchanged; golden STANDARD_v1 remains comparable.
+Completion tests: probe findings documented with numbers; grep confirms recorder gone;
+Run schema valid with field removed... (field removal is schema-only; stored legacy
+values simply become unread — no data migration).
+
+**TR-1 — Interrupted-Run Resume (server lane)** — QUEUED behind TR-0; final shape
+depends on probe findings (plain resume vs per-step invocation chaining vs blueprint
+sub-call checkpointing per plan Phase 4.5). Original scope retained: stalled-run claim
+(stale heartbeat), rehydrate mergedData + intersections from persisted fields, skip
+completed steps, Resume action on /BackendRun. Completion tests as previously recorded:
+(1) fresh queued run unaffected; (2) run killed after Corpus+Cogito resumes without
+recomputing them; (3) active-run claim still no-op; (4) resumed artifact validates.
 
 ### Approved Backlog
 - Phase 5A.1 — Fluid typography (clamp() system) for /BlueprintPrint (recovered design)
