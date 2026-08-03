@@ -109,10 +109,13 @@ cogito→1 pair, animus→2 pairs, actus→3 pairs. Full mode = 13 steps (7 doma
 - **[DEFECT-1 — LIVE, HIGH] No completion invariant.** Finalization marks a run
   `completed` whenever ANY domain exists; 10 of 34 completed runs are partial, 4 with no
   blueprint at all. See §4.5 EV-2. Present in BOTH engine copies.
-- **[DEFECT-2 — LIVE] Domain parse failures are silently survivable.** A malformed domain
-  response is logged to validation_errors and the pipeline continues, so downstream
-  domains reason without it (EV-1: actus ran with no cogito claims, voiding confidence
-  propagation). No signal distinguishes this from a clean run.
+- **[DEFECT-2 — LIVE] Domain parse failures are silently survivable.** Verified in
+  current code (both engines): a malformed domain response is logged to
+  validation_errors and the pipeline continues; context builders include the failed
+  domain's sections only when present, so downstream prompts silently omit them and
+  dependent intersections are skipped. No signal distinguishes this from a clean run.
+  (That EV-1's downstream domains ran without Cogito is justified inference — see
+  §4.5(3b) — since the contemporaneous code is unreachable.)
 
 ## 4.5 EVIDENCE ITEM EV-1 — The Stalled-Run Incident, Reconstructed (2026-08-02)
 
@@ -142,26 +145,31 @@ Unsupported by the record: that the failure was *at* persistence/retrieval. The 
 shows the run never got that far — no blueprint was ever produced to persist.
 Explicitly rejected: the screen-dim causal claim, and "the run must be restarted."
 
-### (3) LATER ARCHITECTURAL INTERPRETATION — and my own error, corrected
-My 2026-08-02 rehydration record called this a **browser-suspension / phone-sleep**
-failure. **That was an unverified conflation of two distinct incidents and is now
-retracted.** The evidence supports a different primary cause:
-- IMP-001 §0 (authored 2026-05-31, one day after, by direct code inspection) names the
-  verified root cause as **absent LLM timeouts** — `callLLM` in ExecutionEngine,
-  blueprintSplitCall, and rerunEngine had no `Promise.race`, so a stalled provider call
-  blocked the domain loop indefinitely. The run's own data corroborates: work stops
-  cleanly after actus/synthesis with no error written, consistent with an await that
-  never returned during the blueprint stage.
-- A **second, contributing defect** is visible and was never separately documented: the
-  cogito parse error. Cogito returned malformed/over-length JSON, was dropped into
-  validation_errors, and the pipeline **continued** — so animus, actus and synthesis all
-  reasoned WITHOUT the cogito domain. Confidence propagation (Actus inheriting Cogito
-  claim tags) was silently impossible for this run. That is a fidelity failure, not just
-  a reliability one.
-- Phone-sleep / browser suspension enters the record on **2026-06-02** as the stated
-  motivation for IMP-002 ("Cut the browser umbilical cord"). It is a *later, separate*
-  concern. It remains a plausible upstream contributor to THIS run's silence but is
-  **not established** by any field in the record.
+### (3) HISTORICAL IMPLEMENTATION-PLAN DIAGNOSIS (class: historical diagnosis, not Run-proven)
+IMP-001 §0 (authored 2026-05-31, one day after the incident, from direct code
+inspection) diagnosed **absent LLM timeouts** — `callLLM` in ExecutionEngine,
+blueprintSplitCall, and rerunEngine had no `Promise.race`, so a stalled provider call
+*could* block the domain loop indefinitely. The Run record is **consistent with** that
+diagnosis (work stops after actus/synthesis; no terminal failure transition or terminal
+diagnostic was ever recorded — note the cogito parse error IS recorded in
+validation_errors; what is absent is any *terminal* error state). The Run does **not
+independently prove** it: nothing in the record shows an LLM promise hung, that a
+blueprint call had started, or where between actus/synthesis and blueprint the process
+died. My 2026-08-02 phone-sleep framing was an unverified conflation of two incidents
+and is **retracted**; phone-sleep enters the documentary record only on 2026-06-02 as
+IMP-002's motivation — a later, separate concern.
+
+### (3b) JUSTIFIED INFERENCE (class: inference, grounded in verified code + Run data)
+- **Silent degradation on domain failure.** CURRENT code (both engines, read directly):
+  a domain parse failure is appended to validation_errors and the loop continues;
+  `buildDomainContext` includes Cogito sections only `if (priorDomains.cogito)`, so
+  downstream prompts silently omit them when Cogito is absent, and Cogito-dependent
+  intersection pairs are skipped (`if (!mergedData[dA] || !mergedData[dB]) continue`).
+  For the 2026-05-30 run this behavior is an **inference**: the contemporaneous code
+  version is unreachable (no repo history via connector), so "animus/actus/synthesis
+  reasoned without Cogito" is well-supported but not directly verified. What the Run
+  directly proves is narrower: downstream outputs exist while the final cogito field is
+  null, and no cogito-dependent intersection was persisted.
 
 ### (4) CURRENT-CODE BEHAVIOR (verified by reading the render path)
 `raw_json` is **not** the canonical Blueprint source anywhere in the live app:
@@ -174,14 +182,23 @@ retracted.** The evidence supports a different primary cause:
 FALSE for current code, and was probably an incomplete diagnosis then.** This run was
 unrenderable because `blueprint` itself is null — not because the cache was empty.
 
-### (5) REMAINING UNCERTAINTY
-- Whether browser suspension, an unbounded LLM hang, or both ended the run cannot be
-  separated: the run predates heartbeat instrumentation, and no contemporaneous
-  code snapshot is reachable (GitHub connector unauthorized).
-- Whether the cogito parse failure worsened the blueprint stage (degraded upstream
-  context) is plausible but untestable without a replay.
+### (5) UNRESOLVED HYPOTHESES (class: hypotheses — none is established)
+- H1: an unbounded LLM await hung during or before the blueprint stage (IMP-001's
+  diagnosis, applied to this run).
+- H2: browser suspension terminated the foreground pipeline before blueprint.
+- H3: failure occurred during final normalization or while writing specific fields.
+- H4: the cogito parse failure degraded downstream context enough to worsen later
+  stages (untestable without replay).
+- H1–H4 cannot be separated: the run predates heartbeat instrumentation and no
+  contemporaneous code snapshot is reachable (GitHub connector unauthorized).
 - **This is the reconstructable limit. EV-1 is closed as "partially reconstructed";
   no further forensic work is warranted.**
+
+> Evidence-class key used throughout §4.5: (1) directly verified DB evidence ·
+> (2) contemporaneous Base44 diagnosis · (3) historical implementation-plan diagnosis ·
+> (3b/4) justified inference · (5) unresolved hypotheses · (6) proposed engineering
+> changes (§ Work Registry, PROPOSED items) · (7) operator-authorized decisions
+> (§ Work Registry, AUTHORIZED items only).
 
 ### The corrected lesson (this supersedes the phone-lock framing)
 The failure was not "raw_json was empty." It was that the system had **no enforced,
@@ -192,27 +209,36 @@ different run could be stamped `completed` while missing the same things. IMP-00
 (bounded calls, heartbeats) and IMP-002 (execution off the foreground browser) each
 attacked one symptom. Neither established the invariant.
 
-### EV-2 — Completion-invariant violations are PRESENT AND CURRENT (verified 2026-08-02)
-Audited all 67 Runs; of **34 with `status: "completed"`, 10 (29%) violate the minimum
-invariant** for their execution mode:
-- `6a1f4ec4…` (06-02, standard) — **completed with NO blueprint at all**
-- `69c69cc7…` (03-27, full) — completed, missing synthesis AND blueprint
-- `69c60531…` (03-27, full) — completed, missing refresh AND blueprint
-- `69a720d9…` (03-03, full) — completed, missing blueprint
-- Six more missing a required domain (cogito ×2, refresh ×3, corpus ×1, actus ×2)
-Root cause in live code (both engine copies, identical): finalization computes
+### EV-2 — Completion-invariant violations are PRESENT AND CURRENT (verified 2026-08-02/03)
+Audited all 67 Runs: 34 with `status: "completed"`, **10 (29%) violate the minimum
+invariant** for their execution mode; 4 of the 10 have no renderable blueprint at all.
+**The full reproducible per-run register — Run IDs, mode, required vs missing fields,
+blueprint step counts, cache sizes, validation errors, classification, renderability,
+reconstructability, and repair category, plus the audit method — is preserved in
+`src/docs/EV_AUDIT_REGISTER.md`. The 29% aggregate is not canonical without it.**
+Root cause verified by direct read of BOTH engine copies (ExecutionEngine.jsx L596–599;
+runJanusPipeline/entry.ts L1767–1770 — identical): finalization computes
 `completionStatus` as `failed` only when **zero** domains exist — otherwise it returns
 `"completed"` for both the complete and partial branches (the ternary's two arms are the
 same string, with `missingDomains` computed and then ignored). **A partial run is
 indistinguishable from a whole one at the status level.** This is a live defect, not history.
 
-**Required completion invariant (to be enforced, not yet implemented):** a
-Blueprint-producing run may only reach `completed` when — every domain its execution
+**Required completion invariant (defined here; enforcement is PROPOSED, not implemented):**
+a Blueprint-producing run may only reach `completed` when — every domain its execution
 mode requires is present and non-empty; required intersections present (full mode);
 synthesis present where applicable; `blueprint` is a valid object with ≥1 step; schema
-validation passes; full JSON and Markdown reconstruct successfully. Anything short of
-that is a distinct terminal state (proposed: `partial`) that remains **recoverable** and
-must not masquerade as complete.
+validation passes; full JSON and Markdown reconstruct successfully.
+
+**Three independent state dimensions (do not collapse):**
+1. **Execution-attempt state** — did this attempt end? (running / attempt-ended). An
+   attempt may be over while the artifact is unfinished.
+2. **Artifact-integrity state** — does the persisted artifact satisfy the invariant
+   above? (complete / partial / empty). Judged from fields, never from status alone.
+3. **Recoverability state** — can the artifact be finished without recomputing valid
+   upstream work? (recoverable / repaired / unrecoverable).
+A run may simultaneously be attempt-ended, hold a partial artifact, and be recoverable —
+EV-1's run is exactly that. `status` currently conflates all three; any future state
+model must express them separately rather than through one ambiguous value.
 
 **Regression tests required of any tranche that touches finalization** (recorded here as
 binding acceptance conditions):
@@ -319,9 +345,12 @@ reaper, permissive auth. Golden harness: Standard baseline only, teardown pendin
 Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (c) only.
 - **(a) Incident reconstruction — ✅ DONE.** EV-1 recorded in §4.5; phone-lock root cause
   retracted; closed as partially reconstructed (forensic limit reached).
-- **(b) Completion-invariant audit — ✅ DONE.** EV-2 recorded; DEFECT-1/DEFECT-2 logged;
-  invariant defined; 6 regression tests recorded as binding. **Enforcement not yet
-  implemented** — that is the candidate tranche TR-1a below.
+- **(b) Completion-invariant audit — ✅ DONE (2026-08-03).** EV-2 recorded with the full
+  reproducible per-run register in `src/docs/EV_AUDIT_REGISTER.md`; DEFECT-1/DEFECT-2
+  logged; invariant + three-dimension state model defined; 6 regression tests recorded
+  as binding acceptance conditions. **Enforcement is NOT part of this audit** — it is
+  the PROPOSED candidate TR-1a below. Repairing the 10 mis-stamped historical runs is a
+  separate open operator decision (no data changed).
 - **(c) Execution-budget probe — PENDING AUTHORIZATION.** Create + run
   `probeExecutionBudget` (heartbeat loop + LLM pings per IMP-002 §Phase 0); document max
   wall-clock, death signature, per-call latency here; record the Path A vs checkpoint
@@ -331,13 +360,16 @@ Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (
 Must-not-regress: both lanes untouched except the recorder removal (a no-op when unset);
 prompt bytes unchanged; STANDARD_v1 golden remains comparable.
 
-**TR-1a — Completion-Invariant Enforcement** (new candidate, promoted by EV-2; not yet
-authorized). Enforce the §4.5 invariant at finalization in both engine copies; introduce
-a distinct non-terminal/partial state so partial runs stay recoverable; surface parse-
-failure degradation instead of swallowing it. Carries the 6 regression tests verbatim.
-Note: this is the work that actually addresses the EV-1 lesson; resume (TR-1) restores
-interrupted runs, but without the invariant a resumed run can still self-certify as
-complete while missing a domain.
+**TR-1a — Completion-Invariant Enforcement** — evidence class (6): **PROPOSED
+engineering change, CANDIDATE status only. Not promoted, not sequenced, not authorized.**
+Its priority relative to TR-1 (resume) and everything else is explicitly **held open**
+until the broader external research, UI/UX review, implementation-plan reconciliation
+completion, and whole-product assessment are done, per operator directive 2026-08-03.
+Scope if authorized: enforce the §4.5 invariant at finalization in both engine copies
+using the three-dimension state model (execution-attempt / artifact-integrity /
+recoverability — no single ambiguous status); surface parse-failure degradation instead
+of swallowing it (DEFECT-2). Carries the 6 regression tests verbatim. Discovery of
+DEFECT-1 motivates this candidate; it does not by itself decide its rank.
 
 **TR-1 — Interrupted-Run Resume (server lane)** — QUEUED behind TR-0; final shape
 depends on probe findings (plain resume vs per-step invocation chaining vs blueprint
