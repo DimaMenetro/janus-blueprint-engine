@@ -541,14 +541,34 @@ Closes the open research item from TR-0(c). Evidence class: **platform documenta
   would reproduce Defect-1 (silent partial completion) by design. **Rejected.**
 - **F-4 — Automations are strictly worse than a plain function** for our purpose
   (3 min < 5 min). **Not applicable.**
-- **F-5 — Workflows are the only mechanism providing durable multi-step
-  orchestration**, and are the strongest candidate carrier for a segmented Janus
-  pipeline. Relevant properties, from the authoring guide:
+- **F-5 — Workflows are the only *documented native Base44* mechanism found in
+  this survey that provides durable, observable multi-step orchestration.**
+  Scope of the claim: this is a statement about what the platform documentation
+  surveyed on 2026-08-03 exposes — NOT a claim that no other durable mechanism
+  can exist. Application-managed durability (checkpoint/resume state persisted on
+  the Run record and driven by self-chaining invocations) is also durable and
+  remains a live candidate; it is simply built by us rather than provided by the
+  platform. Undocumented, newer, or non-native mechanisms are outside this
+  survey's reach.
+  Workflows are a strong candidate carrier for a segmented Janus pipeline.
+  Relevant properties, from the authoring guide:
   - Steps are **strictly sequential** (no parallelism) — which matches the Janus
     domain dependency chain (corpus → cogito → animus → actus → synthesis →
     blueprint) exactly. No pipeline redesign needed to fit the model.
-  - Each `invoke_backend_function` step is a **separate function invocation**, so
-    each gets its own execution budget rather than sharing one 5-min ceiling.
+  - Each `invoke_backend_function` step is a **separate backend-function
+    invocation** in an ordered sequence.
+    ⚠️ **HYPOTHESIS, NOT ESTABLISHED FACT — H-1.** It is *architecturally
+    plausible* that each step therefore receives its own independent ~5-minute
+    budget rather than sharing one ceiling across the whole run, but the
+    documentation surveyed does **not** state this. What the docs DO establish is
+    only: ordered backend-function steps, conditions, durable delays, entity
+    triggers, per-step run visibility, and step-count-based credit usage.
+    **No design may depend on independent per-step budgets until H-1 is measured.**
+    Discharge condition: execute a minimal Workflow probe with at least two timed
+    backend-function steps (each deliberately running past the single-invocation
+    ceiling, or instrumented with start/end timestamps written to an entity),
+    then preserve the run log as evidence. Until then H-1 stays flagged
+    everywhere it is relied upon.
   - `wait` is **durable and survives restarts** (ISO-8601 durations).
   - **Per-step run visibility** — the run log shows exactly which step succeeded
     or failed. This directly attacks the silent-kill death signature and is the
@@ -578,6 +598,27 @@ The candidate set is now reduced by evidence, not preference:
   (b) self-chaining backend functions with checkpoint-resume state on the Run
   record, or (c) a hybrid — workflow as the durable spine with checkpointed
   stages.
+
+### App orchestration surface — current state (2026-08-03)
+
+- This app resolves to the **Workflows** interface; **zero workflows are
+  currently defined**. [MEASURED]
+- **Legacy automations cannot be enumerated with available tooling** — the
+  absence of workflows is NOT evidence of the absence of automations. Operator
+  check required: Dashboard → Automations, presence of a "Switch to Workflows"
+  button.
+- Migration, if required, is **documented as non-destructive**: automations are
+  recreated as workflows with triggers and schedules intact, run counts and stats
+  carry over, past run logs stay accessible as archived originals, archived items
+  come across, nothing stops running, one step, no rebuild. Risk assessed **LOW**.
+  Caveat: no "switch back" is documented — treat as **one-way until proven
+  otherwise**, and authorize it separately rather than as a side effect of Janus
+  work.
+- Entitlement (Builder+ plan) and current credit headroom are **unverified** —
+  operator-visible only.
+
+Full detail, plus benchmarking, UI/UX evaluation, plan reconciliation, cost
+analysis and the integrated roadmap: **`WHOLE_APP_ASSESSMENT.md` (ASM-JBE-001)**.
 
 **Still open, still DIMA's call.** The selection among (a), (b), and (c) is
 deliberately NOT made here. It depends on the Builder-plan question (F-6), the
