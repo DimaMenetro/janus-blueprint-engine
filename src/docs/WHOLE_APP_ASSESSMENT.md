@@ -30,7 +30,7 @@
 > | Code-based UI review | Complete for sampled routes; **not repository-wide** |
 > | Rendered viewport audit | **PARTIAL** — see §2.0 |
 > | Implementation-plan reconciliation | Continuity contradictions **now removed** (2026-08-03) |
-> | External current-practice benchmarking | **OPEN — not started** |
+> | External current-practice benchmarking | **Rev 1.0 DELIVERED** — `BENCHMARK_EXTERNAL_1B.md`; Layers 2–3 and 6 comparators outstanding |
 > | Integrated roadmap | **PROVISIONAL** |
 > | Lane 1 / TR-1a | **High-value unblocked candidate — NOT activated** |
 
@@ -120,8 +120,16 @@ That is operator-visible information I cannot read.
 > evidentiary weight**. They may not be cited, and this document may **not** be called a
 > whole-product benchmark or used to finalize roadmap priority until §1B is delivered.
 >
-> **§1B — External Current-Practice Benchmark: OPEN, NOT STARTED.**
-> Required shape when executed:
+> **§1B — External Current-Practice Benchmark: DELIVERED as Rev 1.0 (2026-08-03) —
+> `BENCHMARK_EXTERNAL_1B.md` (BMK-JBE-001).** Five comparators sourced at Layer 1
+> (Temporal, LangGraph, AWS Step Functions, Inngest, Prefect) plus Base44 Workflows and
+> Janus, across all 13 dimensions. **Partial by design:** dimensions 11–13 are thin,
+> Layers 2 and 3 are not yet gathered, and six further comparators are named as Rev 2
+> scope. Uncited cells were left empty rather than inferred.
+> **§1A below is superseded as an evidentiary basis** and survives only as the
+> hypothesis set BMK-JBE-001 tested.
+>
+> Required shape (met in Rev 1 as far as its stated coverage goes):
 > - **Named comparators**, evidence-first, using current **primary documentation and
 >   live repositories**.
 > - **Layer separation is mandatory:** (Layer 1) official docs + source repositories;
@@ -200,10 +208,22 @@ Kept open per directive. No selection made.
 | Vendor coupling | High | Low | Medium |
 | CP-002 fidelity risk | Step decomposition must not alter prompt construction | Same risk, fully under our control | Same |
 
-**Cross-cutting requirement, independent of choice:** every rejected option and
-every candidate option fails *silently* by default. **A completion invariant is
-mandatory in all three.** It is the one piece of work that is not blocked by the
-architecture decision — which makes it the correct thing to build first.
+**Cross-cutting requirement, independent of choice — CORRECTED.** The earlier claim
+that *every* candidate "fails silently by default" is **withdrawn**: it is not
+established for **Workflows**, which are reported to expose **per-step status and a
+per-step run log** — an explicit failure signal at the step boundary. The accurate
+statement:
+
+> Every **rejected** option fails silently (monolithic invocation: silent kill;
+> `waitUntil()`: no completion guarantee). Among **candidates**, (B) app-managed
+> checkpoint/resume has **no built-in failure signal** — all observability is ours to
+> build; (A) and (C) inherit **platform-provided per-step status** [DOCUMENTED, not
+> yet measured]. **A completion invariant remains necessary in all three**, because
+> per-step status reports *step* outcomes, not *artifact integrity* — a workflow can
+> report every step succeeded while the artifact is still partial.
+
+The invariant is unblocked by the architecture decision. That makes it the
+**highest-value currently unblocked candidate** — not an instruction to build it first.
 
 ---
 
@@ -270,8 +290,12 @@ surfaces are the responsive ones while the primary user-facing shell is not.
 
 This matters disproportionately for **`/BlueprintPrint`** and the **Results
 domain tabs**, which render wide schematic content — dependency graphs, I/O hubs,
-risk topology, intersection matrices — into a 720 px column on a 2560 px display.
-The most information-dense views are the most penalized.
+risk topology, intersection matrices — into a **constrained centred column on a wide
+display**. Corrected widths: `/BlueprintPrint` renders at **≈960 px** (rendered
+evidence, 1440×900) and `/Results` is set to **`maxWidth: 900`** — **neither is the
+720 px figure asserted in Rev 1.0.** The point survives the correction: the most
+information-dense views are the most penalized, because ~960 px of schematic content
+on a 1440 px (or 2560 px) viewport leaves most of the display unused.
 
 **Root cause is architectural, not cosmetic.** Adding breakpoints requires either
 migrating layout-critical styles to Tailwind classes or introducing a viewport
@@ -331,13 +355,22 @@ tab labels are below comfortable minimums; several muted-token foregrounds are
 plausibly under WCAG AA on glass backgrounds (unmeasured — flagged, not asserted).
 Interaction feedback is scale-animation only, which does not reach assistive tech.
 
-### 2.4 UI/UX verdict
+### 2.4 UI/UX verdict — CORRECTED 2026-08-03
 
-Mobile execution: **strong**. Tablet: **acceptable, unconsidered**.
-Desktop: **structurally unaddressed** — and desktop is the natural environment for
-reviewing a dense architectural blueprint, which is the app's core value.
-The defect list is short and mostly cheap; the responsive gap is the only item
-requiring real design decisions.
+> **The Rev 1.0 verdict gave definitive mobile / tablet / desktop grades. It is
+> WITHDRAWN** — those grades exceeded the evidence, since the rendered audit is
+> explicitly partial (§2.0: one of eight surfaces observed).
+
+**Current verdict:**
+
+> Code inspection identifies **responsive inconsistency** and **several concrete
+> defects** (D-UI-1 … D-UI-7). Rendered evidence is sufficient only for a
+> **provisional `/BlueprintPrint` desktop finding**. **Mobile, tablet, and
+> route-wide desktop quality remain OPEN** pending the viewport audit.
+
+The defect list is short and mostly cheap. The responsive question is the only item
+requiring a real design decision — and it cannot be finally scoped until the viewport
+audit completes.
 
 ---
 
@@ -346,11 +379,11 @@ requiring real design decisions.
 | Plan / Artifact | Documented intent | Live reality | Verdict |
 |---|---|---|---|
 | **IMP-001-R-D-RES** (resilience) | Timeout matrix, bounded retry, heartbeat, retry log, `current_step` | All present and in use: `llmTimeout.jsx` matrix with tuned per-label budgets; retry log and heartbeat fields live on the Run schema | **DELIVERED** |
-| **IMP-002** (server lane) | Move execution server-side; `queued` status, `execution_owner`, claim/lifecycle timestamps | Schema fields all exist; `runJanusPipeline` exists; `/BackendRun`, `/BackendRuns` routed explicitly in `App.jsx` | **BLOCKED — invalidated premise.** Built on synchronous invocation, now rejected by the ~295 s ceiling [MEASURED + DOCUMENTED] |
+| **IMP-002** (server lane) | Move execution server-side; `queued` status, `execution_owner`, claim/lifecycle timestamps | Schema fields all exist; `runJanusPipeline` exists; `/BackendRun`, `/BackendRuns` routed explicitly in `App.jsx` | **PARTIALLY IMPLEMENTED; CURRENT TRANSPORT INVALIDATED.** Server ownership, queue fields, claiming and routes exist. The single-function execution model cannot support Standard or Full under the measured ~295 s ceiling [MEASURED + DOCUMENTED] and requires segmentation or replacement. *(Corrected from "BLOCKED — invalidated premise", which was too broad and contradicted F-R2)* |
 | **IMP-002 reaper** | Detect and flag stalled runs; `reaper_strikes` field | Field exists, defaulted to 0; **no reaper implemented** | **DEFERRED — field is a stub** |
 | **Phase -1 instrumentation** | Prompt-hash capture for byte-level reproducibility | Torn down; schema field removed; 4 legacy runs retain data | **RETIRED — with residue** (see continuity V-5/V-6) |
 | **Golden-run harness** | Capture + compare baselines | `captureGoldenRun` / `compareToGolden` intact and invocable | **OPERATIONAL BUT DEGRADED** — 3 of 8 gates read the removed `debug_prompt_hashes`, so `all_pass` can never be true for new runs |
-| **Full-mode golden baseline** | Reference for Full runs | Never captured; qualifying completed Full runs exist in DB | **OUTSTANDING TASK, not a lost capability** |
+| **Full-mode golden baseline** | Reference for Full runs | Never captured. **Re-audit of all 15 Full runs: NO qualifying candidate exists** — `synthesis.intersection_matrix` empty on every one (0/6 pairs) and `corpus.subdomains` empty on every one; two previously-cited candidates are registered EV-2 violations | **OUTSTANDING — requires a FRESH invariant-passing Full run, not an existing one.** Attemptable now via the **browser lane** (interruption + credit risk); safer after durable execution. **Not technically blocked** |
 | **DOC-BP-IMP-002** (BlueprintPrint) | Fluid typography via `clamp()`; unify `BlueprintTab` → `BlueprintPrint` | Neither executed; both components still exist separately | **OPEN** — and the fluid-typography item is a partial answer to §2.2 |
 | **Defect-1 completion invariant** | Refuse `completed` on partial runs | Not implemented | **OPEN — highest-value unblocked work** |
 | **Defect-2 parse-failure hardening** | Fail loudly on domain parse failure | Not implemented | **OPEN** |
@@ -367,9 +400,12 @@ requiring real design decisions.
   three candidates. Only its *transport assumption* — one synchronous invocation
   — is dead. The Run-lifecycle schema it introduced is directly reusable.
 - **F-R3 — The database has drifted from the code twice.** Legacy prompt hashes
-  persist after schema removal; 11 Full runs sit permanently at `status: running`
-  from browser-lane deaths. There is no reconciliation pass that ever cleans
-  orphaned state. This is a structural gap, not an incident.
+  persist after schema removal; **eleven Full records remain nonterminal in
+  `running` — their individual termination causes and ownership histories require
+  classification before remediation.** *(Corrected: the earlier "from browser-lane
+  deaths" attributed a cause to all eleven that neither `execution_owner` nor
+  contemporaneous evidence establishes per record.)* There is no reconciliation
+  pass that ever cleans orphaned state. This is a structural gap, not an incident.
 - **F-R4 — Defect-1 is the only major item blocked by nothing.** It needs no
   architecture decision, no entitlement, no probe.
 
@@ -386,7 +422,7 @@ requiring real design decisions.
 | Automations, 3-min | Not applicable — strictly worse |
 | Workflows | Ordered backend-function steps, conditions, durable waits, entity triggers, per-step run log; **per-step budget = H-1, unproven** |
 | Entity triggers | Directly enables browser-independent start: insert Run as `queued` → workflow fires |
-| Sequential-only execution | **Matches Janus's dependency chain exactly** — no redesign needed |
+| Sequential-only execution | **CORRECTED — does NOT "match Janus's dependency chain exactly".** Janus Full is a **DAG**: 7 domains plus 6 intersections that become eligible in trigger cohorts (cogito→1, animus→2, actus→3). A sequential Workflow can execute a **valid topological ordering** of that graph, which is not the same as matching it — it **serializes** work that is logically concurrent, with consequences for latency, cost and checkpoint semantics. Decomposition must be chosen deliberately (see continuity F-5) |
 | InvokeLLM | Already the workhorse; billed per call regardless of architecture |
 
 ### 4.2 Cost model
@@ -439,14 +475,18 @@ Ordered by dependency, not ambition. Each item states what unblocks it.
 | 1.2 | **Parse-failure hardening (Defect-2)** — domain parse failure becomes an explicit run-level condition, not a silent skip | Same rationale; pairs naturally with 1.1 |
 | 1.3 | **Credit-exhaustion as a recognized outcome** | Cheap to add while 1.1 is being written; expensive to retrofit |
 
-### Lane 2 — Evidence-gathering (parallel with Lane 1)
+### Lane 2 — Evidence-gathering (independent of Lane 1; no implementation implied)
+
+> Renamed 2026-08-03. "Parallel with Lane 1" implied Lane 1 was running. **It is not —
+> Lane 1 is unauthorized.** Lane 2 is evidence work that stands on its own and starts no
+> implementation.
 
 | # | Item | Discharges |
 |---|---|---|
 | 2.1 | **Minimal Workflow probe — corrected design.** Two instrumented backend-function steps, each **safely BELOW** the ~5-min single-invocation ceiling but **combining to exceed it** (e.g. ~3 min + ~3 min). Do **not** make steps deliberately overrun — that only re-proves individual termination. Preserve: per-step start/end timestamps, Workflow run ID, per-step status, total elapsed, heartbeat evidence, credit usage, retry behaviour, final Workflow status, and the run log itself | **H-1** (can a Workflow exceed one function's ceiling while each invocation stays valid?) **and** the per-step credit fraction, in one run |
 | 2.2 | **Operator check of Dashboard → Automations** | §0.2 automation inventory; §0.3 migration necessity |
 | 2.3 | **Confirm workspace plan tier and credit headroom** | §0.4 entitlement precondition |
-| 2.4 | ~~Capture the Full-mode golden baseline from an existing qualifying completed run~~ **WITHDRAWN — no qualifying candidate exists.** Re-audit of all 15 Full runs: `intersection_matrix` is **empty on every one** and `corpus.subdomains` empty on every one; two previously-cited candidates (`69ebc39d…`, `69e185ef…`) are registered EV-2 violations. A Full golden needs a **freshly generated invariant-passing Full run**, which the engine cannot produce under the measured ceiling. **This item is BLOCKED BEHIND the architecture decision — it moves to Lane 3.** | — |
+| 2.4 | ~~Capture the Full-mode golden baseline from an existing qualifying completed run~~ **RESCOPED — no qualifying historical candidate exists.** Re-audit of all 15 Full runs: `intersection_matrix` empty on every one, `corpus.subdomains` empty on every one; two previously-cited candidates (`69ebc39d…`, `69e185ef…`) are registered EV-2 violations. A Full golden requires a **fresh, invariant-passing Full execution under current code**. **OPTIONAL HIGH-RISK PATH available now:** attempt it via the **browser lane** — the ~295 s ceiling governs the server function lane, **not** the browser lane, so this is *not* technically blocked; it carries interruption and credit risk (tab must stay active; a mid-run interruption forfeits spent credits). **Preferred low-risk path is item 3.6.** | Full-mode regression coverage — if the operator accepts the risk |
 | 2.5 | **Re-scope golden gates** to the 5 surviving checks, or consciously accept `all_pass = false` | Makes the harness usable again |
 
 > **Gate:** the architecture decision (Lane 3) should not be taken until 2.1, 2.2
@@ -461,6 +501,7 @@ Ordered by dependency, not ambition. Each item states what unblocks it.
 | 3.3 | **Retire the browser lane** once the server lane is durable; collapse `/NewQuery`, `/BackendRun`, `/BackendRuns` into one honest execution surface (closes D-UI-5, D-UI-6) |
 | 3.4 | **Prompt-byte parity validation** against a golden baseline before/after the refactor — the still-open V-7 |
 | 3.5 | **Implement the reaper**, or delete `reaper_strikes` from the schema. Not both-and-neither |
+| 3.6 | **Capture and validate `FULL_v1`** after **either** a successful controlled browser-lane Full run (item 2.4, high-risk path) **or** deployment of durable execution (**preferred, low-risk**). The two paths are alternatives, not a sequence — whichever produces the first invariant-passing Full run discharges this item. Validate the captured baseline against the completion invariant (all 7 domains, all 6 intersections, valid blueprint) **before** registering it as golden |
 
 ### Lane 4 — Frontend (independent of Lane 3; can run in parallel)
 

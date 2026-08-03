@@ -96,16 +96,20 @@ cogito→1 pair, animus→2 pairs, actus→3 pairs. Full mode = 13 steps (7 doma
 | Append-only finalization | Finalization clobbering incrementally-written intersections |
 | Per-pair intersection calls | Single-call synthesis producing shallow, non-emergent pairs |
 | TIMEOUT_MATRIX + retry | blueprint:expansion hang (historical root-cause site) |
-| Server lane claim model | Phone-sleep killing browser-owned runs |
+| Server lane claim model | Removing foreground-browser ownership of long runs, and the suspension risk that comes with it (neutral architectural purpose — corrected 2026-08-03; the earlier "phone-sleep killing browser-owned runs" asserted a retracted causal diagnosis) |
 | raw_json as cache + field reconstruction | Oversized raw_json breaking record ops / network fetch |
 
 ## 4. Known Defects, Risks & Fidelity Notes
 
-- **[RISK-1 — CRITICAL] Server lane single-invocation ceiling.** runJanusPipeline runs the
-  entire multi-domain pipeline (10–15+ LLM calls, potentially 30+ min) inside one backend
-  function invocation. Long runs risk exceeding platform function wall-clock limits →
-  silent death with status stuck 'running'. No reaper exists. This is the deepest
-  reliability gap.
+- **[RISK-1 → now CONSTRAINT-1 — MEASURED, no longer a risk] Server lane
+  single-invocation ceiling.** runJanusPipeline runs the entire multi-domain pipeline
+  (10–15+ LLM calls) inside one backend function invocation. **This is no longer an
+  unquantified risk — it is a measured, documented constraint (amended 2026-08-03):**
+  the ceiling is **~295 s** (292,350 ms and 293,954 ms across two probes), matching the
+  documented 5-minute platform hard limit. Under it the server lane **cannot complete
+  Standard or Full runs**; death is **silent**, leaving status stuck at `running`. No
+  reaper exists. Scope: this constraint governs the **synchronous backend-function
+  path only** — it does not bound the browser lane. See TR-0(c).
 - **[RISK-2] No resume.** Both lanes restart from zero. Persisted domain fields are never
   rehydrated into a resumed execution — interrupted runs re-pay every completed LLM call.
 - **[FIDELITY-1 — flagged, NOT a defect to silently "fix"]** Implementation subdomain
@@ -328,7 +332,10 @@ Plan checklist shows ALL phases unchecked. Actual verified state:
 - **Phases 7/8 + cutover: NOT DONE.**
 - Verdict: plan REMAINS VALID as roadmap skeleton but requires a Revision 3.0 amendment
   recording the emergency-lane deviation. Do NOT restart Phases 2–4 (done/deviated);
-  do NOT mark -1/0 complete (they aren't).
+  **and (corrected 2026-08-03) Phase -1 teardown and Phase 0 ARE now complete** —
+  the former "do NOT mark -1/0 complete (they aren't)" instruction is **superseded**
+  and must not be acted on. Phase -1 remains partial only in that FULL_v1 was never
+  captured (see TR-0(d) V-4/V-5).
 
 ### BLUEPRINT_IMPLEMENTATION_PLAN (Liquid Glass + iOS readiness)
 - **COMPLETE & STILL EFFECTIVE.** LiquidGlass token/factory system, density-aware
@@ -352,10 +359,14 @@ Plan checklist shows ALL phases unchecked. Actual verified state:
 4. **FULL_v1 golden capture** — costs one Full-mode run of credits; needed before any
    fidelity-gated change to Full-mode behavior.
 
-### Dependency spine (backend → UX)
-Phase 0 probe → (decides) resume vs step-chained execution → reaper → unified entry
-(server default) → THEN UI consolidation (5A) rides on a stable execution substrate.
-UI work (fluid typography) is independent and can interleave.
+### Dependency spine (backend → UX) — amended 2026-08-03
+~~Phase 0 probe →~~ **Phase 0 probe is DONE (ceiling measured).** Current spine:
+**H-1 Workflow probe + entitlement/credit confirmation → architecture selection
+(A workflow / B app-managed checkpoint-resume / C hybrid) → resume semantics →
+reaper → unified entry (server default) → THEN UI consolidation (5A)** on a stable
+execution substrate. UI work (fluid typography) is independent and can interleave.
+Full-golden capture is *not* on this spine — it is safer after durable execution but
+may also be attempted now via the browser lane (V-4/V-5).
 
 ### Current implementation baseline (amended 2026-08-03)
 Browser lane fully functional (IMP-001-hardened). Server lane functional for queued-run
@@ -370,7 +381,11 @@ exists** (V-4). Production build verified passing 2026-08-03 (exit 0).
 
 ### Active Implementation Tranche
 **TR-0 — Incident Reconstruction, Completion-Invariant Audit, and Execution-Budget
-Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (c) only.
+Probe** — revised 2026-08-02 after EV-1/EV-2; **amended 2026-08-03.**
+**Status correction:** the former header line "Awaiting DIMA go-ahead on part (c) only"
+is **superseded** — part (c) was operator-authorized and executed on 2026-08-03 and is
+recorded COMPLETE below. Nothing in TR-0 is awaiting go-ahead. Open sub-items are V-1
+(runtime-anonymous check), V-3c (route rendering), and V-7 (prompt-parity path choice).
 - **(a) Incident reconstruction — ✅ DONE.** EV-1 recorded in §4.5; phone-lock root cause
   retracted; closed as partially reconstructed (forensic limit reached).
 - **(b) Completion-invariant audit — ✅ DONE (2026-08-03).** EV-2 recorded with the full
@@ -524,7 +539,15 @@ Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (
     - **Gate 2 fails universally.** `synthesis.intersection_matrix` is **empty on
       every single Full run** — 0 of 6 pairs on all 15. Persisted synthesis keys are
       only `key_takeaways`, `constraint_collisions`, `limitation_foreground`.
-      Every existing Full run **predates incremental intersection persistence**.
+      **[MEASURED]**
+      **Explanation, held separately as [HYPOTHESIS]:** these records are
+      *consistent with* predating incremental intersection persistence. The earlier
+      wording — "every existing Full run predates incremental intersection
+      persistence" — is **withdrawn as an unverified causal claim**: each Run's
+      creation date was **not** compared against the actual introduction date of
+      that implementation. Discharge by dating the INTERSECTION_TRIGGERS /
+      incremental-pair-persistence change and comparing per-record. Other
+      explanations (e.g. runs that never reached the pair stage) are not excluded.
     - **`corpus.subdomains` is empty on all 15** (keys present: `constraints`,
       `feasibility_notes` only) — so the corpus subdomain fingerprint is
       uncapturable from historical data too.
@@ -533,11 +556,25 @@ Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (
     - Separately noted: `render_md` sits at exactly 60,040–60,041 chars on 8 runs —
       the 60k cache cap, i.e. **silently truncated** markdown. Flagged for review.
 
-    **Consequence — this changes the dependency graph.** The Full golden baseline
-    is **not** "a task not yet performed" that can proceed in parallel. It requires
-    a **freshly generated, invariant-passing Full run**, which the current engine
-    cannot produce under the measured ~295 s ceiling. **Full-golden capture is
-    therefore BLOCKED BEHIND the architecture decision**, not independent of it.
+    **Consequence — corrected 2026-08-03. NOT technically blocked.**
+    An earlier draft said Full-golden capture is "blocked behind the architecture
+    decision" because the engine "cannot produce" a Full run under the measured
+    ceiling. **That is wrong and is withdrawn.** The ~295 s ceiling is a property of
+    the **monolithic server backend-function lane**. It does **not** govern the
+    **browser lane**, which issues a sequence of separate LLM calls from the tab and
+    is bounded by tab lifetime, not by a function invocation budget.
+
+    > **Corrected statement.** No historical Full run qualifies as a golden
+    > baseline. A new Full golden requires a **fresh, invariant-passing Full
+    > execution under current code**. This **can still be attempted through the
+    > browser lane**, but it carries **interruption and credit risk**. Durable
+    > architecture would make the capture substantially safer; it is **not a strict
+    > technical prerequisite**.
+
+    Two admissible paths, operator's choice:
+    (i) **optional high-risk browser-lane attempt now** — tab must stay active for
+    the full run; a mid-run interruption forfeits the spent credits; or
+    (ii) **preferred low-risk path** — capture after durable execution exists.
     **Degradation to record:** `captureGoldenRun` gates g5/g6/g7 and
     `compareToGolden` check #9 all read `run.debug_prompt_hashes`. With the
     schema field removed, those gates will now evaluate false / be skipped for
