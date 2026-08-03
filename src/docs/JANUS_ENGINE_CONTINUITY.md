@@ -2,9 +2,19 @@
 
 > **READ THIS FIRST.** At the start of every Janus Engine session, Kytheion reads this
 > record and the code it points to before acting. The repository/sandbox is canonical;
-> conversational memory is not. Last verified: **2026-08-02** (direct source read of
-> ExecutionEngine.jsx, blueprintSplitCall.jsx, runJanusPipeline/entry.ts,
-> ExecutionContext.jsx, llmTimeout.jsx, janusSchema.jsx, domainSME.jsx).
+> conversational memory is not.
+>
+> **Last verified: 2026-08-03** (amendment pass: TR-0(c) probe, Phase -1 teardown +
+> validation V-1…V-7, TR-0(e) execution-path research, whole-app assessment ASM-JBE-001,
+> and a contradiction-reconciliation sweep of §2, §4 DEBT-1, §4.6, and the Work Registers).
+> Prior verification 2026-08-02 (direct source read of ExecutionEngine.jsx,
+> blueprintSplitCall.jsx, runJanusPipeline/entry.ts, ExecutionContext.jsx, llmTimeout.jsx,
+> janusSchema.jsx, domainSME.jsx).
+>
+> **Amendment rule (binding).** No superseded statement may remain active above its
+> correction. Where a claim has been overtaken, it is either amended in place or marked
+> `[HISTORICAL — SUPERSEDED]` with a pointer forward. A reader must never have to
+> discover which of two mutually exclusive claims appears later in the file.
 
 - App: Janus Blueprint Engine — Base44 app `6978a10dbc9d7c7a927c09b8`
 - Repo: `DimaMenetro/janus-blueprint-engine` @ `main` (2-way synced; sandbox = canonical.
@@ -60,8 +70,14 @@ cogito→1 pair, animus→2 pairs, actus→3 pairs. Full mode = 13 steps (7 doma
 ## 2. Two Execution Lanes — Current Relationship
 
 - **Browser lane (primary, legacy):** /NewQuery → executeJanus() runs in the browser tab.
-  Full UI progress. FRAGILE on iPhone/iPad: tab suspension kills the run mid-pipeline
-  (root cause of the historical "stuck at 8/13" incident).
+  Full UI progress. FRAGILE on iPhone/iPad: tab suspension can kill a run mid-pipeline —
+  this is a real structural fragility of the lane.
+  **⚠️ CORRECTION (2026-08-03):** an earlier revision of this line named tab suspension as
+  the *root cause of the historical "stuck at 8/13" incident*. **That causal claim is
+  RETRACTED** — see §4.5 EV-1(3) and EV-1(5). The incident's cause was never established;
+  browser suspension survives only as unresolved hypothesis **H2** among H1–H4, which the
+  evidence cannot separate. Tab-suspension fragility is a **general property of this lane**,
+  not the diagnosed cause of that run.
 - **Server lane (IMP-002 emergency, functional but incomplete):** /BackendRun creates a
   Run with status='queued', then invokes `runJanusPipeline`, which idempotently claims it
   (queued→running, execution_owner='server') and runs a byte-preserved port of the
@@ -99,8 +115,12 @@ cogito→1 pair, animus→2 pairs, actus→3 pairs. Full mode = 13 steps (7 doma
   subdomains" (CP-002 says 25); buildPrompt header says "Restoration Edition". Changing
   SME identities materially changes reasoning output → **requires operator adjudication**
   before any alignment pass. Recorded as Protocol-Level Question PQ-1.
-- **[DEBT-1]** debug_prompt_hashes field + Phase -1 recorder were meant to be removed
-  after golden-run capture (subtask -1.8) — still present.
+- **[DEBT-1 — ✅ RESOLVED 2026-08-03]** `debug_prompt_hashes` field + Phase -1 recorder
+  were meant to be removed after golden-run capture (subtask -1.8). **Both are now
+  removed** — recorder and call site deleted from `llmTimeout.jsx`, field deleted from the
+  Run schema, `phase1Capture.jsx` and `GoldenRunCapture.jsx` deleted. See TR-0(d).
+  Residue to remember: 4 legacy runs still hold stored hash values (V-6), and the golden
+  harness now has 3 dead gates (V-5).
 - **[DEBT-2]** Engine code is ~duplicated between browser (components/janus/*) and server
   (runJanusPipeline entry.ts) under the IMP-002 byte-preservation mandate. Any prompt
   change must be made in BOTH places until unification.
@@ -272,13 +292,17 @@ binding acceptance conditions):
 
 ### IMP-002-R-D-SRV — Server Execution (the big divergence)
 Plan checklist shows ALL phases unchecked. Actual verified state:
-- **Phase -1 (golden harness): PARTIAL.** captureGoldenRun + compareToGolden deployed;
-  `docs/golden_runs/STANDARD_v1.json` exists. **FULL_v1.json was never captured.**
-  Teardown subtasks -1.8/-1.9 NOT done: `debug_prompt_hashes` still in Run schema and
-  the temp prompt-hash recorder still lives in llmTimeout.jsx (DEBT-1 confirmed).
-- **Phase 0 (budget probe): NOT DONE.** probeExecutionBudget.js does not exist; no
-  findings; Path A vs HARD decision never made. **RISK-1 remains unquantified — this is
-  the plan's own unresolved decision gate.**
+- **Phase -1 (golden harness): PARTIAL — teardown now COMPLETE (amended 2026-08-03).**
+  captureGoldenRun + compareToGolden deployed; `docs/golden_runs/STANDARD_v1.json` exists.
+  **FULL_v1.json was never captured — and see TR-0(d) V-4/V-5: no qualifying Full
+  candidate currently exists in the database.**
+  Teardown subtasks -1.8/-1.9: **✅ DONE 2026-08-03** (DEBT-1 resolved). The earlier
+  "still present" statement is superseded.
+- **Phase 0 (budget probe): ✅ DONE 2026-08-03 (amended).** `probeExecutionBudget`
+  deployed and executed twice; **~295 s wall-clock ceiling measured** and independently
+  corroborated by platform documentation (5-minute hard limit). **RISK-1 is now
+  quantified.** The Path A vs HARD decision is *informed but still not made* — the
+  candidate set is narrowed to three (TR-0(e)); selection remains an operator decision.
 - **Phase 1 (engine DI + rehydration audit): SUPERSEDED, never executed as planned.**
   Instead of dependency-injecting the browser engine, the "IMP-002 Emergency Backend
   Lane" shipped runJanusPipeline as a self-contained byte-preserved PORT of the engine.
@@ -333,10 +357,14 @@ Phase 0 probe → (decides) resume vs step-chained execution → reaper → unif
 (server default) → THEN UI consolidation (5A) rides on a stable execution substrate.
 UI work (fluid typography) is independent and can interleave.
 
-### Current implementation baseline
-Browser lane fully functional (IMP-001-hardened). Server lane functional for
-queued-run execution via /BackendRun with unknown wall-clock ceiling, no resume, no
-reaper, permissive auth. Golden harness: Standard baseline only, teardown pending.
+### Current implementation baseline (amended 2026-08-03)
+Browser lane fully functional (IMP-001-hardened). Server lane functional for queued-run
+execution via /BackendRun, but bounded by a **measured ~295 s wall-clock ceiling**
+(no longer unknown — TR-0(c)), with no resume, no reaper, permissive auth. Under that
+measured ceiling the server lane **cannot complete Standard or Full runs** as currently
+built. Golden harness: Standard baseline only; **Phase -1 teardown COMPLETE**; harness
+operational but degraded (3 of 8 gates dead — V-5); **no qualifying Full golden candidate
+exists** (V-4). Production build verified passing 2026-08-03 (exit 0).
 
 ## 5. Work Registers
 
@@ -446,13 +474,26 @@ Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (
     platform's opaque service-role principal identifier
     (`service_67645bce-…`), which is an actor label, not a secret. Probe logs
     emitted timing values only.
-  - **V-3 — Build integrity / Diagnostics route: VERIFIED.** A full recursive
-    scan of `src/` and `base44/` for `phase1Capture`, `GoldenRunCapture`, and
-    `recordPromptHash` returns ZERO hits in `src/` — no dangling imports, so the
-    frontend bundle cannot break on the deleted modules. `Diagnostics.jsx`
-    imports only live modules (NavigationLogger, janusSchema, exportUtils,
-    pages.config, LiquidGlass, base44Client) and no longer mounts the capture
-    panel. Two backend references remain and are safe (see V-5).
+  - **V-3a — Static-reference scan: PASSED.** A full recursive scan of `src/` and
+    `base44/` for `phase1Capture`, `GoldenRunCapture`, and `recordPromptHash`
+    returns ZERO hits in `src/`. `Diagnostics.jsx` imports only live modules
+    (NavigationLogger, janusSchema, exportUtils, pages.config, LiquidGlass,
+    base44Client) and no longer mounts the capture panel. Two backend references
+    remain and are safe (see V-5).
+    **Scope limit (correction 2026-08-03):** this was previously labelled
+    "Build integrity — VERIFIED". **That label was overclaimed and is withdrawn.**
+    A name scan proves only that those exact identifiers are absent; it proves
+    nothing about whether the application compiles or the routes render.
+  - **V-3b — Production build: ✅ VERIFIED 2026-08-03.** `npx vite build` executed
+    in the sandbox: **exit status 0**, `dist/` emitted (`index.html` + `assets`).
+    No compilation errors. Only non-blocking warnings (stale `caniuse-lite` /
+    `baseline-browser-mapping` data). The bundle builds.
+  - **V-3c — Route load verification: PARTIAL.** Rendered observation obtained for
+    **/BlueprintPrint** (1440×900 — renders correctly: header, run selector,
+    empty-state card, tab bar). One capture attempt for **/BackendRuns** failed at
+    the tooling level (no page error observed — the screenshot service did not
+    return). **Still unrendered: /Diagnostics, /NewQuery, /History, /Results,
+    /BackendRun.** V-3c stays OPEN until each is loaded and observed.
   - **V-4 / V-5 — Golden-capture and prompt-comparison capability: PRESERVED,
     BUT DEGRADED. No restore required.** The deleted files were a UI convenience
     layer, not the mechanism. The actual capability lives in two intact backend
@@ -462,11 +503,41 @@ Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (
     (presence, array-length, subdomain, intersection, render_md ±1% tolerance,
     validation_errors equality). Both are operator-invocable directly and are
     unaffected by the UI deletion.
-    A **Full golden baseline is still producible**: completed Full-mode runs with
-    both blueprint and synthesis exist in the database (e.g. `69ebc39ddfd79c…`,
-    `69e185ef6a092f…`, `69e044356b738a…`, `69d31010232c54…`), and
-    `captureGoldenRun` accepts any completed run by ID. The missing Full baseline
-    is therefore a task not yet performed, NOT a lost capability.
+    **⚠️ MAJOR CORRECTION (2026-08-03) — the earlier Full-golden claim was WRONG
+    and is withdrawn.** It asserted that "completed Full-mode runs with both
+    blueprint and synthesis exist" and named four as candidates. `completed` +
+    blueprint + synthesis is **not** a qualifying test, and two of the four named
+    runs are **already-registered completion-invariant violations** in
+    `EV_AUDIT_REGISTER.md` EV-2: `69ebc39d…` is **missing Corpus** (EV-2 row 4) and
+    `69e185ef…` is **missing Cogito** (EV-2 row 5). Citing audited defective runs
+    as golden candidates was a direct contradiction of our own evidence register.
+
+    **A Full golden candidate must first pass, in order:** (1) the mode-specific
+    structural invariant (refresh, corpus, cogito, animus, actus, synthesis,
+    blueprint all present and non-empty); (2) **required intersection
+    completeness** (all 6 pairs); (3) schema validation; (4) dependency
+    consistency; (5) absence or explicit adjudication of `validation_errors`;
+    (6) semantic review of the resulting artifact.
+
+    **Re-audit result — NO QUALIFYING CANDIDATE EXISTS.** All 15 Full-mode runs in
+    the database were re-examined field-by-field against the gates above:
+    - **Gate 2 fails universally.** `synthesis.intersection_matrix` is **empty on
+      every single Full run** — 0 of 6 pairs on all 15. Persisted synthesis keys are
+      only `key_takeaways`, `constraint_collisions`, `limitation_foreground`.
+      Every existing Full run **predates incremental intersection persistence**.
+    - **`corpus.subdomains` is empty on all 15** (keys present: `constraints`,
+      `feasibility_notes` only) — so the corpus subdomain fingerprint is
+      uncapturable from historical data too.
+    - Gate 5: only 6 runs have zero `validation_errors` (`69d31010`, `69cf18a0`,
+      `69ad0451`, `69a63901`, `69a2f90e`, `69a254b2`) — but all 6 still fail Gate 2.
+    - Separately noted: `render_md` sits at exactly 60,040–60,041 chars on 8 runs —
+      the 60k cache cap, i.e. **silently truncated** markdown. Flagged for review.
+
+    **Consequence — this changes the dependency graph.** The Full golden baseline
+    is **not** "a task not yet performed" that can proceed in parallel. It requires
+    a **freshly generated, invariant-passing Full run**, which the current engine
+    cannot produce under the measured ~295 s ceiling. **Full-golden capture is
+    therefore BLOCKED BEHIND the architecture decision**, not independent of it.
     **Degradation to record:** `captureGoldenRun` gates g5/g6/g7 and
     `compareToGolden` check #9 all read `run.debug_prompt_hashes`. With the
     schema field removed, those gates will now evaluate false / be skipped for
@@ -488,10 +559,37 @@ Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (
   - **V-7 — Prompt-byte invariance: PENDING DETERMINISTIC COMPARISON.** The
     earlier claim that prompt bytes are unchanged "by construction" is
     RETRACTED as an assertion. The recorder was a no-op when unset, which is an
-    argument, not a measurement. Status: unverified until a Standard run is
-    compared against the `STANDARD_v1` golden (`6a280c9b…`) or an equivalent
-    validated baseline via `compareToGolden`. Note the comparison will now be
-    limited to content-hash and structural checks per V-5.
+    argument, not a measurement.
+
+    **⚠️ CORRECTION (2026-08-03).** The earlier disposition — "compare a Standard
+    run against `STANDARD_v1` via `compareToGolden`" — **cannot discharge V-7 and
+    is withdrawn as a closure path.** `compareToGolden` compares **outputs**:
+    content hashes, array lengths, structural fingerprints, `render_md` size.
+    Prompt-byte invariance is a claim about **inputs**. Output parity is
+    consistent with prompt drift (a changed prompt can yield a structurally
+    identical artifact) and output divergence is consistent with prompt stability
+    (LLM non-determinism). The evidence channel V-7 relied on —
+    `debug_prompt_hashes` — **no longer exists for new runs** (V-6). Claiming the
+    output comparator can close an input-parity gate would be a category error.
+
+    **V-7 must be closed by exactly ONE of these three explicit paths (operator
+    choice required):**
+    1. **Restore a bounded prompt-evidence mechanism** — a narrowly-scoped prompt
+       snapshot or hash, captured for the parity test only, then torn down again
+       under a teardown plan written *before* it ships (Phase -1's lesson).
+    2. **Deterministic offline prompt-construction test** — call `buildPrompt` /
+       `buildDomainContext` / `buildSMEIdentity` / `buildCompressedBlueprintContext`
+       with **fixed inputs**, and byte-compare the generated prompt strings against
+       committed fixtures. **Preferred:** no LLM spend, no schema change, no
+       production instrumentation, runs in CI, and it tests exactly the claim.
+       Also the only option that protects DEBT-2 — it can assert the browser and
+       server engine copies emit **identical bytes**.
+    3. **Formally abandon byte-level parity** and redefine the fidelity gate in
+       terms of structural/content equivalence — requires **explicit operator
+       approval** and an amendment recording what fidelity guarantee Janus then has.
+
+    Until one path is chosen and executed, V-7 is **OPEN** and no fidelity claim
+    about prompt bytes may be made.
 
   **Artifact classification (item 7): RETAINED DIAGNOSTICS.** Both
   `probeExecutionBudget` (auth-guarded, touches no Run records, writes only
@@ -552,9 +650,30 @@ Closes the open research item from TR-0(c). Evidence class: **platform documenta
   survey's reach.
   Workflows are a strong candidate carrier for a segmented Janus pipeline.
   Relevant properties, from the authoring guide:
-  - Steps are **strictly sequential** (no parallelism) — which matches the Janus
-    domain dependency chain (corpus → cogito → animus → actus → synthesis →
-    blueprint) exactly. No pipeline redesign needed to fit the model.
+  - Steps are **strictly sequential** (no parallelism).
+    **⚠️ CORRECTION (2026-08-03): the earlier claim that this "matches Janus's dependency
+    chain exactly" is WRONG and is withdrawn.** Janus Full mode is **not a linear chain —
+    it is a dependency graph (DAG)**: 7 domains plus **6 cross-domain intersections that
+    become eligible as their parent domains complete** (INTERSECTION_TRIGGERS —
+    cogito→1 pair, animus→2, actus→3; §1). A strictly sequential Workflow can execute a
+    **valid topological ordering** of that graph, but that is not the same as matching it.
+    Consequences that must be carried into any design:
+    **serialization of work that could otherwise be scheduled independently**, with
+    knock-on effects on **latency**, **cost**, and **checkpoint semantics** (a linear
+    step list cannot express "these 3 pairs became eligible together").
+    Decomposition options to compare — none selected:
+    (i) **one Workflow step per domain + per intersection** (13 steps in Full — maximum
+    granularity and observability, maximum step-fraction cost, fully serialized);
+    (ii) **grouped intersection steps** (fire each trigger cohort as one step — fewer
+    steps, coarser checkpoints, retains eligibility semantics);
+    (iii) **application-managed DAG scheduling** (we compute eligibility and dispatch —
+    preserves the true graph, all mechanism is ours);
+    (iv) **hybrid Workflow spine + Run-record checkpoints** (platform durability,
+    application-level eligibility).
+    **Binding constraint on all four: CP-002 input and dependency fidelity must be
+    preserved exactly** — identical prompt inputs and identical upstream dependencies per
+    call, whatever the decomposition. A decomposition that changes what a domain sees is
+    a protocol change, not a refactor.
   - Each `invoke_backend_function` step is a **separate backend-function
     invocation** in an ordered sequence.
     ⚠️ **HYPOTHESIS, NOT ESTABLISHED FACT — H-1.** It is *architecturally
@@ -564,11 +683,22 @@ Closes the open research item from TR-0(c). Evidence class: **platform documenta
     only: ordered backend-function steps, conditions, durable delays, entity
     triggers, per-step run visibility, and step-count-based credit usage.
     **No design may depend on independent per-step budgets until H-1 is measured.**
-    Discharge condition: execute a minimal Workflow probe with at least two timed
-    backend-function steps (each deliberately running past the single-invocation
-    ceiling, or instrumented with start/end timestamps written to an entity),
-    then preserve the run log as evidence. Until then H-1 stays flagged
-    everywhere it is relied upon.
+
+    **Discharge condition — CORRECTED PROBE DESIGN (2026-08-03).** An earlier draft
+    proposed steps that *deliberately exceed* the 5-minute function ceiling. **That
+    design is rejected as invalid:** it would only re-demonstrate that an individual
+    invocation gets terminated, which is already known, and would tell us nothing about
+    the workflow-level envelope.
+    The correct experiment uses **two instrumented steps that are each safely BELOW the
+    individual ceiling but whose COMBINED duration exceeds it** — e.g. two steps of
+    ~3 minutes each (~6 min total). The question under test is: *can a Workflow run
+    exceed one function's wall-clock ceiling while every constituent invocation remains
+    individually valid?*
+    Evidence to preserve from the probe run:
+    per-step **start and end timestamps**; the **Workflow run ID**; **per-step status**;
+    **total elapsed time**; **heartbeat evidence** within each step; **credit usage**
+    (which also discharges the unpublished per-step fraction); **retry behaviour**; and
+    the **final Workflow status**. Preserve the run log itself, not just a summary.
   - `wait` is **durable and survives restarts** (ISO-8601 durations).
   - **Per-step run visibility** — the run log shows exactly which step succeeded
     or failed. This directly attacks the silent-kill death signature and is the
@@ -647,9 +777,16 @@ completed steps, Resume action on /BackendRun. Completion tests as previously re
 recomputing them; (3) active-run claim still no-op; (4) resumed artifact validates.
 
 ### Approved Backlog
-- Phase 5A.1 — Fluid typography (clamp() system) for /BlueprintPrint (recovered design)
-- Phase 5A.2 — Unify BlueprintTab → schematic view (superset verified; needs explicit go)
 - Golden-run dry test vs STANDARD_v1 archive (compareToGolden) after any engine change
+
+### Pending Ratification (NOT approved — corrected 2026-08-03)
+Moved out of "Approved Backlog", which misclassified them. DOC-BP-IMP-002, the source
+plan, classifies both as recovered design **pending ratification**:
+- **Phase 5A.1** — Fluid typography (`clamp()` system) for /BlueprintPrint. Recovered
+  design, pending ratification.
+- **Phase 5A.2** — Unify BlueprintTab → schematic view. Pending ratification **and**
+  listed under "Pending operator decisions" #2 as requiring **explicit operator
+  authorization**. It was never approved.
 
 ### Idea Reservoir (recorded, NOT authorized)
 - Step-chained server execution: one function invocation per pipeline step, chained via

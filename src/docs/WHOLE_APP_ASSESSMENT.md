@@ -7,7 +7,32 @@
 * **Author:** Kytheion (Scribe-Particle-4)
 * **Authority:** Operator-directed (DIMA), whole-product review
 * **Companion:** `JANUS_ENGINE_CONTINUITY.md` (CR-JBE-001) — execution forensics
-* **Status:** Evidence-recorded. No architecture decision is made in this document.
+* **Status: PROVISIONAL — NOT a completed whole-application assessment.**
+  Corrected 2026-08-03 following operator review. No architecture decision is made here,
+  and **no work is authorized here.**
+
+> ### Correction notice (2026-08-03) — read before using this document
+> Operator review found four overclaims in Rev 1.0. All are corrected below:
+> 1. **§1 was labelled "benchmarking". It was not** — it was internal architectural
+>    opinion. Downgraded and quarantined; the real benchmark is **OPEN**.
+> 2. **§2's "every page is a fixed 720 px column and all styling is inline" was FALSE
+>    repository-wide.** Corrected and narrowed in place.
+> 3. **§5 Lane 1 said "start immediately" / "the correct thing to build first."**
+>    That promoted TR-1a from candidate to active work. **Withdrawn.**
+> 4. **§2 made claims about `/BlueprintPrint` and Results without reading them or
+>    observing them rendered.** Code now read; rendered audit partially done and
+>    explicitly scoped.
+>
+> **Completion status of this assessment:**
+> | Workstream | Status |
+> |---|---|
+> | Base44 execution-path research | Substantially complete; **H-1 open** |
+> | Code-based UI review | Complete for sampled routes; **not repository-wide** |
+> | Rendered viewport audit | **PARTIAL** — see §2.0 |
+> | Implementation-plan reconciliation | Continuity contradictions **now removed** (2026-08-03) |
+> | External current-practice benchmarking | **OPEN — not started** |
+> | Integrated roadmap | **PROVISIONAL** |
+> | Lane 1 / TR-1a | **High-value unblocked candidate — NOT activated** |
 
 > **Standing epistemic rule for this document.** Every finding carries an
 > evidence class: **[MEASURED]** (observed directly), **[DOCUMENTED]** (platform
@@ -85,7 +110,32 @@ That is operator-visible information I cannot read.
 
 ---
 
-## Section 1 — Product & Architecture Benchmarking
+## Section 1 — Internal Architectural Opinion (NOT a benchmark)
+
+> **⚠️ SECTION DOWNGRADED 2026-08-03.** This section was published as
+> "Product & Architecture Benchmarking". **It is not benchmarking.** It contains no
+> named comparators, no primary documentation, and no repository evidence. Claims such
+> as *"above the norm"*, *"rare"*, *"essentially unique"*, and *"checkpoint-resume is
+> standard practice"* are **unsourced assertions** and are hereby **stripped of
+> evidentiary weight**. They may not be cited, and this document may **not** be called a
+> whole-product benchmark or used to finalize roadmap priority until §1B is delivered.
+>
+> **§1B — External Current-Practice Benchmark: OPEN, NOT STARTED.**
+> Required shape when executed:
+> - **Named comparators**, evidence-first, using current **primary documentation and
+>   live repositories**.
+> - **Layer separation is mandatory:** (Layer 1) official docs + source repositories;
+>   (Layer 2) GitHub issues/discussions; (Layer 3) practitioner and Reddit evidence —
+>   recorded as a **separate supplementary layer**, never mixed into platform fact.
+> - **Matrix dimensions (all 13 required):** checkpoint persistence · resumability ·
+>   step-level retries · idempotency · terminal-state enforcement · schema validation ·
+>   partial-result handling · observability · human intervention · branching/DAG
+>   execution · versioning · cost telemetry · long-running AI-task UX.
+> - Each cell cites its source. Uncited cells stay empty rather than being inferred.
+>
+> The text below is retained **only** as the internal hypothesis set that §1B must test.
+
+### Section 1A — Internal opinion, retained as hypotheses to be tested
 
 ### 1.1 What Janus actually is, in current-practice terms
 
@@ -170,20 +220,53 @@ spring-animated tab indicator, page transitions, pull-to-refresh, and an
 Apple-requirement account-deletion path. On a phone this is a genuinely polished,
 native-feeling app. That quality is not in question.
 
-### 2.2 The central responsive finding — the app is mobile-only by construction
+### 2.0 Evidence basis — code inspection vs rendered observation
 
-**Every page is a fixed `maxWidth: 720` centred column**, and **all styling is
-inline `style={{}}` objects**, not Tailwind classes.
+| Route | Code read | Rendered observation |
+|---|---|---|
+| `/NewQuery` | ✅ | ❌ not yet |
+| `/History` | ✅ | ❌ not yet |
+| `/Results` | ✅ | ❌ not yet |
+| Domain tabs (Corpus…Export) | ⚠️ partial — `BlueprintTab` only | ❌ not yet |
+| `/BlueprintPrint` | ⚠️ page not fully read; component family listed only | ✅ **1440×900** |
+| `/Diagnostics` | ✅ (summary) | ❌ not yet |
+| `/BackendRun` | ❌ not yet | ❌ not yet |
+| `/BackendRuns` | ✅ | ⚠️ capture attempt failed at tooling level |
 
-Consequence: **inline styles cannot express media queries.** There is no
-mechanism anywhere in the app for a layout to change at a breakpoint. The only
-responsive behaviour present is fluid width up to 720 px plus a few `flexWrap`s.
+**The desktop verdict below is therefore PROVISIONAL.** It rests on one rendered
+capture plus code reading. A final verdict requires all seven surfaces observed at
+representative mobile / tablet / desktop widths.
+
+### 2.2 Responsive finding — CORRECTED 2026-08-03
+
+> **⚠️ The Rev 1.0 claim — "every page is a fixed 720 px column and all styling is
+> inline" — is FALSE repository-wide and is WITHDRAWN.**
+> Verified counterexamples: **`/BackendRuns`** uses Tailwind throughout
+> (`max-w-3xl mx-auto px-4 py-6`, `flex flex-wrap`, `space-y-3`, `line-clamp-2`);
+> **`/BackendRun`** likewise; **domain tabs** use `md:grid-cols-*` and
+> `lg:grid-cols-*`; numerous Janus components use class-based responsive grids.
+> Column widths also differ per page — `/Results` is `maxWidth: 900`,
+> `/BlueprintPrint` renders at roughly 960 px, not 720.
+
+**The accurate, narrower finding:**
+
+> The primary **Liquid Glass shell pages examined — particularly `NewQuery` and
+> `History` — use a centred 720 px inline-styled layout**, while the **repository as a
+> whole contains a mixed inline-style and Tailwind responsive system.**
+
+The consequence still holds *for the inline-styled shell pages specifically*: inline
+`style={{}}` cannot express media queries, so those pages have no breakpoint mechanism.
+But the repository is not uniformly in that state — the IMP-002 pages and several
+component families are already class-based and breakpoint-aware. **The real problem is
+therefore inconsistency, not a global absence of responsive capability**: two styling
+systems coexist with no stated rule for which applies where, and the newer Tailwind
+surfaces are the responsive ones while the primary user-facing shell is not.
 
 | Viewport | Actual behaviour | Verdict |
 |---|---|---|
-| Mobile (≤430 px) | Full-bleed column, bottom pill nav, safe areas honoured | **Excellent** — the design target |
-| Tablet (768–1024 px) | Same 720 px column, centred; bottom pill still fixed at 440 px | **Adequate but unconsidered** — reads as a blown-up phone |
-| Desktop (≥1280 px) | Same 720 px column stranded in the centre; ~60% of viewport is empty ambient background; navigation remains a floating bottom pill | **Poor** — violates desktop convention and wastes the space that dense blueprint content most needs |
+| Mobile (≤430 px) | Full-bleed column, bottom pill nav, safe areas honoured | **Excellent** — the design target *(code-inferred; not yet rendered)* |
+| Tablet (768–1024 px) | Shell pages hold their inline max-width; bottom pill fixed at 440 px | **Adequate but unconsidered** *(not yet rendered)* |
+| Desktop (≥1280 px) | **RENDERED at 1440×900 on `/BlueprintPrint`:** content column ≈960 px centred, large empty ambient field left/right and below the fold; navigation remains a floating bottom pill | **Provisionally poor** — confirmed for this one route by observation; desktop convention favours top/side nav, and dense schematic content is confined to ~⅔ of the viewport |
 
 This matters disproportionately for **`/BlueprintPrint`** and the **Results
 domain tabs**, which render wide schematic content — dependency graphs, I/O hubs,
@@ -338,7 +421,17 @@ option above makes it *more* granular, not less.
 
 Ordered by dependency, not ambition. Each item states what unblocks it.
 
-### Lane 1 — Unblocked, correctness-critical (start immediately)
+### Lane 1 — Highest-value currently unblocked CANDIDATES (⛔ NOT AUTHORIZED)
+
+> **⚠️ AUTHORIZATION CORRECTION 2026-08-03.** Rev 1.0 headed this lane
+> "start immediately" and called the completion invariant "the correct thing to build
+> first". **Both phrasings are withdrawn.** They promoted TR-1a from candidate to active
+> implementation, contradicting the continuity record, which holds TR-1a **not promoted,
+> not sequenced, not authorized**, with its priority explicitly **held open** until the
+> broader assessment completes.
+> Correct classification: **the highest-value currently unblocked candidate.**
+> Nothing in this lane is authorized work. **No implementation begins unless DIMA
+> activates it.** Ordering below is analytical, not a schedule.
 
 | # | Item | Why now |
 |---|---|---|
@@ -350,10 +443,10 @@ Ordered by dependency, not ambition. Each item states what unblocks it.
 
 | # | Item | Discharges |
 |---|---|---|
-| 2.1 | **Minimal Workflow probe** — two timed backend-function steps writing start/end timestamps to an entity; preserve the run log | **H-1** (independent per-step budget) **and** the per-step credit fraction, in one run |
+| 2.1 | **Minimal Workflow probe — corrected design.** Two instrumented backend-function steps, each **safely BELOW** the ~5-min single-invocation ceiling but **combining to exceed it** (e.g. ~3 min + ~3 min). Do **not** make steps deliberately overrun — that only re-proves individual termination. Preserve: per-step start/end timestamps, Workflow run ID, per-step status, total elapsed, heartbeat evidence, credit usage, retry behaviour, final Workflow status, and the run log itself | **H-1** (can a Workflow exceed one function's ceiling while each invocation stays valid?) **and** the per-step credit fraction, in one run |
 | 2.2 | **Operator check of Dashboard → Automations** | §0.2 automation inventory; §0.3 migration necessity |
 | 2.3 | **Confirm workspace plan tier and credit headroom** | §0.4 entitlement precondition |
-| 2.4 | **Capture the Full-mode golden baseline** from an existing qualifying completed run | Restores regression coverage for Full before any refactor touches it |
+| 2.4 | ~~Capture the Full-mode golden baseline from an existing qualifying completed run~~ **WITHDRAWN — no qualifying candidate exists.** Re-audit of all 15 Full runs: `intersection_matrix` is **empty on every one** and `corpus.subdomains` empty on every one; two previously-cited candidates (`69ebc39d…`, `69e185ef…`) are registered EV-2 violations. A Full golden needs a **freshly generated invariant-passing Full run**, which the engine cannot produce under the measured ceiling. **This item is BLOCKED BEHIND the architecture decision — it moves to Lane 3.** | — |
 | 2.5 | **Re-scope golden gates** to the 5 surviving checks, or consciously accept `all_pass = false` | Makes the harness usable again |
 
 > **Gate:** the architecture decision (Lane 3) should not be taken until 2.1, 2.2
