@@ -351,14 +351,39 @@ Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (
   as binding acceptance conditions. **Enforcement is NOT part of this audit** — it is
   the PROPOSED candidate TR-1a below. Repairing the 10 mis-stamped historical runs is a
   separate open operator decision (no data changed).
-- **(c) Execution-budget probe — PENDING AUTHORIZATION.** Create + run
-  `probeExecutionBudget` (heartbeat loop + LLM pings per IMP-002 §Phase 0); document max
-  wall-clock, death signature, per-call latency here; record the Path A vs checkpoint
-  decision. Plus Phase -1 teardown (subtask -1.8): remove the temp prompt-hash recorder
-  from llmTimeout.jsx and `debug_prompt_hashes` from the Run schema; -1.9 verification
-  rides on DIMA's next organic run (no dedicated credit spend).
-Must-not-regress: both lanes untouched except the recorder removal (a no-op when unset);
-prompt bytes unchanged; STANDARD_v1 golden remains comparable.
+- **(c) Execution-budget probe — ✅ EXECUTED (2026-08-03, authorized by DIMA).**
+  `probeExecutionBudget` (backend function + ProbeResult entity) ran two wall-clock
+  probes and one latency probe. **Measured findings (evidence class: directly verified):**
+  - **Wall-clock ceiling ≈ 295 seconds (~5 min).** Probe 1: died at tick 29,
+    elapsed 292,350 ms. Probe 2: died at tick 29, elapsed 293,954 ms. Identical
+    signature both times.
+  - **Death signature: silent kill.** No error surfaces, no final write occurs — the
+    isolate simply stops between heartbeats. An external observer sees only a stale
+    `last_heartbeat`. (This matches the pattern EV-1-era diagnostics could never see.)
+  - **Execution SURVIVES client disconnect.** Probe 2's caller disconnected at ~8 s;
+    heartbeats continued to the ~294 s ceiling. The ceiling is a platform wall-clock
+    limit, not a connection dependency.
+  - **LLM ping latency:** 1,073 / 1,019 / 1,062 ms per minimal InvokeLLM round-trip.
+  Raw evidence: ProbeResult records `6a6fe5df…` and `6a6fe7f9…` (retained).
+  **Path decision (data-determined): Path A — one server invocation running the whole
+  pipeline — is ELIMINATED for standard/full modes.** A single domain call is budgeted
+  up to 240 s (TIMEOUT_MATRIX); the whole pipeline is 6–13+ LLM calls; a 295 s ceiling
+  cannot contain it — this is also consistent with server run `6a58dbbf…` failing.
+  The server lane therefore requires segmented execution (per-step invocation chaining
+  or checkpoint-resume, ≤ ~4 min of work per invocation with a safety margin). WHICH
+  segmentation granularity to adopt is a class-(6) proposal for the TR-1 design, not
+  decided here.
+- **(d) Phase -1 teardown (subtask -1.8) — ✅ DONE (2026-08-03).** Removed: prompt-hash
+  recorder block + call site from llmTimeout.jsx; `debug_prompt_hashes` from the Run
+  schema; phase1Capture.jsx and GoldenRunCapture.jsx (and its Diagnostics mount).
+  Recorder was a no-op when unset, so prompt bytes are unchanged by construction;
+  -1.9 verification rides on DIMA's next organic Standard run. STANDARD_v1 golden
+  remains comparable.
+
+**TR-0 status: CLOSED (2026-08-03)** per the §4.5 closure statement — incident
+reconstruction and structural completion audit complete; remediation scope,
+dependency-consistent repair classifications, and semantic-fidelity validation remain
+open. The probe function/entity are retained as diagnostic tooling.
 
 **TR-1a — Completion-Invariant Enforcement** — evidence class (6): **PROPOSED
 engineering change, CANDIDATE status only. Not promoted, not sequenced, not authorized.**

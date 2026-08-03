@@ -1,0 +1,45 @@
+{
+  "name": "ProbeResult",
+  "type": "object",
+  "properties": {
+    "probe_type": {
+      "type": "string",
+      "description": "Type of probe: wall_clock or llm_latency"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_heartbeat": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Updated every tick \u2014 the last write before platform kill reveals the wall-clock ceiling"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tick_count": {
+      "type": "number",
+      "default": 0
+    },
+    "elapsed_ms": {
+      "type": "number",
+      "default": 0
+    },
+    "survived": {
+      "type": "boolean",
+      "default": false,
+      "description": "True only if the probe reached its target duration without being killed"
+    },
+    "max_minutes": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "probe_type"
+  ]
+}

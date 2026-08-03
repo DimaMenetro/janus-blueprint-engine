@@ -972,31 +972,6 @@
           }
         }
       }
-    },
-    "debug_prompt_hashes": {
-      "type": "array",
-      "description": "IMP-002-R-D-SRV Phase -1 \u2014 TEMPORARY field used only during golden run capture. Stores SHA-256 hashes of each LLM prompt issued during the run. WILL BE REMOVED at end of Phase -1 (subtask -1.8). Optional.",
-      "items": {
-        "type": "object",
-        "properties": {
-          "call_label": {
-            "type": "string"
-          },
-          "prompt_hash_sha256": {
-            "type": "string"
-          },
-          "prompt_length": {
-            "type": "number"
-          },
-          "attempt": {
-            "type": "number"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      }
     }
   },
   "required": [
