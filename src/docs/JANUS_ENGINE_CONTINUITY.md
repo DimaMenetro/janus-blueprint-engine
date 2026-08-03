@@ -351,39 +351,240 @@ Probe** — revised 2026-08-02 after EV-1/EV-2. Awaiting DIMA go-ahead on part (
   as binding acceptance conditions. **Enforcement is NOT part of this audit** — it is
   the PROPOSED candidate TR-1a below. Repairing the 10 mis-stamped historical runs is a
   separate open operator decision (no data changed).
-- **(c) Execution-budget probe — ✅ EXECUTED (2026-08-03, authorized by DIMA).**
-  `probeExecutionBudget` (backend function + ProbeResult entity) ran two wall-clock
-  probes and one latency probe. **Measured findings (evidence class: directly verified):**
-  - **Wall-clock ceiling ≈ 295 seconds (~5 min).** Probe 1: died at tick 29,
-    elapsed 292,350 ms. Probe 2: died at tick 29, elapsed 293,954 ms. Identical
-    signature both times.
-  - **Death signature: silent kill.** No error surfaces, no final write occurs — the
-    isolate simply stops between heartbeats. An external observer sees only a stale
-    `last_heartbeat`. (This matches the pattern EV-1-era diagnostics could never see.)
-  - **Execution SURVIVES client disconnect.** Probe 2's caller disconnected at ~8 s;
-    heartbeats continued to the ~294 s ceiling. The ceiling is a platform wall-clock
-    limit, not a connection dependency.
-  - **LLM ping latency:** 1,073 / 1,019 / 1,062 ms per minimal InvokeLLM round-trip.
-  Raw evidence: ProbeResult records `6a6fe5df…` and `6a6fe7f9…` (retained).
-  **Path decision (data-determined): Path A — one server invocation running the whole
-  pipeline — is ELIMINATED for standard/full modes.** A single domain call is budgeted
-  up to 240 s (TIMEOUT_MATRIX); the whole pipeline is 6–13+ LLM calls; a 295 s ceiling
-  cannot contain it — this is also consistent with server run `6a58dbbf…` failing.
-  The server lane therefore requires segmented execution (per-step invocation chaining
-  or checkpoint-resume, ≤ ~4 min of work per invocation with a safety margin). WHICH
-  segmentation granularity to adopt is a class-(6) proposal for the TR-1 design, not
-  decided here.
-- **(d) Phase -1 teardown (subtask -1.8) — ✅ DONE (2026-08-03).** Removed: prompt-hash
-  recorder block + call site from llmTimeout.jsx; `debug_prompt_hashes` from the Run
-  schema; phase1Capture.jsx and GoldenRunCapture.jsx (and its Diagnostics mount).
-  Recorder was a no-op when unset, so prompt bytes are unchanged by construction;
-  -1.9 verification rides on DIMA's next organic Standard run. STANDARD_v1 golden
-  remains comparable.
+- **(c) Execution-budget measurement — ✅ COMPLETE (2026-08-03, operator-authorized).**
 
-**TR-0 status: CLOSED (2026-08-03)** per the §4.5 closure statement — incident
-reconstruction and structural completion audit complete; remediation scope,
-dependency-consistent repair classifications, and semantic-fidelity validation remain
-open. The probe function/entity are retained as diagnostic tooling.
+  **Reproduction record (evidence class: directly measured).**
+  - Function under test: `base44/functions/probeExecutionBudget/entry.ts`.
+    Revision at time of probe: auth guard temporarily replaced with a tolerant
+    `try { await base44.auth.me(); } catch {}` block to permit sandbox-driven
+    invocation; all other logic identical to the committed revision. Auth guard
+    restored immediately after (see Validation V-1).
+  - Invocation method: `base44.functions.invoke('probeExecutionBudget', {...})`
+    from the platform exec sandbox (not the browser, not the Diagnostics page).
+  - Heartbeat mechanism: `ProbeResult.update()` every 10 s inside a
+    `while (Date.now() - t0 < maxMinutes*60000)` loop.
+
+  | | Probe 1 | Probe 2 |
+  |---|---|---|
+  | ProbeResult ID | `6a6fe5df392d47fc4168b8bb` | `6a6fe7f9136ad8ed5e916556` |
+  | `started_at` | 2026-08-03T00:50:39.388Z | 2026-08-03T00:59:37.144Z |
+  | payload `maxMinutes` | 10 | 8 |
+  | final `last_heartbeat` | 2026-08-03T00:55:31.820Z | 2026-08-03T01:04:31.233Z |
+  | final `tick_count` | 29 | 29 |
+  | final `elapsed_ms` | 292,350 | 293,954 |
+  | `survived` | false | false |
+  | `completed_at` | null | null |
+
+  - **Heartbeat sequence (Probe 2), sampled by an independent observer:**
+    t≈110 s → tick 11, elapsed 110,676 ms, heartbeat age 6.9 s (live);
+    t≈233 s → tick 23, elapsed 233,506 ms, heartbeat age 8.4 s (live);
+    t≈360 s → tick 29, elapsed 293,954 ms, heartbeat age 66.3 s (dead).
+    Ticks advanced monotonically at ~10 s until they stopped.
+  - **Disconnect timing (Probe 2):** the invoking caller was released at
+    ~8 s after launch (`Promise.race` against an 8,000 ms timer; the invoke
+    promise was never awaited to completion). Heartbeats continued for a
+    further ~286 s after caller release.
+  - **Death signature:** silent. No error returned, no rejection surfaced to
+    any observer, `survived` never set true, `completed_at` never written. The
+    isolate stops between two heartbeat writes; the only external symptom is a
+    `last_heartbeat` that stops advancing.
+  - **Minimal-LLM latency (phase `llm`):** 1,073 / 1,019 / 1,062 ms for three
+    sequential `InvokeLLM` calls with the prompt `"Reply with the single word:
+    pong"`, model `claude_sonnet_4_6`, no schema, no internet context.
+    **Scope limit:** this measures endpoint reachability and per-call baseline
+    overhead ONLY. It does NOT characterize production Janus domain-call
+    latency, which carries multi-KB accumulated prompts and large structured
+    JSON responses (the TIMEOUT_MATRIX budgets 90–240 s precisely because those
+    calls are nothing like a ping). Do not extrapolate pipeline duration from
+    this number.
+
+  **Conclusion (scoped exactly to what was measured).**
+  > A single synchronous backend-function invocation is not viable for the
+  > current Standard and Full Janus pipelines under the observed ~295-second
+  > execution ceiling.
+
+  Basis: one domain call alone is budgeted up to 240 s in TIMEOUT_MATRIX; a
+  Standard run issues 7+ sequential LLM calls and Full more; the observed
+  ceiling (~292–294 s, twice, identical tick count) cannot contain them. This is
+  consistent with the failure of server run `6a58dbbf…`.
+
+  **Explicitly NOT established by this probe.** The ceiling was measured on ONE
+  execution path — a synchronous `functions.invoke` of a Deno backend function.
+  It is NOT established that every Base44 execution mechanism shares this limit.
+  Open research item (carried into the external-research phase): determine
+  whether Base44 currently offers distinct execution paths — background jobs,
+  scheduled functions, asynchronous continuation, function chaining, queues, or
+  workflow orchestration — and document the wall-clock limit, invocation model,
+  and durability guarantee of each. Until that is done, no statement of the form
+  "Path A is eliminated on Base44" may be written; the rejection above is scoped
+  to the synchronous-invocation path for Standard/Full runs.
+
+  **Remaining open decision:** the choice among checkpoint-resume, per-stage
+  invocation chaining, or another supported Base44 mechanism is UNDECIDED and
+  depends on the research item above plus the whole-application assessment.
+
+- **(d) Phase -1 teardown — IMPLEMENTATION COMPLETE, VALIDATION RECORDED (2026-08-03).**
+  Removed: prompt-hash recorder block + call site from `llmTimeout.jsx`;
+  `debug_prompt_hashes` from the Run schema; `phase1Capture.jsx`;
+  `GoldenRunCapture.jsx` and its Diagnostics mount.
+
+  **Validation results:**
+  - **V-1 — Auth enforcement restored: VERIFIED AT SOURCE, RUNTIME-ANONYMOUS
+    CHECK NOT PERFORMED.** `probeExecutionBudget/entry.ts` lines 14–17 again read
+    `const user = await base44.auth.me(); if (!user) return 401;` — identical to
+    every other function in the app. The temporary tolerant block is gone.
+    Caveat recorded honestly: available tooling invokes functions as an
+    authenticated principal, so a true unauthenticated HTTP call to the deployed
+    endpoint was NOT executed. Claim strength: source-verified, not
+    runtime-verified. To close fully, issue an unauthenticated request to the
+    deployed function URL and confirm 401.
+  - **V-2 — No sensitive data persisted: VERIFIED.** Both ProbeResult records were
+    read back in full. Fields present: `probe_type`, `started_at`,
+    `last_heartbeat`, `completed_at`, `tick_count`, `elapsed_ms`, `survived`,
+    `max_minutes`, `notes` (null), plus platform built-ins. No credentials, no
+    tokens, no prompt text, no Run content, no user PII. `created_by_id` is the
+    platform's opaque service-role principal identifier
+    (`service_67645bce-…`), which is an actor label, not a secret. Probe logs
+    emitted timing values only.
+  - **V-3 — Build integrity / Diagnostics route: VERIFIED.** A full recursive
+    scan of `src/` and `base44/` for `phase1Capture`, `GoldenRunCapture`, and
+    `recordPromptHash` returns ZERO hits in `src/` — no dangling imports, so the
+    frontend bundle cannot break on the deleted modules. `Diagnostics.jsx`
+    imports only live modules (NavigationLogger, janusSchema, exportUtils,
+    pages.config, LiquidGlass, base44Client) and no longer mounts the capture
+    panel. Two backend references remain and are safe (see V-5).
+  - **V-4 / V-5 — Golden-capture and prompt-comparison capability: PRESERVED,
+    BUT DEGRADED. No restore required.** The deleted files were a UI convenience
+    layer, not the mechanism. The actual capability lives in two intact backend
+    functions:
+    `captureGoldenRun` (8-gate verification, SHA-256 content hashes of
+    `render_md`/`raw_json`, structural fingerprints) and `compareToGolden`
+    (presence, array-length, subdomain, intersection, render_md ±1% tolerance,
+    validation_errors equality). Both are operator-invocable directly and are
+    unaffected by the UI deletion.
+    A **Full golden baseline is still producible**: completed Full-mode runs with
+    both blueprint and synthesis exist in the database (e.g. `69ebc39ddfd79c…`,
+    `69e185ef6a092f…`, `69e044356b738a…`, `69d31010232c54…`), and
+    `captureGoldenRun` accepts any completed run by ID. The missing Full baseline
+    is therefore a task not yet performed, NOT a lost capability.
+    **Degradation to record:** `captureGoldenRun` gates g5/g6/g7 and
+    `compareToGolden` check #9 all read `run.debug_prompt_hashes`. With the
+    schema field removed, those gates will now evaluate false / be skipped for
+    all NEW runs, so `all_pass` can never be true going forward and prompt-level
+    byte comparison is no longer available. Content-hash + structural comparison
+    remain fully functional. Either re-scope the gates to the 5 surviving checks
+    or reinstate the recorder if prompt-level diffing is needed again.
+  - **V-6 — Legacy `debug_prompt_hashes` data + reproducibility consequence:
+    RECORDED.** Removing the schema property did NOT delete stored values. Four
+    runs still carry hash arrays and remain readable via service role:
+    `6a280c9bf2d582da07c32fda` (7 entries — the Standard golden),
+    `6a1f4ec4dfdfe3357f2730ab` (4), `6a1f44f4b63fc76c4ded566e` (5),
+    `6a1f3dc0f3078caf8c63f7ad` (5).
+    Consequence: historical prompt hashes are still readable for forensic
+    comparison, but no NEW run can produce a comparable hash set. Prompt-level
+    reproducibility is therefore frozen at the pre-teardown corpus — future
+    prompt drift is detectable only indirectly, via content hashes and
+    structural fingerprints.
+  - **V-7 — Prompt-byte invariance: PENDING DETERMINISTIC COMPARISON.** The
+    earlier claim that prompt bytes are unchanged "by construction" is
+    RETRACTED as an assertion. The recorder was a no-op when unset, which is an
+    argument, not a measurement. Status: unverified until a Standard run is
+    compared against the `STANDARD_v1` golden (`6a280c9b…`) or an equivalent
+    validated baseline via `compareToGolden`. Note the comparison will now be
+    limited to content-hash and structural checks per V-5.
+
+  **Artifact classification (item 7): RETAINED DIAGNOSTICS.** Both
+  `probeExecutionBudget` (auth-guarded, touches no Run records, writes only
+  ProbeResult) and the `ProbeResult` entity are retained as active diagnostic
+  tooling — they will be re-run to measure any alternative execution mechanism
+  found during external research. They are NOT temporary artifacts scheduled for
+  removal and NOT disabled. Retention is reviewed once the execution-path
+  research concludes.
+
+**Status.**
+- TR-0(c) execution-budget measurement: **COMPLETE.**
+- Phase -1 teardown implementation: **COMPLETE**, with validation recorded above;
+  V-1 (runtime-anonymous check) and V-7 (deterministic prompt comparison) remain
+  open sub-items.
+- TR-0 overall: incident reconstruction and structural completion audit complete;
+  remediation scope, dependency-consistent repair classification, and
+  semantic-fidelity validation remain open.
+
+---
+
+## TR-0(e) — Execution-Path Research: Base44 Mechanism Survey (2026-08-03)
+
+Closes the open research item from TR-0(c). Evidence class: **platform documentation
++ authoring guide**, cross-checked against our own measurement.
+
+### Documented limits per mechanism
+
+| Mechanism | Wall-clock limit | Invocation model | Durability |
+|---|---|---|---|
+| **Backend function** (`functions.invoke`) | **5 min, hard** — "requests that exceed this limit are terminated" | synchronous HTTP | none — silent kill |
+| **`waitUntil()`** (`base44:runtime`) | post-response background work | fire-and-forget after return | **best-effort, NOT guaranteed** |
+| **Automations** (legacy apps) | **3 min per run** — shorter | scheduled / data-event / connector | run fails on overrun |
+| **Workflows** (current apps) | per-**step** budget; each step is a separate backend-function invocation | scheduled / entity / connector / agent triggers | **durable** — multi-step, waits survive restarts, per-step run log |
+
+### Findings
+
+- **F-1 — Our measurement matches the documented platform limit exactly.**
+  Documented: 5 minutes. Measured: 292,350 ms and 293,954 ms. Independent
+  confirmation from two directions; the ~295 s ceiling is a real, documented,
+  non-negotiable platform constraint, not an anomaly of our function.
+- **F-2 — The synchronous-invocation rejection is confirmed and now doubly
+  grounded.** Platform docs give the identical remedy we derived from the probe:
+  *"break up work into smaller batches… use scheduled automations to spread work
+  over multiple runs… restructure so each function call handles a smaller chunk."*
+- **F-3 — `waitUntil()` is NOT a viable pipeline carrier.** Explicitly documented
+  as best-effort with no completion guarantee. Using it to run Janus domains
+  would reproduce Defect-1 (silent partial completion) by design. **Rejected.**
+- **F-4 — Automations are strictly worse than a plain function** for our purpose
+  (3 min < 5 min). **Not applicable.**
+- **F-5 — Workflows are the only mechanism providing durable multi-step
+  orchestration**, and are the strongest candidate carrier for a segmented Janus
+  pipeline. Relevant properties, from the authoring guide:
+  - Steps are **strictly sequential** (no parallelism) — which matches the Janus
+    domain dependency chain (corpus → cogito → animus → actus → synthesis →
+    blueprint) exactly. No pipeline redesign needed to fit the model.
+  - Each `invoke_backend_function` step is a **separate function invocation**, so
+    each gets its own execution budget rather than sharing one 5-min ceiling.
+  - `wait` is **durable and survives restarts** (ISO-8601 durations).
+  - **Per-step run visibility** — the run log shows exactly which step succeeded
+    or failed. This directly attacks the silent-kill death signature and is the
+    natural substrate for a completion invariant (Defect-1).
+  - **Entity triggers** fire on Run create/update — a Run inserted with
+    `status: "queued"` could start the workflow with no browser involvement,
+    which is the original IMP-002 goal.
+  - `switch` branching on jq conditions supports resume/skip logic.
+- **F-6 — Constraints to carry into any workflow design.**
+  - Workflows require the **Builder plan or above** — a commercial precondition
+    to verify with DIMA before committing the architecture.
+  - Per-run **credit cost scales with step count**; a 7–13 step Janus run costs
+    more per run than the current monolith.
+  - **If integration credits are exhausted mid-run, the run is cancelled** — a new
+    failure mode that must be handled by the completion invariant.
+  - Minimum scheduled interval is 5 minutes (affects any polling/reaper design,
+    not the main pipeline).
+  - This app currently has **zero workflows defined**; this would be net-new.
+
+### Consequence for the architecture decision
+
+The candidate set is now reduced by evidence, not preference:
+- Monolithic synchronous invocation — **rejected** (F-1, F-2).
+- `waitUntil()` background continuation — **rejected** (F-3).
+- Automations — **not applicable** (F-4).
+- **Remaining viable:** (a) workflow-orchestrated per-stage chaining, or
+  (b) self-chaining backend functions with checkpoint-resume state on the Run
+  record, or (c) a hybrid — workflow as the durable spine with checkpointed
+  stages.
+
+**Still open, still DIMA's call.** The selection among (a), (b), and (c) is
+deliberately NOT made here. It depends on the Builder-plan question (F-6), the
+per-run credit budget, and the whole-application assessment still in progress.
+What the evidence now establishes is only that the viable set contains exactly
+these three, and that whichever is chosen must supply a completion invariant,
+since every rejected option fails silently.
 
 **TR-1a — Completion-Invariant Enforcement** — evidence class (6): **PROPOSED
 engineering change, CANDIDATE status only. Not promoted, not sequenced, not authorized.**
