@@ -3,6 +3,9 @@
 > deadlines were removed by ADE-JBE-001. Other independently verified findings
 > (including the ~295 s backend-function ceiling, resume/idempotency gaps, UI
 > findings, and CP-002 drift) remain evidence unless separately superseded.
+> The prior blanket "no resume" finding is now **partially superseded**: the browser
+> lane can resume a failed Run from persisted domain/intersection checkpoints.
+> Durable background orchestration and server-side step idempotency remain open.
 
 # Janus Blueprint Engine — Whole-Application Assessment
 
