@@ -14,12 +14,13 @@
 > record and the code it points to before acting. The repository/sandbox is canonical;
 > conversational memory is not.
 >
-> **Last verified: 2026-08-03** (amendment pass: TR-0(c) probe, Phase -1 teardown +
-> validation V-1…V-7, TR-0(e) execution-path research, whole-app assessment ASM-JBE-001,
-> and a contradiction-reconciliation sweep of §2, §4 DEBT-1, §4.6, and the Work Registers).
-> Prior verification 2026-08-02 (direct source read of ExecutionEngine.jsx,
-> blueprintSplitCall.jsx, runJanusPipeline/entry.ts, ExecutionContext.jsx, llmTimeout.jsx,
-> janusSchema.jsx, domainSME.jsx).
+> **Current execution state verified: 2026-09-26** — full application audit
+> AUD-JBE-2026-09-26 and completion-oriented execution adjudication ADE-JBE-001.
+> Executable Janus paths were re-read, timer-driven LLM deadlines removed, checkpoint
+> resume and strict completion semantics added, and the production bundle rebuilt.
+> **Historical body last reconciled: 2026-08-03** (TR-0(c), V-1…V-7, TR-0(e),
+> ASM-JBE-001). Historical claims remain provenance unless superseded by the current
+> amendment or ADE-JBE-001.
 >
 > **Amendment rule (binding).** No superseded statement may remain active above its
 > correction. Where a claim has been overtaken, it is either amended in place or marked
