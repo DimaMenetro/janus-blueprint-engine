@@ -1,3 +1,8 @@
+> **AMENDMENT — 2026-09-26.** Any benchmark praise or scoring based on Janus's
+> former TIMEOUT_MATRIX is historical. ADE-JBE-001 removed timer-driven LLM
+> failure inference. Current comparison should evaluate completion-oriented
+> settled-failure retries plus checkpoint/resume semantics instead.
+
 # §1B — External Current-Practice Benchmark (Durable Multi-Stage LLM/Task Pipelines)
 
 * **Document Type:** External Benchmark / Evidence Matrix
