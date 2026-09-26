@@ -184,7 +184,7 @@ QUERY: ${queryText}`;
  * @param {string} noveltyDial - "low" | "medium" | "high"
  * @param {string} outputMode
  * @param {function} onProgress - progress callback
- * @param {function} [onRetry] - optional retry-event callback (forwarded to callLLMResilient).
+ * @param {function} [onRetry] - optional retry-event callback for explicitly settled provider/transport failures.
  *   Receives { callLabel, attempt, error, willRetry, nextDelayMs }. Wired by the
  *   engine to its recordRetry helper so retries land in the Run's retry_log.
  * @param {function} [onHeartbeat] - optional heartbeat callback (stepLabel) =>
@@ -227,7 +227,7 @@ export async function executeBlueprintSplitCall({ source, queryText, blueprintLe
   }
 
   // ── Sub-call 2: Step Expansion (skip for L1 — no substeps/checklists needed)
-  // NOTE: This is the historical root-cause hang site (150s timeout in TIMEOUT_MATRIX).
+  // Historical note: this sub-call was previously subjected to a local elapsed-time cutoff; that design is retired.
   if (blueprintLevel !== "L1") {
     onProgress({ domain: "blueprint:expansion", status: "running", detail: "Expanding steps with detail...", completedDomains: 1, totalDomains: totalSubCalls });
     await beat("blueprint:expansion");
