@@ -178,20 +178,17 @@ QUERY: ${queryText}`;
 
 /**
  * Execute blueprint generation as 3 focused sub-calls.
- * @param {object} source - Run entity (rerun) or priorContext (first-run)
- * @param {string} queryText
- * @param {string} blueprintLevel - "L1" | "L2" | "L3"
- * @param {string} noveltyDial - "low" | "medium" | "high"
- * @param {string} outputMode
- * @param {function} onProgress - progress callback
- * @param {function} [onRetry] - optional retry-event callback for explicitly settled provider/transport failures.
- *   Receives { callLabel, attempt, error, willRetry, nextDelayMs }. Wired by the
- *   engine to its recordRetry helper so retries land in the Run's retry_log.
- * @param {function} [onHeartbeat] - optional heartbeat callback (stepLabel) =>
- *   void/Promise. Fired at each sub-call boundary (skeleton/expansion/criteria)
- *   so the engine can persist current_step + last_heartbeat on the Run.
- *   Module-pure: this file performs NO DB writes itself.
- * @returns {{ data: object|null, errors: string[] }}
+ * @param {{
+ *   source: object,
+ *   queryText: string,
+ *   blueprintLevel: string,
+ *   noveltyDial: string,
+ *   outputMode: string,
+ *   onProgress: Function,
+ *   onRetry?: Function,
+ *   onHeartbeat?: Function
+ * }} options
+ * @returns {Promise<{ data: object|null, errors: string[] }>}
  */
 export async function executeBlueprintSplitCall({ source, queryText, blueprintLevel, noveltyDial, outputMode, onProgress, onRetry, onHeartbeat }) {
   // Safe heartbeat wrapper — never break the pipeline if caller didn't supply one
