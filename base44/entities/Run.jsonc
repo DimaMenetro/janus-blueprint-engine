@@ -952,7 +952,7 @@
           },
           "call_label": {
             "type": "string",
-            "description": "Stable label from TIMEOUT_MATRIX (e.g. 'blueprint:expansion')"
+            "description": "Stable diagnostic execution label (e.g. 'blueprint:expansion'); no elapsed-time budget is implied."
           },
           "attempt": {
             "type": "number",
