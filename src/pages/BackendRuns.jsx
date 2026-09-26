@@ -109,7 +109,7 @@ export default function BackendRuns() {
           </Button>
           <Link to="/BackendRun">
             <Button size="sm" className="gap-1.5">
-              <Plus className="w-4 h-4" /> New
+              <Plus className="w-4 h-4" /> Lane Status
             </Button>
           </Link>
         </div>
@@ -121,8 +121,8 @@ export default function BackendRuns() {
         </div>
       ) : runs.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted-foreground">
-          No backend-owned runs yet. Dispatch one from{" "}
-          <Link to="/BackendRun" className="text-blue-600 underline">Backend Run</Link>.
+          No backend-owned runs are recorded. The legacy monolithic backend lane is disabled for new Janus executions; see{" "}
+          <Link to="/BackendRun" className="text-blue-600 underline">Lane Status</Link>.
         </Card>
       ) : (
         <div className="space-y-3">
