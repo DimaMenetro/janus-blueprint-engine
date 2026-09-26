@@ -78,11 +78,12 @@ export default function BackendRun() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-medium">
-            Submit a server-owned Standard run
+            Legacy server-owned execution lane
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Execution is owned by the server (functions/runJanusPipeline) and persists
-            independently of this browser tab. Same engine, same prompts as /NewQuery.
+            New dispatches are disabled. Direct probes measured the monolithic backend
+            function terminating at about 295 seconds, which is incompatible with completion-oriented
+            Janus Standard/Full execution. Use New Query; healthy LLM work must not be shortened to fit this transport.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -138,10 +139,12 @@ export default function BackendRun() {
             </div>
           )}
 
-          <Button onClick={handleSubmit} disabled={submitting} className="w-full gap-2">
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            {submitting ? "Dispatching…" : "Dispatch Backend Run"}
-          </Button>
+          <Link to="/NewQuery" className="block">
+            <Button className="w-full gap-2">
+              <Play className="w-4 h-4" />
+              Use Completion-Oriented New Query
+            </Button>
+          </Link>
         </CardContent>
       </Card>
     </div>
