@@ -382,6 +382,57 @@ async function callLLM(prompt, domain, refreshEnabled, callLabel, onRetry) {
   return await callLLMCompletionOriented(llmParams, { callLabel: label, onRetry });
 }
 
+const INTERSECTION_TRIGGER_LIST = Object.values(INTERSECTION_TRIGGERS).flat();
+const REQUIRED_INTERSECTION_PAIRS = INTERSECTION_TRIGGER_LIST.map((trigger) => trigger.pair);
+const INTERSECTION_MODEL_BY_PAIR = Object.fromEntries(
+  INTERSECTION_TRIGGER_LIST.map((trigger) => [trigger.pair, trigger.model])
+);
+const CORE_DOMAIN_SEQUENCE = ["corpus", "cogito", "animus", "actus"];
+
+function hasCompleteSynthesis(synthesis) {
+  if (!synthesis || typeof synthesis !== "object") return false;
+  return Boolean(
+    synthesis.quantum_foresight &&
+    synthesis.governed_cogito &&
+    synthesis.narrative_loop &&
+    (synthesis.empathy_driven_strategy || synthesis.alignment_engine)
+  );
+}
+
+function domainCheckpointComplete(domain, data) {
+  if (domain === "synthesis") return hasCompleteSynthesis(data.synthesis);
+  return Boolean(data[domain]);
+}
+
+function hydrateCheckpoint(run) {
+  const mergedData = {};
+  for (const domain of ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"]) {
+    if (run?.[domain]) mergedData[domain] = run[domain];
+  }
+
+  const intersections = {};
+  const matrix = run?.synthesis?.intersection_matrix || {};
+  for (const [pair, value] of Object.entries(matrix)) {
+    if (!value || typeof value !== "object") continue;
+    intersections[pair] = {
+      ...value,
+      _model: INTERSECTION_MODEL_BY_PAIR[pair],
+    };
+  }
+
+  return { mergedData, intersections };
+}
+
+function buildIntersectionMatrix(intersections) {
+  const matrix = {};
+  for (const [key, val] of Object.entries(intersections)) {
+    if (!val || typeof val !== "object") continue;
+    const { _model, ...pairData } = val;
+    matrix[key] = pairData;
+  }
+  return matrix;
+}
+
 // ─── MAIN EXECUTION ──────────────────────────────────────────────────────────
 
 /**
