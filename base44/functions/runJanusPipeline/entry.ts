@@ -1798,7 +1798,8 @@ async function executeJanusServer(base44, runId, params) {
     missingDomains.length === 0 &&
     missingIntersectionPairs.length === 0 &&
     synthesisComplete &&
-    domainErrors.length === 0
+    domainErrors.length === 0 &&
+    (validation.errors || []).length === 0
       ? "completed"
       : "failed";
 
