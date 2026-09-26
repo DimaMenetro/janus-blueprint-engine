@@ -61,6 +61,22 @@ const INTERSECTION_PAIRS = [
   { pair: "animus_x_actus", domains: ["animus", "actus"], model: "empathy_driven_strategy" },
 ];
 
+const REQUIRED_SYNTHESIS_PATTERNS = [
+  "quantum_foresight",
+  "governed_cogito",
+  "narrative_loop",
+  "empathy_driven_strategy",
+];
+
+function hasCompleteSynthesis(synthesis) {
+  if (!synthesis || typeof synthesis !== "object") return false;
+  const matrix = synthesis.intersection_matrix || {};
+  return (
+    Object.keys(matrix).length === INTERSECTION_PAIRS.length &&
+    REQUIRED_SYNTHESIS_PATTERNS.every((key) => Boolean(synthesis[key]))
+  );
+}
+
 // ─── Build intersection prompt (same logic as ExecutionEngine) ───
 function buildIntersectionPrompt(pairKey, modelKey, domainA, domainB, dataA, dataB, queryText) {
   const model = SYNTHESIS_MODELS[modelKey];
@@ -270,32 +286,38 @@ export async function rerunSynthesis(runId, onProgress) {
     }
   }
 
-  // Persist intersection pairs immediately
+  // Persist whatever pair checkpoints completed, even if the rerun must fail.
   await base44.entities.Run.update(runId, {
     synthesis: { intersection_matrix: intersections },
   });
 
-  // Step 2: Compute named patterns
-  onProgress({ domain: "synthesis:patterns", status: "running", detail: "Computing 4 named emergent patterns...", completedDomains: 6, totalDomains: 8 });
-  await heartbeat("rerun:synthesis:patterns");
+  // Named synthesis is invalid unless all six pair checkpoints exist.
+  if (Object.keys(intersections).length === INTERSECTION_PAIRS.length) {
+    onProgress({ domain: "synthesis:patterns", status: "running", detail: "Computing 4 named emergent patterns...", completedDomains: 6, totalDomains: 8 });
+    await heartbeat("rerun:synthesis:patterns");
 
-  try {
-    const patternPrompt = buildSynthesisNamedPatternsPrompt(intersections, queryText);
-    const patternResult = await callLLM(patternPrompt, "rerun:synthesis", recordRetry);
-    const patternParsed = parseLLMResponse(patternResult, "synthesis");
+    try {
+      const patternPrompt = buildSynthesisNamedPatternsPrompt(intersections, queryText);
+      const patternResult = await callLLM(patternPrompt, "rerun:synthesis", recordRetry);
+      const patternParsed = parseLLMResponse(patternResult, "synthesis");
 
-    if (patternParsed.data) {
-      // Merge named patterns with the intersection matrix
-      const fullSynthesis = {
-        ...patternParsed.data,
-        intersection_matrix: intersections,
-      };
-      await base44.entities.Run.update(runId, { synthesis: fullSynthesis });
-    } else {
-      errors.push(`synthesis:patterns: ${patternParsed.error}`);
+      if (patternParsed.data) {
+        const fullSynthesis = {
+          ...patternParsed.data,
+          intersection_matrix: intersections,
+        };
+        await base44.entities.Run.update(runId, { synthesis: fullSynthesis });
+      } else {
+        errors.push(`synthesis:patterns: ${patternParsed.error}`);
+      }
+    } catch (e) {
+      errors.push(`synthesis:patterns: ${e.message}`);
     }
-  } catch (e) {
-    errors.push(`synthesis:patterns: ${e.message}`);
+  } else {
+    const missingPairs = INTERSECTION_PAIRS
+      .map(({ pair }) => pair)
+      .filter((pair) => !intersections[pair]);
+    errors.push(`synthesis:patterns blocked — missing required intersections: ${missingPairs.join(", ")}`);
   }
 
   // Step 3: Finalize
@@ -316,17 +338,26 @@ export async function rerunSynthesis(runId, onProgress) {
   const synthDomainUpdate = {};
   allDomains.forEach(d => { if (normalizedSynthData[d]) synthDomainUpdate[d] = normalizedSynthData[d]; });
 
+  const synthesisComplete = hasCompleteSynthesis(normalizedSynthData.synthesis);
+  const allErrors = [...(validation.errors || []), ...errors];
+  if (!synthesisComplete) allErrors.push("synthesis: required intersection/pattern checkpoints are incomplete");
+  const success = synthesisComplete && allErrors.length === 0;
+  const completedAt = new Date().toISOString();
+
   await base44.entities.Run.update(runId, {
     ...synthDomainUpdate,
-    status: errors.length > 0 && !updatedRun.synthesis?.intersection_matrix ? "failed" : "completed",
+    status: success ? "completed" : "failed",
+    current_step: success ? "completed" : "failed",
+    last_heartbeat: completedAt,
+    completed_at: completedAt,
     render_md: safeTruncate(renderMd, 60000),
     raw_json: safeTruncate(JSON.stringify(normalizedSynthData), MAX_RAW_JSON_LENGTH),
-    // Replace ALL validation errors — fresh validation + only rerun-specific errors
-    validation_errors: [...(validation.errors || []), ...errors],
+    validation_errors: allErrors,
+    error_message: success ? "" : allErrors.join("\n"),
   });
 
-  onProgress({ domain: null, status: "completed", detail: "Synthesis re-run complete" });
-  return { success: errors.length === 0, errors };
+  onProgress({ domain: null, status: success ? "completed" : "failed", detail: success ? "Synthesis re-run complete" : "Synthesis re-run failed; completed checkpoints were preserved" });
+  return { success, errors: allErrors };
 }
 
 /**
@@ -340,9 +371,15 @@ export async function rerunBlueprint(runId, onProgress) {
   const run = runs[0];
   if (!run) throw new Error("Run not found");
 
-  // Blueprint requires core domains; synthesis is used if available but not a hard prerequisite
-  const missing = ["corpus", "cogito", "animus", "actus"].filter(d => !run[d]);
-  if (missing.length > 0) throw new Error(`Cannot re-run blueprint — missing prerequisite domains: ${missing.join(", ")}`);
+  // Blueprint prerequisites follow the selected execution mode.
+  const required = run.execution_mode === "quick"
+    ? ["corpus", "cogito"]
+    : ["corpus", "cogito", "animus", "actus"];
+  const missing = required.filter(d => !run[d]);
+  if (run.execution_mode === "full" && !hasCompleteSynthesis(run.synthesis)) {
+    missing.push("synthesis");
+  }
+  if (missing.length > 0) throw new Error(`Cannot re-run blueprint — missing prerequisite domains: ${[...new Set(missing)].join(", ")}`);
 
   await base44.entities.Run.update(runId, { status: "running" });
 
@@ -411,15 +448,23 @@ export async function rerunBlueprint(runId, onProgress) {
   const domainUpdate = {};
   allDomains.forEach(d => { if (normalizedData[d]) domainUpdate[d] = normalizedData[d]; });
 
+  const allErrors = [...(validation.errors || []), ...errors];
+  const success = Boolean(normalizedData.blueprint) && allErrors.length === 0;
+  if (!normalizedData.blueprint) allErrors.push("blueprint: required blueprint checkpoint is incomplete");
+  const completedAt = new Date().toISOString();
+
   await base44.entities.Run.update(runId, {
     ...domainUpdate,
-    status: errors.length > 0 && !updatedRun.blueprint ? "failed" : "completed",
+    status: success ? "completed" : "failed",
+    current_step: success ? "completed" : "failed",
+    last_heartbeat: completedAt,
+    completed_at: completedAt,
     render_md: safeTruncate(renderMd, 60000),
     raw_json: safeTruncate(JSON.stringify(normalizedData), MAX_RAW_JSON_LENGTH),
-    // Replace ALL validation errors — fresh validation + only rerun-specific errors
-    validation_errors: [...(validation.errors || []), ...errors],
+    validation_errors: allErrors,
+    error_message: success ? "" : allErrors.join("\n"),
   });
 
-  onProgress({ domain: null, status: "completed", detail: "Blueprint re-run complete" });
-  return { success: errors.length === 0, errors };
+  onProgress({ domain: null, status: success ? "completed" : "failed", detail: success ? "Blueprint re-run complete" : "Blueprint re-run failed; partial output was preserved" });
+  return { success, errors: allErrors };
 }
