@@ -440,41 +440,86 @@ function buildIntersectionMatrix(intersections) {
  * Domain pipeline: refresh? → corpus → cogito (+intersection) → animus (+intersections) → actus (+intersections) → synthesis (named patterns) → blueprint
  */
 export async function executeJanus(params, onProgress, generateMarkdown, buildFullPrompt) {
-  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = params;
+  let effectiveParams = { ...params };
+  let run = null;
+  let mergedData = {};
+  let intersections = {};
+
+  // Resume reuses the original Run and its persisted checkpoints. The operator
+  // must explicitly select a Run to resume; Janus never guesses from elapsed time
+  // that a currently-running LLM call is dead.
+  if (params.resumeRunId) {
+    const matches = await base44.entities.Run.filter({ id: params.resumeRunId });
+    run = Array.isArray(matches) ? matches[0] : matches;
+    if (!run) throw new Error(`Resume target not found: ${params.resumeRunId}`);
+
+    if (run.status === "completed") {
+      return { runId: run.id, success: true, errors: run.validation_errors || [] };
+    }
+
+    effectiveParams = {
+      ...effectiveParams,
+      queryText: run.query_text,
+      executionMode: run.execution_mode || effectiveParams.executionMode,
+      outputMode: run.output_mode || effectiveParams.outputMode,
+      blueprintLevel: run.blueprint_level || effectiveParams.blueprintLevel,
+      noveltyDial: run.novelty_dial || effectiveParams.noveltyDial,
+      refreshEnabled: !!run.refresh_enabled,
+    };
+
+    ({ mergedData, intersections } = hydrateCheckpoint(run));
+
+    const nowIso = new Date().toISOString();
+    await base44.entities.Run.update(run.id, {
+      status: "running",
+      execution_owner: "browser",
+      current_step: "resume:claimed",
+      last_heartbeat: nowIso,
+      validation_errors: [],
+      error_message: "",
+    });
+  }
+
+  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = effectiveParams;
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
+  if (!mode) throw new Error(`Unknown execution mode: ${executionMode}`);
   const domains = mode.domains;
 
-  // Step 1: Create Run record
-  const fullPromptForStorage = safeTruncate(
-    buildFullPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) + queryText,
-    MAX_PROMPT_LENGTH
-  );
+  if (!run) {
+    const fullPromptForStorage = safeTruncate(
+      buildFullPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) + queryText,
+      MAX_PROMPT_LENGTH
+    );
+    const nowIso = new Date().toISOString();
 
-  const run = await base44.entities.Run.create({
-    query_text: queryText,
-    full_prompt: fullPromptForStorage,
-    execution_mode: executionMode,
-    output_mode: outputMode,
-    blueprint_level: blueprintLevel,
-    novelty_dial: noveltyDial,
-    refresh_enabled: refreshEnabled,
-    status: "running",
-    validation_errors: [],
-    raw_json: "{}"
-  });
+    run = await base44.entities.Run.create({
+      query_text: queryText,
+      full_prompt: fullPromptForStorage,
+      execution_mode: executionMode,
+      output_mode: outputMode,
+      blueprint_level: blueprintLevel,
+      novelty_dial: noveltyDial,
+      refresh_enabled: refreshEnabled,
+      status: "running",
+      execution_owner: "browser",
+      started_at: nowIso,
+      current_step: "initiated",
+      last_heartbeat: nowIso,
+      validation_errors: [],
+      raw_json: "{}"
+    });
+  }
 
   const runId = run.id;
-  const mergedData = {};
-  const intersections = {}; // Accumulated intersection pairs
   const domainErrors = [];
-  let completedCount = 0;
-  const totalSteps = domains.length + (domains.includes("synthesis") ? 6 : 0); // 6 intersection pairs for full mode
+  const totalSteps = domains.length + (domains.includes("synthesis") ? REQUIRED_INTERSECTION_PAIRS.length : 0);
+  let completedCount =
+    domains.filter((domain) => domainCheckpointComplete(domain, mergedData)).length +
+    (domains.includes("synthesis") ? Object.keys(intersections).length : 0);
 
-  // ── IMP-001-R-D-RES Phase 3: Heartbeat + retry-log helpers ─────────────────
-  // In-memory shadow of retry_log; persisted via read-modify-write to avoid an
-  // extra DB read on every retry event. Single-tab single-user per run, so no
-  // race condition concern.
-  const retryLog = [];
+  // Retry telemetry records only provider/transport failures that have already
+  // settled. It is not a wall-clock watchdog.
+  const retryLog = Array.isArray(run.retry_log) ? [...run.retry_log] : [];
 
   async function heartbeat(stepLabel) {
     try {
