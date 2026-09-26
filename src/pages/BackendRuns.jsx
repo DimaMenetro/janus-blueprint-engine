@@ -51,8 +51,6 @@ function RunRow({ run }) {
   const retryCount = Array.isArray(run.retry_log) ? run.retry_log.length : 0;
   const errorCount = Array.isArray(run.validation_errors) ? run.validation_errors.length : 0;
   const heartbeatAge = ageFrom(run.last_heartbeat);
-  const stale = run.status === "running" && run.last_heartbeat &&
-    (Date.now() - new Date(run.last_heartbeat).getTime()) > 5 * 60 * 1000;
 
   return (
     <Card className="p-4">
@@ -63,9 +61,7 @@ function RunRow({ run }) {
             <span className={`px-2 py-0.5 rounded-full font-medium ${status.cls}`}>{status.label}</span>
             {run.current_step && <span>Step: <code className="text-foreground">{run.current_step}</code></span>}
             <span>Elapsed: {elapsedOf(run)}</span>
-            <span className={stale ? "text-amber-600 font-medium" : ""}>
-              Heartbeat: {heartbeatAge}{stale ? " (stale)" : ""}
-            </span>
+            <span>Last checkpoint: {heartbeatAge}</span>
             {retryCount > 0 && <span>Retries: {retryCount}</span>}
             {errorCount > 0 && <span className="text-red-600">Errors: {errorCount}</span>}
           </div>
