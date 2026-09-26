@@ -244,7 +244,7 @@ export async function rerunSynthesis(runId, onProgress) {
         will_retry: willRetry,
         next_delay_ms: nextDelayMs,
       });
-      // Fire-and-forget — we don't await here because onRetry is sync-ish in callLLMResilient
+      // Fire-and-forget diagnostic persistence; execution itself still awaits the provider call.
       base44.entities.Run.update(runId, { retry_log: retryLog }).catch(() => {});
     } catch (_e) { /* diagnostic only */ }
   };
