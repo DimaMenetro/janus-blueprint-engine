@@ -1090,7 +1090,7 @@ function buildCompressedBlueprintContext(source) {
 }
 
 async function bpCallLLM(base44, prompt, callLabel, onRetry) {
-  return await callLLMResilient(
+  return await callLLMCompletionOriented(
     base44,
     { prompt, model: "claude_sonnet_4_6" },
     { callLabel, onRetry }
