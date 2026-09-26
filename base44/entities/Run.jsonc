@@ -938,11 +938,11 @@
     "last_heartbeat": {
       "type": "string",
       "format": "date-time",
-      "description": "IMP-001-R-D-RES Phase 2 \u2014 ISO timestamp updated each time the engine enters a new step or completes a retry. Allows external observers to detect stalled runs. Optional; absent on legacy runs."
+      "description": "ISO timestamp updated when Janus enters or completes an execution checkpoint or records an explicit provider/transport failure. It is observability data only; elapsed time alone does not imply a stalled LLM call. Optional on legacy runs."
     },
     "retry_log": {
       "type": "array",
-      "description": "IMP-001-R-D-RES Phase 2 \u2014 Append-only log of LLM retry events for this run.",
+      "description": "Append-only log of retries that follow explicitly settled provider/transport failures. Janus-local elapsed-time deadlines are not retry triggers.",
       "items": {
         "type": "object",
         "properties": {
@@ -964,11 +964,11 @@
           },
           "will_retry": {
             "type": "boolean",
-            "description": "Whether the resilient caller scheduled another attempt"
+            "description": "Whether Janus scheduled another attempt after the prior provider/transport call explicitly failed"
           },
           "next_delay_ms": {
             "type": "number",
-            "description": "Backoff delay before the next attempt (0 if exhausted)"
+            "description": "Delay before the next attempt. Completion-oriented execution currently retries immediately after a settled retryable failure."
           }
         }
       }
