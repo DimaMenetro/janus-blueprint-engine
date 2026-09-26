@@ -1,3 +1,10 @@
+> **HISTORICAL — SUPERSEDED FOR EXECUTION SEMANTICS (2026-09-26).**
+> IMP-001-R-D-RES documents the May 31 introduction of Janus-local timeout
+> deadlines. Those deadlines, their TIMEOUT_MATRIX, Promise.race behavior, and
+> timer-triggered retries are no longer executable requirements. Current
+> authority: `JANUS_COMPLETION_EXECUTION_ADJUDICATION_2026-09-26.md`.
+> Retain this file as provenance; do not use it to reintroduce local LLM timers.
+
 # RESILIENCE IMPLEMENTATION BLUEPRINT
 ## Janus Pipeline Hardening — CP-002 v1.6 (Production-Grade Resilience)
 
