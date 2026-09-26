@@ -7,7 +7,7 @@ import { base44 } from "@/api/base44Client";
 import { EXECUTION_MODES, validateJanusOutput } from "./janusSchema";
 import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity, buildSynthesisPrompt } from "./domainSME";
 import { executeBlueprintSplitCall } from "./blueprintSplitCall";
-import { callLLMResilient } from "./llmTimeout";
+import { callLLMCompletionOriented } from "./llmCall";
 
 const MAX_RAW_JSON_LENGTH = 200000; // Full fidelity for cephalon consumption
 const MAX_PROMPT_LENGTH = 10000;
@@ -361,10 +361,9 @@ function parseLLMResponse(result, expectedKey) {
 }
 
 // ─── LLM CALL HELPER ─────────────────────────────────────────────────────────
-// IMP-001-R-D-RES Phase 3: Delegates to callLLMResilient for timeout + retry.
-// Signature preserved (prompt, domain, refreshEnabled) for backward compatibility
-// with existing call sites. Optional 4th arg `callLabel` overrides the auto-derived
-// label; optional 5th arg `onRetry` receives retry events for retry_log persistence.
+// Completion-oriented execution: Janus never infers LLM failure from elapsed time.
+// Call labels are diagnostic only. Retries occur only after InvokeLLM explicitly
+// settles as a retryable provider/transport failure.
 
 async function callLLM(prompt, domain, refreshEnabled, callLabel, onRetry) {
   const llmParams = { prompt };
@@ -374,13 +373,13 @@ async function callLLM(prompt, domain, refreshEnabled, callLabel, onRetry) {
   } else {
     llmParams.model = "claude_sonnet_4_6";
   }
-  // Derive a stable callLabel if caller didn't supply one
+  // Stable diagnostic label; it does not select a time budget.
   const label = callLabel || (
     domain === "refresh" ? "refresh:websweep"
     : domain === "intersection" ? "intersection:unlabeled"
     : `domain:${domain}`
   );
-  return await callLLMResilient(llmParams, { callLabel: label, onRetry });
+  return await callLLMCompletionOriented(llmParams, { callLabel: label, onRetry });
 }
 
 // ─── MAIN EXECUTION ──────────────────────────────────────────────────────────
@@ -497,7 +496,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     const contextForPrompt = { ...mergedData, _intersections: intersections };
     const domainPrompt = buildDomainPrompt(domain, queryText, params, contextForPrompt);
 
-    // ── Execute domain LLM call (Phase 3: resilient — timeout + retry inside callLLM)
+    // ── Execute domain LLM call. No Janus-local elapsed-time cutoff.
     let domainResult;
     try {
       domainResult = await callLLM(domainPrompt, domain, refreshEnabled, undefined, recordRetry);
@@ -594,9 +593,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
 
   // Determine completion status
   const missingDomains = domains.filter(d => !normalizedData[d]);
-  const completionStatus = Object.keys(mergedData).length === 0 ? "failed" 
-    : missingDomains.length === 0 ? "completed" 
-    : "completed"; // Partial success — some domains present, errors list shows what's missing
+  const completionStatus = missingDomains.length === 0 ? "completed" : "failed";
   
   // ── APPEND-ONLY FINALIZATION ─────────────────────────────────────────────
   // Only write status, cached fields (render_md, raw_json), and validation_errors.
