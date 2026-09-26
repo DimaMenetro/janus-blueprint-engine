@@ -7,7 +7,7 @@
 //
 // Retries occur only AFTER InvokeLLM has explicitly settled as a failure (or
 // returned an empty response). This prevents overlapping paid calls caused by
-// Promise.race-style local timeouts.
+// local elapsed-time races that abandon a still-running provider promise.
 //
 // Call labels remain for diagnostics only. They never select a time budget.
 
@@ -91,8 +91,8 @@ export async function callLLMCompletionOriented(invokeParams, options = {}) {
     attempts = attempt;
 
     try {
-      // Deliberately await the provider call directly. No Promise.race,
-      // setTimeout, wall-clock budget, or locally inferred deadline.
+      // Deliberately await the provider call directly. No local wall-clock
+      // budget, timer-driven race, or locally inferred deadline.
       const result = await base44.integrations.Core.InvokeLLM(invokeParams);
 
       if (isEmptyResponse(result)) {
