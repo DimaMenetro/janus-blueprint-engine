@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
@@ -8,7 +8,6 @@ import {
   light, dark,
   glassCard, glassBtn, glassError
 } from "@/components/ui/LiquidGlass";
-import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import { executeJanus } from "@/components/janus/ExecutionEngine";
 import { useExecution } from "@/components/janus/ExecutionContext";
 import QueryForm from "@/components/janus/QueryForm";
@@ -29,7 +28,47 @@ export default function NewQuery() {
   const [refreshEnabled, setRefreshEnabled] = useState(false);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [resumeRunId, setResumeRunId] = useState(null);
+  const [resumeLoading, setResumeLoading] = useState(false);
   const { startExecution, updateProgress, recordRetry, finishExecution, failExecution } = useExecution();
+
+  useEffect(() => {
+    const resumeId = new URLSearchParams(window.location.search).get("resume");
+    if (!resumeId) return;
+
+    let cancelled = false;
+    setResumeLoading(true);
+
+    (async () => {
+      try {
+        const matches = await base44.entities.Run.filter({ id: resumeId });
+        const savedRun = Array.isArray(matches) ? matches[0] : matches;
+        if (!savedRun) throw new Error("The selected Janus checkpoint no longer exists.");
+
+        if (savedRun.status === "completed") {
+          navigate(`/results?id=${savedRun.id}`, { replace: true });
+          return;
+        }
+
+        if (cancelled) return;
+        setResumeRunId(savedRun.id);
+        setQueryText(savedRun.query_text || "");
+        setExecutionMode(savedRun.execution_mode || "standard");
+        setOutputMode(savedRun.output_mode || "Blueprint");
+        setBlueprintLevel(savedRun.blueprint_level || "L2");
+        setNoveltyDial(savedRun.novelty_dial || "medium");
+        setRefreshEnabled(!!savedRun.refresh_enabled);
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(`Unable to load checkpoint: ${error?.message || String(error)}`);
+        }
+      } finally {
+        if (!cancelled) setResumeLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [navigate]);
 
   const handleExecute = async () => {
     if (!queryText.trim()) return;
@@ -39,7 +78,7 @@ export default function NewQuery() {
 
     try {
       const result = await executeJanus(
-        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled },
+        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, resumeRunId },
         (payload) => {
           // Phase 6: route retry events into the context's recordRetry; everything
           // else flows through updateProgress as before. Destructure inside so the
@@ -92,6 +131,21 @@ export default function NewQuery() {
         </p>
       </motion.div>
 
+      {resumeRunId && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ ...glassCard(t), padding: "14px 16px", marginBottom: 16 }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 600, color: t.title, marginBottom: 4 }}>
+            Resuming saved Janus checkpoint
+          </div>
+          <div style={{ fontSize: 12, color: t.subtitle, lineHeight: 1.5 }}>
+            Completed domains and intersection pairs will be reused. The original run parameters are authoritative; Janus will continue from the first missing checkpoint rather than recomputing finished work.
+          </div>
+        </motion.div>
+      )}
+
       {/* Main glass card */}
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
@@ -120,19 +174,19 @@ export default function NewQuery() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleExecute}
-            disabled={!queryText.trim() || status === "running" || status === "validating"}
+            disabled={!queryText.trim() || resumeLoading || status === "running" || status === "validating"}
             style={{
               ...glassBtn(t),
               padding: "0 24px",
               height: 44,
               display: "flex", alignItems: "center", gap: 8,
               fontSize: 14,
-              opacity: (!queryText.trim() || status === "running" || status === "validating") ? 0.5 : 1,
-              cursor: (!queryText.trim() || status === "running" || status === "validating") ? "not-allowed" : "pointer",
+              opacity: (!queryText.trim() || resumeLoading || status === "running" || status === "validating") ? 0.5 : 1,
+              cursor: (!queryText.trim() || resumeLoading || status === "running" || status === "validating") ? "not-allowed" : "pointer",
             }}
           >
             <Play style={{ width: 16, height: 16 }} />
-            Execute Janus
+            {resumeLoading ? "Loading Checkpoint…" : resumeRunId ? "Resume Janus" : "Execute Janus"}
           </motion.button>
         </div>
       </motion.div>
