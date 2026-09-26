@@ -1613,8 +1613,11 @@ async function executeJanusServer(base44, runId, params) {
   const mergedData = {};
   const intersections = {};
   const domainErrors = [];
+  const requiredIntersectionPairs = Object.values(INTERSECTION_TRIGGERS)
+    .flat()
+    .map((trigger) => trigger.pair);
   let completedCount = 0;
-  const totalSteps = domains.length + (domains.includes("synthesis") ? 6 : 0);
+  const totalSteps = domains.length + (domains.includes("synthesis") ? requiredIntersectionPairs.length : 0);
   const retryLog = [];
   const onProgress = () => {}; // no UI on the server
 
@@ -1643,6 +1646,26 @@ async function executeJanusServer(base44, runId, params) {
 
   for (const domain of domains) {
     onProgress({ domain, status: "running", completedDomains: completedCount, totalDomains: totalSteps });
+
+    if (domain === "synthesis" && domains.includes("synthesis")) {
+      const missingPairs = requiredIntersectionPairs.filter((pair) => !intersections[pair]);
+      if (missingPairs.length > 0) {
+        domainErrors.push(`synthesis: blocked because required intersection checkpoints are missing: ${missingPairs.join(", ")}`);
+        break;
+      }
+    }
+
+    if (domain === "blueprint") {
+      const blueprintIndex = domains.indexOf("blueprint");
+      const missingPrerequisites = domains
+        .slice(0, blueprintIndex)
+        .filter((requiredDomain) => !mergedData[requiredDomain]);
+      if (missingPrerequisites.length > 0) {
+        domainErrors.push(`blueprint: blocked because required upstream checkpoints are missing: ${missingPrerequisites.join(", ")}`);
+        break;
+      }
+    }
+
     await heartbeat(domain === "refresh" ? "refresh:websweep" : `domain:${domain}`);
 
     if (domain === "blueprint") {
@@ -1679,19 +1702,20 @@ async function executeJanusServer(base44, runId, params) {
       domainResult = await callLLM(base44, domainPrompt, domain, refreshEnabled, undefined, recordRetry);
     } catch (err) {
       domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
-      continue;
+      break;
     }
 
     try {
       const parsed = parseLLMResponse(domainResult, domain);
       if (parsed.error) {
         domainErrors.push(parsed.error);
+        break;
       } else {
         mergedData[domain] = parsed.data;
       }
     } catch (e) {
       domainErrors.push(`${domain}: Parse error — ${e.message}`);
-      continue;
+      break;
     }
 
     completedCount++;
@@ -1761,18 +1785,44 @@ async function executeJanusServer(base44, runId, params) {
   const renderMd = generateMarkdown(normalizedData, executionMode);
 
   const missingDomains = domains.filter(d => !normalizedData[d]);
-  const completionStatus = missingDomains.length === 0 ? "completed" : "failed";
+  const missingIntersectionPairs = domains.includes("synthesis")
+    ? requiredIntersectionPairs.filter((pair) => !intersections[pair])
+    : [];
+  const synthesisComplete = !domains.includes("synthesis") || Boolean(
+    normalizedData.synthesis?.quantum_foresight &&
+    normalizedData.synthesis?.governed_cogito &&
+    normalizedData.synthesis?.narrative_loop &&
+    (normalizedData.synthesis?.empathy_driven_strategy || normalizedData.synthesis?.alignment_engine)
+  );
+  const completionStatus =
+    missingDomains.length === 0 &&
+    missingIntersectionPairs.length === 0 &&
+    synthesisComplete &&
+    domainErrors.length === 0
+      ? "completed"
+      : "failed";
+
+  const structuralErrors = [
+    ...missingDomains.map((domain) => `Missing required domain checkpoint: ${domain}`),
+    ...missingIntersectionPairs.map((pair) => `Missing required intersection checkpoint: ${pair}`),
+    ...(!synthesisComplete ? ["Missing required named synthesis patterns"] : []),
+  ];
+  const allErrors = [...(validation.errors || []), ...domainErrors, ...structuralErrors];
 
   const finalPayload = {
     status: completionStatus,
     render_md: safeTruncate(renderMd, 60000),
     raw_json: safeTruncate(JSON.stringify(normalizedData), MAX_RAW_JSON_LENGTH),
-    validation_errors: [...(validation.errors || []), ...domainErrors],
+    validation_errors: allErrors,
+    current_step: completionStatus === "completed" ? "completed" : "failed",
+    last_heartbeat: new Date().toISOString(),
     completed_at: new Date().toISOString(),
   };
 
   if (finalPayload.status === "failed") {
-    finalPayload.error_message = [...(validation.errors || []), ...domainErrors].join("\n");
+    finalPayload.error_message = allErrors.join("\n");
+  } else {
+    finalPayload.error_message = "";
   }
 
   await base44.asServiceRole.entities.Run.update(runId, finalPayload);
