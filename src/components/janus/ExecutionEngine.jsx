@@ -444,6 +444,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   let run = null;
   let mergedData = {};
   let intersections = {};
+  let synthesisNeedsRecompute = false;
 
   // Resume reuses the original Run and its persisted checkpoints. The operator
   // must explicitly select a Run to resume; Janus never guesses from elapsed time
@@ -468,6 +469,18 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     };
 
     ({ mergedData, intersections } = hydrateCheckpoint(run));
+
+    // If a legacy/partial Run has named synthesis but not the full pair matrix,
+    // completing a missing pair invalidates that synthesis and requires a fresh pass.
+    synthesisNeedsRecompute =
+      hasCompleteSynthesis(mergedData.synthesis) &&
+      REQUIRED_INTERSECTION_PAIRS.some((pair) => !intersections[pair]);
+
+    // A failed Run's Blueprint is not authoritative. Blueprint is the terminal
+    // stage, so recomputing it after recovery cannot invalidate later work.
+    if (run.status === "failed" && mergedData.blueprint) {
+      delete mergedData.blueprint;
+    }
 
     const nowIso = new Date().toISOString();
     await base44.entities.Run.update(run.id, {
@@ -514,7 +527,11 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   const domainErrors = [];
   const totalSteps = domains.length + (domains.includes("synthesis") ? REQUIRED_INTERSECTION_PAIRS.length : 0);
   let completedCount =
-    domains.filter((domain) => domainCheckpointComplete(domain, mergedData)).length +
+    domains.filter(
+      (domain) =>
+        domainCheckpointComplete(domain, mergedData) &&
+        !(domain === "synthesis" && synthesisNeedsRecompute)
+    ).length +
     (domains.includes("synthesis") ? Object.keys(intersections).length : 0);
 
   // Retry telemetry records only provider/transport failures that have already
@@ -613,6 +630,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
           ...pairParsed.data,
           _model: trigger.model,
         };
+        synthesisNeedsRecompute = true;
         completedCount++;
 
         const currentMatrix = buildIntersectionMatrix(intersections);
@@ -669,7 +687,10 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
       }
     }
 
-    if (domainCheckpointComplete(domain, mergedData)) {
+    if (
+      domainCheckpointComplete(domain, mergedData) &&
+      !(domain === "synthesis" && synthesisNeedsRecompute)
+    ) {
       // Rehydrated domains can still unlock a missing intersection checkpoint.
       await computeAvailableIntersections(domain);
       continue;
@@ -754,6 +775,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     }
 
     mergedData[domain] = parsed.data;
+    if (domain === "synthesis") synthesisNeedsRecompute = false;
     completedCount++;
 
     await base44.entities.Run.update(runId, {
