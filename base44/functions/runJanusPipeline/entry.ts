@@ -3,8 +3,9 @@
 // Server-owned orchestrator. Self-contained port of the browser Janus engine.
 //
 // FIDELITY MANDATE (DIMA, IMP-002): prompts, prompt builders, context
-// construction, model selection, retry count, parser behavior, validation
-// behavior, markdown rendering, and execution order are BYTE-PRESERVED from:
+// construction, model selection, parser behavior, markdown rendering, and
+// execution order remain aligned with the browser engine. Execution failure/
+// retry semantics were intentionally superseded on 2026-09-26 by ADE-JBE-001:
 //   components/janus/llmCall.jsx
 //   components/janus/janusSchema.js
 //   components/janus/domainSME.js
@@ -20,6 +21,8 @@
 //   5. Phase -1 prompt-hash instrumentation is omitted (it was a no-op when the
 //      recorder is unset, which it always is server-side → zero behavioral change)
 //   6. completed_at / claimed_at / started_at / execution_owner lifecycle stamps
+//   7. ADE-JBE-001 completion-oriented LLM waits (no Janus-local elapsed deadline)
+//   8. ADE-JBE-001 strict required-domain completion invariant
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.51';
