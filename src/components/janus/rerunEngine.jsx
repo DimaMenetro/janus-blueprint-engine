@@ -5,7 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "./janusSchema";
 import { generateMarkdown } from "./promptUtils";
 import { executeBlueprintSplitCall } from "./blueprintSplitCall";
-import { callLLMResilient } from "./llmTimeout";
+import { callLLMCompletionOriented } from "./llmCall";
 
 // ─── Re-use the LLM call + prompt builders from ExecutionEngine ───
 // We import the module dynamically to avoid circular deps, but the functions
@@ -18,12 +18,11 @@ function safeTruncate(str, max) {
   return str.slice(0, max) + "\n\n[TRUNCATED — original was " + str.length + " chars]";
 }
 
-// IMP-001-R-D-RES Phase 5: Delegates to callLLMResilient for timeout + retry.
-// `callLabel` selects the per-call timeout from TIMEOUT_MATRIX. `onRetry` is
-// forwarded so retry events surface in the Run's retry_log via the per-rerun
-// recordRetry helper built inside each public function.
+// Completion-oriented execution. `callLabel` is diagnostic only; Janus does
+// not impose an elapsed-time deadline on rerun LLM calls. `onRetry` records only
+// explicitly settled provider/transport failures.
 async function callLLM(prompt, callLabel, onRetry) {
-  return await callLLMResilient(
+  return await callLLMCompletionOriented(
     { prompt, model: "claude_sonnet_4_6" },
     { callLabel, onRetry }
   );
@@ -126,7 +125,7 @@ No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
 }
 
-// Maximum context size for blueprint prompt — prevents timeout on large runs
+// Maximum context size for blueprint prompt — bounds context size and token load
 const MAX_BLUEPRINT_CONTEXT = 18000;
 
 // ─── Build blueprint prompt from stored context ───
@@ -178,7 +177,7 @@ function buildBlueprintPrompt(run) {
     parts.push(`\n═══ ANIMUS: Ethical Stance ═══\n  ${run.animus.ethical_stance}`);
   }
 
-  // Truncate total context to prevent timeout
+  // Truncate total context to bound prompt size
   const contextBlock = safeTruncate(parts.join("\n"), MAX_BLUEPRINT_CONTEXT);
 
   const blueprintLevel = run.blueprint_level || "L2";
@@ -258,7 +257,7 @@ export async function rerunSynthesis(runId, onProgress) {
 
     try {
       const prompt = buildIntersectionPrompt(pair, model, dA, dB, run[dA], run[dB], queryText);
-      // Use the specific intersection label (matches ExecutionEngine timeout budget — 90s)
+      // Use the specific intersection label for diagnostics.
       const result = await callLLM(prompt, `intersection:${pair}`, recordRetry);
       const parsed = parseLLMResponse(result, pair);
       if (parsed.data) {
