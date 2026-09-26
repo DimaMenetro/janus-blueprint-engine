@@ -73,11 +73,8 @@ function isExplicitlyRetryableError(error) {
  * Await InvokeLLM to completion with no Janus-local time limit.
  *
  * @param {object} invokeParams Same shape as base44.integrations.Core.InvokeLLM.
- * @param {object} options
- * @param {string} options.callLabel Diagnostic label only.
- * @param {number} options.maxRetries Number of retries after an explicitly
- *   settled retryable failure. Default 1.
- * @param {function} options.onRetry Receives retry/failure telemetry.
+ * @param {{callLabel?: string, maxRetries?: number, onRetry?: Function}} [options]
+ *   Optional diagnostic label, bounded retry count, and retry/failure telemetry callback.
  */
 export async function callLLMCompletionOriented(invokeParams, options = {}) {
   const callLabel = options.callLabel || "unlabeled";
@@ -96,9 +93,10 @@ export async function callLLMCompletionOriented(invokeParams, options = {}) {
       const result = await base44.integrations.Core.InvokeLLM(invokeParams);
 
       if (isEmptyResponse(result)) {
-        const emptyError = new Error(`${callLabel}: Empty response from LLM`);
-        emptyError.retryable = true;
-        throw emptyError;
+        throw Object.assign(
+          new Error(`${callLabel}: Empty response from LLM`),
+          { retryable: true }
+        );
       }
 
       return result;
