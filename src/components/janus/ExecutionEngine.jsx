@@ -556,162 +556,290 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     }
   }
 
-  // Step 2: Execute each domain sequentially
+  async function persistExecutionErrors() {
+    if (domainErrors.length === 0) return;
+    try {
+      await base44.entities.Run.update(runId, { validation_errors: [...domainErrors] });
+    } catch (_e) {
+      // Error telemetry must not replace the original execution failure.
+    }
+  }
+
+  async function computeAvailableIntersections(domain) {
+    if (!domains.includes("synthesis") || !INTERSECTION_TRIGGERS[domain]) return;
+
+    for (const trigger of INTERSECTION_TRIGGERS[domain]) {
+      if (intersections[trigger.pair]) continue;
+
+      const [dA, dB] = trigger.domains;
+      if (!mergedData[dA] || !mergedData[dB]) continue;
+
+      onProgress({
+        domain: `synthesis:${trigger.pair}`,
+        status: "running",
+        completedDomains: completedCount,
+        totalDomains: totalSteps
+      });
+      await heartbeat(`intersection:${trigger.pair}`);
+
+      try {
+        const pairPrompt = buildIntersectionPrompt(
+          trigger.pair,
+          trigger.model,
+          dA,
+          dB,
+          mergedData[dA],
+          mergedData[dB],
+          queryText
+        );
+        const pairResult = await callLLM(
+          pairPrompt,
+          "intersection",
+          false,
+          `intersection:${trigger.pair}`,
+          recordRetry
+        );
+        const pairParsed = parseLLMResponse(pairResult, trigger.pair);
+
+        if (!pairParsed.data) {
+          domainErrors.push(
+            `intersection:${trigger.pair}: ${pairParsed.error || "Missing intersection response"}`
+          );
+          await persistExecutionErrors();
+          continue;
+        }
+
+        intersections[trigger.pair] = {
+          ...pairParsed.data,
+          _model: trigger.model,
+        };
+        completedCount++;
+
+        const currentMatrix = buildIntersectionMatrix(intersections);
+        await base44.entities.Run.update(runId, {
+          synthesis: {
+            ...(mergedData.synthesis || {}),
+            intersection_matrix: currentMatrix,
+          },
+        });
+      } catch (error) {
+        domainErrors.push(
+          `intersection:${trigger.pair}: ${error?.message || String(error)}`
+        );
+        await persistExecutionErrors();
+      }
+    }
+  }
+
+  // Execute each domain sequentially. Existing checkpointed domains are reused;
+  // they are never re-paid merely because a later stage failed.
   for (const domain of domains) {
-    onProgress({ domain, status: "running", completedDomains: completedCount, totalDomains: totalSteps });
+    onProgress({
+      domain,
+      status: "running",
+      completedDomains: completedCount,
+      totalDomains: totalSteps
+    });
+
+    // A Full synthesis is authoritative only after all six pair analyses exist.
+    if (domain === "synthesis" && domains.includes("synthesis")) {
+      const missingPairs = REQUIRED_INTERSECTION_PAIRS.filter((pair) => !intersections[pair]);
+      if (missingPairs.length > 0) {
+        domainErrors.push(
+          `synthesis: blocked because required intersection checkpoints are missing: ${missingPairs.join(", ")}`
+        );
+        await persistExecutionErrors();
+        break;
+      }
+    }
+
+    // Blueprint execution requires every prior stage for the selected mode.
+    if (domain === "blueprint") {
+      const blueprintIndex = domains.indexOf("blueprint");
+      const missingPrerequisites = domains
+        .slice(0, blueprintIndex)
+        .filter((requiredDomain) => !domainCheckpointComplete(requiredDomain, mergedData));
+
+      if (missingPrerequisites.length > 0) {
+        domainErrors.push(
+          `blueprint: blocked because required upstream checkpoints are missing: ${missingPrerequisites.join(", ")}`
+        );
+        await persistExecutionErrors();
+        break;
+      }
+    }
+
+    if (domainCheckpointComplete(domain, mergedData)) {
+      // Rehydrated domains can still unlock a missing intersection checkpoint.
+      await computeAvailableIntersections(domain);
+      continue;
+    }
+
     await heartbeat(domain === "refresh" ? "refresh:websweep" : `domain:${domain}`);
 
-    // ── BLUEPRINT: Use split-call architecture (Option 1)
     if (domain === "blueprint") {
       const source = { ...mergedData, _intersections: intersections };
       const { data: bpData, errors: bpErrors } = await executeBlueprintSplitCall({
         source,
         queryText,
-        blueprintLevel: params.blueprintLevel,
-        noveltyDial: params.noveltyDial,
-        outputMode: params.outputMode,
-        onProgress: (p) => onProgress({ ...p, completedDomains: completedCount, totalDomains: totalSteps }),
-        onRetry: recordRetry,    // Phase 4: forward retry events into Run.retry_log
-        onHeartbeat: heartbeat,  // Phase 4: forward sub-call boundaries into Run.current_step
+        blueprintLevel,
+        noveltyDial,
+        outputMode,
+        onProgress: (progress) => onProgress({
+          ...progress,
+          completedDomains: completedCount,
+          totalDomains: totalSteps
+        }),
+        onRetry: recordRetry,
+        onHeartbeat: heartbeat,
       });
-      if (bpData) {
-        mergedData.blueprint = bpData;
-      }
-      domainErrors.push(...bpErrors);
-      completedCount++;
 
-      // Persist blueprint immediately
-      const bpPayload = {};
-      if (mergedData.blueprint) bpPayload.blueprint = mergedData.blueprint;
-      if (domainErrors.length > 0) bpPayload.validation_errors = [...domainErrors];
-      await base44.entities.Run.update(runId, bpPayload);
+      if (bpData) mergedData.blueprint = bpData;
+      if (bpErrors?.length) domainErrors.push(...bpErrors);
+
+      if (!mergedData.blueprint || bpErrors?.length) {
+        await base44.entities.Run.update(runId, {
+          ...(mergedData.blueprint ? { blueprint: mergedData.blueprint } : {}),
+          validation_errors: [...domainErrors],
+        });
+        break;
+      }
+
+      completedCount++;
+      await base44.entities.Run.update(runId, {
+        blueprint: mergedData.blueprint,
+        ...(domainErrors.length > 0 ? { validation_errors: [...domainErrors] } : {}),
+      });
       continue;
     }
 
-    // Attach intersections to context for synthesis and other domains
     const contextForPrompt = { ...mergedData, _intersections: intersections };
-    const domainPrompt = buildDomainPrompt(domain, queryText, params, contextForPrompt);
+    const domainPrompt = buildDomainPrompt(
+      domain,
+      queryText,
+      effectiveParams,
+      contextForPrompt
+    );
 
-    // ── Execute domain LLM call. No Janus-local elapsed-time cutoff.
     let domainResult;
     try {
-      domainResult = await callLLM(domainPrompt, domain, refreshEnabled, undefined, recordRetry);
-    } catch (err) {
-      domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
-      continue;
+      domainResult = await callLLM(
+        domainPrompt,
+        domain,
+        refreshEnabled,
+        undefined,
+        recordRetry
+      );
+    } catch (error) {
+      domainErrors.push(
+        `${domain}: LLM call failed — ${error?.message || String(error)}`
+      );
+      await persistExecutionErrors();
+      break;
     }
 
+    let parsed;
     try {
-      const parsed = parseLLMResponse(domainResult, domain);
-      if (parsed.error) {
-        domainErrors.push(parsed.error);
-      } else {
-        mergedData[domain] = parsed.data;
-      }
-    } catch (e) {
-      domainErrors.push(`${domain}: Parse error — ${e.message}`);
-      continue;
+      parsed = parseLLMResponse(domainResult, domain);
+    } catch (error) {
+      domainErrors.push(`${domain}: Parse error — ${error?.message || String(error)}`);
+      await persistExecutionErrors();
+      break;
     }
 
+    if (!parsed?.data) {
+      domainErrors.push(parsed?.error || `${domain}: Missing parsed response`);
+      await persistExecutionErrors();
+      break;
+    }
+
+    mergedData[domain] = parsed.data;
     completedCount++;
 
-    // Persist domain result immediately (NO raw_json here — saves entity size)
-    const updatePayload = {};
-    if (mergedData[domain]) {
-      updatePayload[domain] = mergedData[domain];
-    }
-    if (domainErrors.length > 0) {
-      updatePayload.validation_errors = [...domainErrors];
-    }
-    await base44.entities.Run.update(runId, updatePayload);
-
-    // ── INCREMENTAL SYNTHESIS: Compute intersection pairs as they become available
-    if (INTERSECTION_TRIGGERS[domain] && domains.includes("synthesis")) {
-      const triggers = INTERSECTION_TRIGGERS[domain];
-      for (const trigger of triggers) {
-        const [dA, dB] = trigger.domains;
-        if (!mergedData[dA] || !mergedData[dB]) continue; // Skip if prerequisite missing
-
-        onProgress({ domain: `synthesis:${trigger.pair}`, status: "running", completedDomains: completedCount, totalDomains: totalSteps });
-        await heartbeat(`intersection:${trigger.pair}`);
-
-        try {
-          const pairPrompt = buildIntersectionPrompt(trigger.pair, trigger.model, dA, dB, mergedData[dA], mergedData[dB], queryText);
-          const pairResult = await callLLM(pairPrompt, "intersection", false, `intersection:${trigger.pair}`, recordRetry);
-          const pairParsed = parseLLMResponse(pairResult, trigger.pair);
-
-          if (pairParsed.data) {
-            intersections[trigger.pair] = { ...pairParsed.data, _model: trigger.model };
-            // Persist intersection pairs incrementally so they survive downstream timeouts
-            const { _model, ...cleanPair } = intersections[trigger.pair];
-            const currentMatrix = {};
-            Object.entries(intersections).forEach(([k, v]) => {
-              const { _model: m, ...p } = v;
-              currentMatrix[k] = p;
-            });
-            await base44.entities.Run.update(runId, { 
-              synthesis: { intersection_matrix: currentMatrix } 
-            });
-          } else if (pairParsed.error) {
-            domainErrors.push(`intersection:${trigger.pair}: ${pairParsed.error}`);
-          }
-        } catch (e) {
-          domainErrors.push(`intersection:${trigger.pair}: ${e.message}`);
-        }
-
-        completedCount++;
-      }
-    }
-  }
-
-  onProgress({ domain: null, status: "validating", completedDomains: completedCount, totalDomains: totalSteps });
-
-  // Step 3: Merge pre-computed intersection pairs into synthesis data
-  if (Object.keys(intersections).length > 0) {
-    // Build intersection_matrix from the stored pairs (synthesis no longer returns these)
-    const matrix = {};
-    Object.entries(intersections).forEach(([key, val]) => {
-      const { _model, ...pairData } = val;
-      matrix[key] = pairData;
+    await base44.entities.Run.update(runId, {
+      [domain]: mergedData[domain],
+      ...(domainErrors.length > 0 ? { validation_errors: [...domainErrors] } : {}),
     });
-    if (mergedData.synthesis) {
-      mergedData.synthesis.intersection_matrix = matrix;
-    } else {
-      // If synthesis itself failed but intersections succeeded, preserve them
-      mergedData.synthesis = { intersection_matrix: matrix, key_takeaways: [], constraint_collisions: [], limitation_foreground: "Synthesis named patterns failed — intersection matrix preserved from incremental computation." };
-    }
+
+    await computeAvailableIntersections(domain);
   }
 
-  // Step 4: Validate and finalize
+  onProgress({
+    domain: null,
+    status: "validating",
+    completedDomains: completedCount,
+    totalDomains: totalSteps
+  });
+
+  await base44.entities.Run.update(runId, {
+    status: "validating",
+    current_step: "validating",
+    last_heartbeat: new Date().toISOString(),
+  });
+
+  // Merge the incrementally persisted pair matrix back into the synthesis object.
+  // This write is intentional: the synthesis LLM call can replace the entity's
+  // synthesis object, so finalization must restore the persisted pair matrix.
+  if (Object.keys(intersections).length > 0) {
+    const matrix = buildIntersectionMatrix(intersections);
+    mergedData.synthesis = {
+      ...(mergedData.synthesis || {}),
+      intersection_matrix: matrix,
+    };
+    await base44.entities.Run.update(runId, { synthesis: mergedData.synthesis });
+  }
+
   const validation = validateJanusOutput(mergedData, domains);
   const normalizedData = validation.normalized || mergedData;
   const renderMd = generateMarkdown(normalizedData, executionMode);
 
-  // Determine completion status
-  const missingDomains = domains.filter(d => !normalizedData[d]);
-  const completionStatus = missingDomains.length === 0 ? "completed" : "failed";
-  
-  // ── APPEND-ONLY FINALIZATION ─────────────────────────────────────────────
-  // Only write status, cached fields (render_md, raw_json), and validation_errors.
-  // Domain fields were already persisted incrementally during execution.
-  // This prevents the finalization step from clobbering data that was
-  // written by earlier incremental persistence (e.g. intersection_matrix).
+  const missingDomains = domains.filter(
+    (domain) => !domainCheckpointComplete(domain, normalizedData)
+  );
+  const missingIntersectionPairs = domains.includes("synthesis")
+    ? REQUIRED_INTERSECTION_PAIRS.filter((pair) => !intersections[pair])
+    : [];
+
+  const structuralErrors = [
+    ...missingDomains.map((domain) => `Missing required domain checkpoint: ${domain}`),
+    ...missingIntersectionPairs.map((pair) => `Missing required intersection checkpoint: ${pair}`),
+  ];
+
+  const allErrors = [
+    ...(validation.errors || []),
+    ...domainErrors,
+    ...structuralErrors,
+  ];
+
+  const completionStatus =
+    missingDomains.length === 0 &&
+    missingIntersectionPairs.length === 0 &&
+    domainErrors.length === 0
+      ? "completed"
+      : "failed";
+
+  const completedAt = new Date().toISOString();
   const finalPayload = {
     status: completionStatus,
+    current_step: completionStatus === "completed" ? "completed" : "failed",
+    last_heartbeat: completedAt,
+    completed_at: completedAt,
     render_md: safeTruncate(renderMd, 60000),
     raw_json: safeTruncate(JSON.stringify(normalizedData), MAX_RAW_JSON_LENGTH),
-    validation_errors: [...(validation.errors || []), ...domainErrors]
+    validation_errors: allErrors,
   };
 
-  if (finalPayload.status === "failed") {
-    finalPayload.error_message = [...(validation.errors || []), ...domainErrors].join("\n");
+  if (completionStatus === "failed") {
+    finalPayload.error_message = allErrors.join("\n");
+  } else {
+    finalPayload.error_message = "";
   }
 
   await base44.entities.Run.update(runId, finalPayload);
 
   return {
     runId,
-    success: finalPayload.status === "completed",
-    errors: finalPayload.validation_errors
+    success: completionStatus === "completed",
+    errors: allErrors
   };
 }
