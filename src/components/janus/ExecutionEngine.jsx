@@ -5,7 +5,7 @@
 
 import { base44 } from "@/api/base44Client";
 import { EXECUTION_MODES, validateJanusOutput } from "./janusSchema";
-import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity, buildSynthesisPrompt } from "./domainSME";
+import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity } from "./domainSME";
 import { executeBlueprintSplitCall } from "./blueprintSplitCall";
 import { callLLMCompletionOriented } from "./llmCall";
 
@@ -387,7 +387,6 @@ const REQUIRED_INTERSECTION_PAIRS = INTERSECTION_TRIGGER_LIST.map((trigger) => t
 const INTERSECTION_MODEL_BY_PAIR = Object.fromEntries(
   INTERSECTION_TRIGGER_LIST.map((trigger) => [trigger.pair, trigger.model])
 );
-const CORE_DOMAIN_SEQUENCE = ["corpus", "cogito", "animus", "actus"];
 
 function hasCompleteSynthesis(synthesis) {
   if (!synthesis || typeof synthesis !== "object") return false;
@@ -442,7 +441,9 @@ function buildIntersectionMatrix(intersections) {
 export async function executeJanus(params, onProgress, generateMarkdown, buildFullPrompt) {
   let effectiveParams = { ...params };
   let run = null;
+  /** @type {Record<string, any>} */
   let mergedData = {};
+  /** @type {Record<string, any>} */
   let intersections = {};
   let synthesisNeedsRecompute = false;
 
