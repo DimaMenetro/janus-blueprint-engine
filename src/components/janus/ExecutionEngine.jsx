@@ -837,7 +837,8 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   const completionStatus =
     missingDomains.length === 0 &&
     missingIntersectionPairs.length === 0 &&
-    domainErrors.length === 0
+    domainErrors.length === 0 &&
+    (validation.errors || []).length === 0
       ? "completed"
       : "failed";
 
