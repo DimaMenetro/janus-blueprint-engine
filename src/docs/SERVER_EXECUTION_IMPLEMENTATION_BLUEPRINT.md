@@ -1,3 +1,10 @@
+> **CURRENT CONSTRAINT NOTE — 2026-09-26.** The monolithic server lane described
+> here remains historically useful but is not a valid Standard/Full long-run
+> transport under the measured ~295 s backend-function ceiling. Its former
+> timeout-preservation assumptions are superseded by
+> `JANUS_COMPLETION_EXECUTION_ADJUDICATION_2026-09-26.md`. Do not shorten Janus
+> LLM calls to fit this transport.
+
 # IMP-002-R-D-SRV — Server-Side Execution Refactor
 
 **Document Type:** Implementation Blueprint
