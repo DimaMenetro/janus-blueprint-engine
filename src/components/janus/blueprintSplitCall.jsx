@@ -6,8 +6,7 @@
 // Call 2: Step Expansion — substeps, checklists, acceptance_tests, time/effort per step
 // Call 3: Criteria & Risk — success_criteria, risk_register, alternative_approaches
 
-import { base44 } from "@/api/base44Client";
-import { callLLMResilient } from "./llmTimeout";
+import { callLLMCompletionOriented } from "./llmCall";
 
 // ─── COMPRESSED CONTEXT BUILDER (Option 2 — input compression) ───────────────
 // Builds a compressed upstream context for blueprint calls.
@@ -83,14 +82,12 @@ export function buildCompressedBlueprintContext(source) {
 }
 
 // ─── LLM CALL ────────────────────────────────────────────────────────────────
-// IMP-001-R-D-RES Phase 4: Delegates to callLLMResilient for timeout + retry.
-// `callLabel` is REQUIRED here (no auto-derivation) because the three sub-calls
-// have distinct timeout budgets in TIMEOUT_MATRIX (skeleton=120s, expansion=150s,
-// criteria=90s). `onRetry` is forwarded so retry events surface in the Run's
-// retry_log via the engine's recordRetry helper.
+// Completion-oriented execution. Each blueprint sub-call is awaited directly;
+// callLabel exists only for diagnostics and retry telemetry. No local wall-clock
+// deadline is imposed by Janus.
 
 async function callLLM(prompt, callLabel, onRetry) {
-  return await callLLMResilient(
+  return await callLLMCompletionOriented(
     { prompt, model: "claude_sonnet_4_6" },
     { callLabel, onRetry }
   );
