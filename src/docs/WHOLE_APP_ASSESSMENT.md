@@ -1,3 +1,9 @@
+> **AMENDMENT — 2026-09-26.** Timeout/retry findings in this assessment describe
+> the then-current implementation and are now historical. Janus-local elapsed-time
+> deadlines were removed by ADE-JBE-001. Other independently verified findings
+> (including the ~295 s backend-function ceiling, resume/idempotency gaps, UI
+> findings, and CP-002 drift) remain evidence unless separately superseded.
+
 # Janus Blueprint Engine — Whole-Application Assessment
 
 * **Document Type:** Assessment / Reconciliation Record
