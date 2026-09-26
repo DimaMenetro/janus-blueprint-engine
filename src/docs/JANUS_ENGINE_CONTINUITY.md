@@ -1,5 +1,15 @@
 # JANUS ENGINE CONTINUITY RECORD (CR-JBE-001)
 
+> **CURRENT EXECUTION AMENDMENT — 2026-09-26.** Read
+> `JANUS_COMPLETION_EXECUTION_ADJUDICATION_2026-09-26.md` before the historical
+> body below. The IMP-001 TIMEOUT_MATRIX / Promise.race mechanism is **SUPERSEDED**:
+> Janus now uses completion-oriented direct waits, retries only after explicitly
+> settled provider/transport failures, strict completion invariants, and
+> checkpoint resume. Any older statement below that presents local elapsed-time
+> deadlines as current or required is historical provenance, not executable
+> authority. The measured ~295 s monolithic backend-function ceiling remains
+> valid and is not an LLM-call deadline.
+
 > **READ THIS FIRST.** At the start of every Janus Engine session, Kytheion reads this
 > record and the code it points to before acting. The repository/sandbox is canonical;
 > conversational memory is not.
