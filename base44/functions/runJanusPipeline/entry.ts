@@ -5,7 +5,7 @@
 // FIDELITY MANDATE (DIMA, IMP-002): prompts, prompt builders, context
 // construction, model selection, retry count, parser behavior, validation
 // behavior, markdown rendering, and execution order are BYTE-PRESERVED from:
-//   components/janus/llmTimeout.js
+//   components/janus/llmCall.jsx
 //   components/janus/janusSchema.js
 //   components/janus/domainSME.js
 //   components/janus/promptUtils.js
@@ -22,7 +22,7 @@
 //   6. completed_at / claimed_at / started_at / execution_owner lifecycle stamps
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.51';
 
 // ═══ SHARED CONSTANTS (ExecutionEngine.js + blueprintSplitCall.js) ═══
 const MAX_RAW_JSON_LENGTH = 200000;
@@ -36,59 +36,20 @@ function safeTruncate(str, max) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// llmTimeout.js — TIMEOUT MATRIX + RESILIENT CALLER (Phase -1 hooks omitted)
+// Completion-oriented LLM caller.
+// No Janus-local elapsed-time deadline is imposed. A call is awaited until the
+// provider resolves or explicitly rejects it. Retries happen only after that
+// prior call has settled, preventing overlapping paid requests.
 // ═══════════════════════════════════════════════════════════════════════════
-const TIMEOUT_MATRIX = {
-  "refresh:websweep":      180000,
-  "domain:corpus":         120000,
-  "domain:cogito":         240000,
-  "domain:animus":          90000,
-  "domain:actus":          240000,
-  "domain:synthesis":      120000,
-  "intersection:corpus_x_cogito":   90000,
-  "intersection:corpus_x_animus":   90000,
-  "intersection:corpus_x_actus":    90000,
-  "intersection:cogito_x_animus":   90000,
-  "intersection:cogito_x_actus":    90000,
-  "intersection:animus_x_actus":    90000,
-  "blueprint:skeleton":    240000,
-  "blueprint:expansion":   240000,
-  "blueprint:criteria":    180000,
-  "rerun:intersection":     90000,
-  "rerun:synthesis":       120000,
-  "rerun:blueprint":       150000,
-};
-
-const DEFAULT_TIMEOUT_MS = 120000;
-const DEFAULT_MAX_RETRIES = 2;            // 3 total attempts (1 initial + 2 retries)
-const BACKOFF_SCHEDULE_MS = [3000, 9000]; // backoff before retry attempt N+1
-
-class LLMTimeoutError extends Error {
-  constructor(callLabel, timeoutMs) {
-    super(`${callLabel}: LLM call exceeded timeout of ${timeoutMs}ms`);
-    this.name = "LLMTimeoutError";
-    this.callLabel = callLabel;
-    this.timeoutMs = timeoutMs;
-  }
-}
+const DEFAULT_MAX_RETRIES = 1;
 
 class LLMCallError extends Error {
   constructor(callLabel, attempts, lastErrorMessage) {
-    super(`${callLabel}: LLM call failed after ${attempts} attempts — ${lastErrorMessage}`);
+    super(`${callLabel}: LLM call failed after ${attempts} attempt${attempts === 1 ? "" : "s"} — ${lastErrorMessage}`);
     this.name = "LLMCallError";
     this.callLabel = callLabel;
     this.attempts = attempts;
   }
-}
-
-function timeoutPromise(ms, callLabel) {
-  return new Promise((_, reject) => {
-    setTimeout(() => reject(new LLMTimeoutError(callLabel, ms)), ms);
-  });
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isEmptyResponse(result) {
@@ -98,53 +59,85 @@ function isEmptyResponse(result) {
   return false;
 }
 
-// Resilient LLM call — SERVER PORT: base44 threaded as first arg, InvokeLLM via asServiceRole.
-async function callLLMResilient(base44, invokeParams, options = {}) {
+function isExplicitlyRetryableError(error) {
+  if (error?.retryable === true) return true;
+  const message = (error?.message || String(error) || "").toLowerCase();
+
+  if (
+    message.includes("unauthorized") ||
+    message.includes("forbidden") ||
+    message.includes("invalid request") ||
+    message.includes("bad request") ||
+    message.includes("monthly integration") ||
+    message.includes("insufficient credit") ||
+    message.includes("insufficient fund") ||
+    message.includes("quota exceeded") ||
+    /\b(400|401|403|404)\b/.test(message)
+  ) {
+    return false;
+  }
+
+  return (
+    message.includes("network error") ||
+    message.includes("fetch failed") ||
+    message.includes("econnreset") ||
+    message.includes("connection reset") ||
+    message.includes("connection timed out") ||
+    message.includes("litellm.timeout") ||
+    message.includes("service unavailable") ||
+    message.includes("temporarily unavailable") ||
+    message.includes("bad gateway") ||
+    message.includes("gateway timeout") ||
+    /\b(502|503|504)\b/.test(message)
+  );
+}
+
+async function callLLMCompletionOriented(base44, invokeParams, options = {}) {
   const callLabel = options.callLabel || "unlabeled";
-  const timeoutMs = options.timeoutMs ?? TIMEOUT_MATRIX[callLabel] ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const onRetry = typeof options.onRetry === "function" ? options.onRetry : null;
 
   let lastError = null;
+  let attempts = 0;
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    attempts = attempt;
+
     try {
-      const invokePromise = base44.asServiceRole.integrations.Core.InvokeLLM(invokeParams);
-      const result = await Promise.race([
-        invokePromise,
-        timeoutPromise(timeoutMs, callLabel),
-      ]);
+      const result = await base44.asServiceRole.integrations.Core.InvokeLLM(invokeParams);
 
       if (isEmptyResponse(result)) {
-        throw new Error(`${callLabel}: Empty response from LLM`);
+        const emptyError = new Error(`${callLabel}: Empty response from LLM`);
+        emptyError.retryable = true;
+        throw emptyError;
       }
 
       return result;
-    } catch (err) {
-      lastError = err;
-      const willRetry = attempt <= maxRetries;
-      const nextDelayMs = willRetry ? (BACKOFF_SCHEDULE_MS[attempt - 1] || 0) : 0;
+    } catch (error) {
+      lastError = error;
+      const retryable = isExplicitlyRetryableError(error);
+      const willRetry = retryable && attempt <= maxRetries;
 
       if (onRetry) {
         try {
-          onRetry({
+          await onRetry({
             callLabel,
             attempt,
-            error: err?.message || String(err),
+            error: error?.message || String(error),
             willRetry,
-            nextDelayMs,
+            nextDelayMs: 0,
+            failureKind: retryable ? "explicit_transient_failure" : "explicit_terminal_failure",
           });
-        } catch (_cbErr) {
-          // Never let a caller-side onRetry crash bring down the retry loop.
+        } catch (_callbackError) {
+          // Diagnostic persistence must never become an execution failure.
         }
       }
 
       if (!willRetry) break;
-      if (nextDelayMs > 0) await sleep(nextDelayMs);
     }
   }
 
-  throw new LLMCallError(callLabel, maxRetries + 1, lastError?.message || String(lastError));
+  throw new LLMCallError(callLabel, attempts, lastError?.message || String(lastError));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1605,7 +1598,7 @@ async function callLLM(base44, prompt, domain, refreshEnabled, callLabel, onRetr
     : domain === "intersection" ? "intersection:unlabeled"
     : `domain:${domain}`
   );
-  return await callLLMResilient(base44, llmParams, { callLabel: label, onRetry });
+  return await callLLMCompletionOriented(base44, llmParams, { callLabel: label, onRetry });
 }
 
 // SERVER ORCHESTRATOR — claim-based (Run already exists; NO create).
@@ -1765,9 +1758,7 @@ async function executeJanusServer(base44, runId, params) {
   const renderMd = generateMarkdown(normalizedData, executionMode);
 
   const missingDomains = domains.filter(d => !normalizedData[d]);
-  const completionStatus = Object.keys(mergedData).length === 0 ? "failed"
-    : missingDomains.length === 0 ? "completed"
-    : "completed";
+  const completionStatus = missingDomains.length === 0 ? "completed" : "failed";
 
   const finalPayload = {
     status: completionStatus,
