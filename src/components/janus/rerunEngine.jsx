@@ -4,8 +4,6 @@
 import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "./janusSchema";
 import { generateMarkdown } from "./promptUtils";
-import { executeBlueprintSplitCall } from "./blueprintSplitCall";
-import { callLLMCompletionOriented } from "./llmCall";
 
 // ─── Re-use the LLM call + prompt builders from ExecutionEngine ───
 // We import the module dynamically to avoid circular deps, but the functions
@@ -18,14 +16,11 @@ function safeTruncate(str, max) {
   return str.slice(0, max) + "\n\n[TRUNCATED — original was " + str.length + " chars]";
 }
 
-// Completion-oriented execution. `callLabel` is diagnostic only; Janus does
-// not impose an elapsed-time deadline on rerun LLM calls. `onRetry` records only
-// explicitly settled provider/transport failures.
-async function callLLM(prompt, callLabel, onRetry) {
-  return await callLLMCompletionOriented(
-    { prompt, model: "claude_sonnet_4_6" },
-    { callLabel, onRetry }
-  );
+async function callLLM(prompt) {
+  return await base44.integrations.Core.InvokeLLM({
+    prompt,
+    model: "claude_sonnet_4_6",
+  });
 }
 
 function parseLLMResponse(result, expectedKey) {
@@ -60,22 +55,6 @@ const INTERSECTION_PAIRS = [
   { pair: "cogito_x_actus", domains: ["cogito", "actus"], model: "narrative_loop" },
   { pair: "animus_x_actus", domains: ["animus", "actus"], model: "empathy_driven_strategy" },
 ];
-
-const REQUIRED_SYNTHESIS_PATTERNS = [
-  "quantum_foresight",
-  "governed_cogito",
-  "narrative_loop",
-  "empathy_driven_strategy",
-];
-
-function hasCompleteSynthesis(synthesis) {
-  if (!synthesis || typeof synthesis !== "object") return false;
-  const matrix = synthesis.intersection_matrix || {};
-  return (
-    Object.keys(matrix).length === INTERSECTION_PAIRS.length &&
-    REQUIRED_SYNTHESIS_PATTERNS.every((key) => Boolean(synthesis[key]))
-  );
-}
 
 // ─── Build intersection prompt (same logic as ExecutionEngine) ───
 function buildIntersectionPrompt(pairKey, modelKey, domainA, domainB, dataA, dataB, queryText) {
@@ -141,9 +120,6 @@ No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
 }
 
-// Maximum context size for blueprint prompt — bounds context size and token load
-const MAX_BLUEPRINT_CONTEXT = 18000;
-
 // ─── Build blueprint prompt from stored context ───
 function buildBlueprintPrompt(run) {
   const parts = [];
@@ -159,29 +135,9 @@ function buildBlueprintPrompt(run) {
     });
   }
 
-  // Named synthesis patterns — compact summaries if available
-  const namedPatterns = ["quantum_foresight", "governed_cogito", "narrative_loop", "empathy_driven_strategy"];
-  namedPatterns.forEach(key => {
-    const pattern = run.synthesis?.[key];
-    if (pattern) {
-      const summary = Object.values(pattern).filter(v => typeof v === "string").join(" | ");
-      if (summary) parts.push(`  ▸ ${key}: ${summary.slice(0, 300)}`);
-    }
-  });
-
   if (run.actus?.recommendations?.length) {
-    parts.push("\n═══ ACTUS: Key Recommendations (compressed) ═══");
-    // Compress recommendations — take id, confidence, probability, and first 200 chars of text
-    run.actus.recommendations.forEach(r => {
-      const shortText = r.text?.length > 200 ? r.text.slice(0, 200) + "..." : r.text;
-      parts.push(`  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${shortText}`);
-    });
-  }
-
-  if (run.actus?.strategic_plan) {
-    const sp = run.actus.strategic_plan;
-    if (sp.immediate_horizon) parts.push(`  Immediate: ${sp.immediate_horizon.slice(0, 300)}`);
-    if (sp.long_term_horizon) parts.push(`  Long-term: ${sp.long_term_horizon.slice(0, 300)}`);
+    parts.push("\n═══ ACTUS: Key Recommendations ═══");
+    run.actus.recommendations.forEach(r => parts.push(`  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`));
   }
 
   if (run.corpus?.constraints?.length) {
@@ -193,9 +149,6 @@ function buildBlueprintPrompt(run) {
     parts.push(`\n═══ ANIMUS: Ethical Stance ═══\n  ${run.animus.ethical_stance}`);
   }
 
-  // Truncate total context to bound prompt size
-  const contextBlock = safeTruncate(parts.join("\n"), MAX_BLUEPRINT_CONTEXT);
-
   const blueprintLevel = run.blueprint_level || "L2";
   const noveltyDial = run.novelty_dial || "medium";
 
@@ -204,7 +157,7 @@ You are the Janus Blueprint Module.
 Level: ${blueprintLevel} | Novelty: ${noveltyDial} | Output Mode: ${run.output_mode}.
 ${noveltyDial === "high" ? "alternative_approaches REQUIRED." : ""}
 
-${contextBlock}
+${parts.join("\n")}
 
 Output ONLY valid JSON: { "blueprint": { "goal": "...", "assumptions": ["..."], ${noveltyDial === "high" ? '"alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], ' : ""}"steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[]${blueprintLevel !== "L1" ? ',"time_estimate":"...","effort_level":"medium"' : ""}${blueprintLevel === "L2" || blueprintLevel === "L3" ? ',"substeps":[{"substep":"1a","details":"..."}]' : ""}${blueprintLevel === "L3" ? ',"checklist":["..."],"acceptance_tests":["..."]' : ""}}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}] } }
 No markdown fences, no prose outside JSON.
@@ -237,44 +190,14 @@ export async function rerunSynthesis(runId, onProgress) {
   const intersections = {};
   const errors = [];
 
-  // ─── Phase 5: Resilience persistence helpers (closure-scoped to runId) ───
-  // Mirror of the pattern in ExecutionEngine. Heartbeat writes current_step +
-  // last_heartbeat; recordRetry appends to retry_log via read-modify-write.
-  // Both wrapped in try/catch so persistence failures never break the rerun.
-  const retryLog = Array.isArray(run.retry_log) ? [...run.retry_log] : [];
-  const heartbeat = async (stepLabel) => {
-    try {
-      await base44.entities.Run.update(runId, {
-        current_step: stepLabel,
-        last_heartbeat: new Date().toISOString(),
-      });
-    } catch (_e) { /* diagnostic only */ }
-  };
-  const recordRetry = ({ callLabel, attempt, error, willRetry, nextDelayMs }) => {
-    try {
-      retryLog.push({
-        timestamp: new Date().toISOString(),
-        call_label: callLabel,
-        attempt,
-        error,
-        will_retry: willRetry,
-        next_delay_ms: nextDelayMs,
-      });
-      // Fire-and-forget diagnostic persistence; execution itself still awaits the provider call.
-      base44.entities.Run.update(runId, { retry_log: retryLog }).catch(() => {});
-    } catch (_e) { /* diagnostic only */ }
-  };
-
   // Step 1: Recompute all 6 intersection pairs
   for (let i = 0; i < INTERSECTION_PAIRS.length; i++) {
     const { pair, domains: [dA, dB], model } = INTERSECTION_PAIRS[i];
     onProgress({ domain: `synthesis:${pair}`, status: "running", detail: `Computing intersection ${i + 1}/6: ${pair}`, completedDomains: i, totalDomains: 8 });
-    await heartbeat(`rerun:intersection:${pair}`);
 
     try {
       const prompt = buildIntersectionPrompt(pair, model, dA, dB, run[dA], run[dB], queryText);
-      // Use the specific intersection label for diagnostics.
-      const result = await callLLM(prompt, `intersection:${pair}`, recordRetry);
+      const result = await callLLM(prompt);
       const parsed = parseLLMResponse(result, pair);
       if (parsed.data) {
         intersections[pair] = parsed.data;
@@ -286,38 +209,31 @@ export async function rerunSynthesis(runId, onProgress) {
     }
   }
 
-  // Persist whatever pair checkpoints completed, even if the rerun must fail.
+  // Persist intersection pairs immediately
   await base44.entities.Run.update(runId, {
     synthesis: { intersection_matrix: intersections },
   });
 
-  // Named synthesis is invalid unless all six pair checkpoints exist.
-  if (Object.keys(intersections).length === INTERSECTION_PAIRS.length) {
-    onProgress({ domain: "synthesis:patterns", status: "running", detail: "Computing 4 named emergent patterns...", completedDomains: 6, totalDomains: 8 });
-    await heartbeat("rerun:synthesis:patterns");
+  // Step 2: Compute named patterns
+  onProgress({ domain: "synthesis:patterns", status: "running", detail: "Computing 4 named emergent patterns...", completedDomains: 6, totalDomains: 8 });
 
-    try {
-      const patternPrompt = buildSynthesisNamedPatternsPrompt(intersections, queryText);
-      const patternResult = await callLLM(patternPrompt, "rerun:synthesis", recordRetry);
-      const patternParsed = parseLLMResponse(patternResult, "synthesis");
+  try {
+    const patternPrompt = buildSynthesisNamedPatternsPrompt(intersections, queryText);
+    const patternResult = await callLLM(patternPrompt);
+    const patternParsed = parseLLMResponse(patternResult, "synthesis");
 
-      if (patternParsed.data) {
-        const fullSynthesis = {
-          ...patternParsed.data,
-          intersection_matrix: intersections,
-        };
-        await base44.entities.Run.update(runId, { synthesis: fullSynthesis });
-      } else {
-        errors.push(`synthesis:patterns: ${patternParsed.error}`);
-      }
-    } catch (e) {
-      errors.push(`synthesis:patterns: ${e.message}`);
+    if (patternParsed.data) {
+      // Merge named patterns with the intersection matrix
+      const fullSynthesis = {
+        ...patternParsed.data,
+        intersection_matrix: intersections,
+      };
+      await base44.entities.Run.update(runId, { synthesis: fullSynthesis });
+    } else {
+      errors.push(`synthesis:patterns: ${patternParsed.error}`);
     }
-  } else {
-    const missingPairs = INTERSECTION_PAIRS
-      .map(({ pair }) => pair)
-      .filter((pair) => !intersections[pair]);
-    errors.push(`synthesis:patterns blocked — missing required intersections: ${missingPairs.join(", ")}`);
+  } catch (e) {
+    errors.push(`synthesis:patterns: ${e.message}`);
   }
 
   // Step 3: Finalize
@@ -333,31 +249,15 @@ export async function rerunSynthesis(runId, onProgress) {
   const validation = validateJanusOutput(fullData, allDomains);
   const renderMd = generateMarkdown(validation.normalized || fullData, updatedRun.execution_mode);
 
-  // Write normalized domain data back to fix enum drift (e.g. "Probable" → "Contested")
-  const normalizedSynthData = validation.normalized || fullData;
-  const synthDomainUpdate = {};
-  allDomains.forEach(d => { if (normalizedSynthData[d]) synthDomainUpdate[d] = normalizedSynthData[d]; });
-
-  const synthesisComplete = hasCompleteSynthesis(normalizedSynthData.synthesis);
-  const allErrors = [...(validation.errors || []), ...errors];
-  if (!synthesisComplete) allErrors.push("synthesis: required intersection/pattern checkpoints are incomplete");
-  const success = synthesisComplete && allErrors.length === 0;
-  const completedAt = new Date().toISOString();
-
   await base44.entities.Run.update(runId, {
-    ...synthDomainUpdate,
-    status: success ? "completed" : "failed",
-    current_step: success ? "completed" : "failed",
-    last_heartbeat: completedAt,
-    completed_at: completedAt,
+    status: errors.length > 0 && !updatedRun.synthesis?.intersection_matrix ? "failed" : "completed",
     render_md: safeTruncate(renderMd, 60000),
-    raw_json: safeTruncate(JSON.stringify(normalizedSynthData), MAX_RAW_JSON_LENGTH),
-    validation_errors: allErrors,
-    error_message: success ? "" : allErrors.join("\n"),
+    raw_json: safeTruncate(JSON.stringify(validation.normalized || fullData), MAX_RAW_JSON_LENGTH),
+    validation_errors: [...(updatedRun.validation_errors || []).filter(e => !e.includes("synthesis") && !e.includes("intersection")), ...errors],
   });
 
-  onProgress({ domain: null, status: success ? "completed" : "failed", detail: success ? "Synthesis re-run complete" : "Synthesis re-run failed; completed checkpoints were preserved" });
-  return { success, errors: allErrors };
+  onProgress({ domain: null, status: "completed", detail: "Synthesis re-run complete" });
+  return { success: errors.length === 0, errors };
 }
 
 /**
@@ -371,63 +271,28 @@ export async function rerunBlueprint(runId, onProgress) {
   const run = runs[0];
   if (!run) throw new Error("Run not found");
 
-  // Blueprint prerequisites follow the selected execution mode.
-  const required = run.execution_mode === "quick"
-    ? ["corpus", "cogito"]
-    : ["corpus", "cogito", "animus", "actus"];
-  const missing = required.filter(d => !run[d]);
-  if (run.execution_mode === "full" && !hasCompleteSynthesis(run.synthesis)) {
-    missing.push("synthesis");
-  }
-  if (missing.length > 0) throw new Error(`Cannot re-run blueprint — missing prerequisite domains: ${[...new Set(missing)].join(", ")}`);
+  // Blueprint requires core domains; synthesis is used if available but not a hard prerequisite
+  const missing = ["corpus", "cogito", "animus", "actus"].filter(d => !run[d]);
+  if (missing.length > 0) throw new Error(`Cannot re-run blueprint — missing prerequisite domains: ${missing.join(", ")}`);
 
   await base44.entities.Run.update(runId, { status: "running" });
 
   const errors = [];
 
-  // ─── Phase 5: Same resilience persistence helpers for blueprint rerun ───
-  const retryLog = Array.isArray(run.retry_log) ? [...run.retry_log] : [];
-  const heartbeat = async (stepLabel) => {
-    try {
-      await base44.entities.Run.update(runId, {
-        current_step: stepLabel,
-        last_heartbeat: new Date().toISOString(),
-      });
-    } catch (_e) { /* diagnostic only */ }
-  };
-  const recordRetry = ({ callLabel, attempt, error, willRetry, nextDelayMs }) => {
-    try {
-      retryLog.push({
-        timestamp: new Date().toISOString(),
-        call_label: callLabel,
-        attempt,
-        error,
-        will_retry: willRetry,
-        next_delay_ms: nextDelayMs,
-      });
-      base44.entities.Run.update(runId, { retry_log: retryLog }).catch(() => {});
-    } catch (_e) { /* diagnostic only */ }
-  };
+  onProgress({ domain: "blueprint", status: "running", detail: "Generating blueprint from stored domain data...", completedDomains: 0, totalDomains: 1 });
 
-  // Use split-call architecture — 3 focused sub-calls instead of one monolithic call
-  // Phase 5: pass onRetry + onHeartbeat callbacks (split-call already accepts these from Phase 4)
-  const { data: bpData, errors: bpErrors } = await executeBlueprintSplitCall({
-    source: run,
-    queryText: run.query_text,
-    blueprintLevel: run.blueprint_level || "L2",
-    noveltyDial: run.novelty_dial || "medium",
-    outputMode: run.output_mode || "Blueprint",
-    onProgress,
-    onRetry: recordRetry,
-    onHeartbeat: heartbeat,
-  });
+  try {
+    const prompt = buildBlueprintPrompt(run);
+    const result = await callLLM(prompt);
+    const parsed = parseLLMResponse(result, "blueprint");
 
-  errors.push(...bpErrors);
-
-  if (bpData) {
-    await base44.entities.Run.update(runId, { blueprint: bpData });
-  } else {
-    errors.push("blueprint: All sub-calls failed — no blueprint data produced");
+    if (parsed.data) {
+      await base44.entities.Run.update(runId, { blueprint: parsed.data });
+    } else {
+      errors.push(`blueprint: ${parsed.error}`);
+    }
+  } catch (e) {
+    errors.push(`blueprint: ${e.message}`);
   }
 
   // Finalize
@@ -439,32 +304,16 @@ export async function rerunBlueprint(runId, onProgress) {
   const fullData = {};
   allDomains.forEach(d => { fullData[d] = updatedRun[d]; });
 
-  // Re-validate ALL domains — this normalizes "Probable" → "Contested" and cleans stale errors
   const validation = validateJanusOutput(fullData, allDomains);
-  const normalizedData = validation.normalized || fullData;
-  const renderMd = generateMarkdown(normalizedData, updatedRun.execution_mode);
-
-  // Write normalized domain data back to fix enum drift (e.g. "Probable" → "Contested")
-  const domainUpdate = {};
-  allDomains.forEach(d => { if (normalizedData[d]) domainUpdate[d] = normalizedData[d]; });
-
-  const allErrors = [...(validation.errors || []), ...errors];
-  const success = Boolean(normalizedData.blueprint) && allErrors.length === 0;
-  if (!normalizedData.blueprint) allErrors.push("blueprint: required blueprint checkpoint is incomplete");
-  const completedAt = new Date().toISOString();
+  const renderMd = generateMarkdown(validation.normalized || fullData, updatedRun.execution_mode);
 
   await base44.entities.Run.update(runId, {
-    ...domainUpdate,
-    status: success ? "completed" : "failed",
-    current_step: success ? "completed" : "failed",
-    last_heartbeat: completedAt,
-    completed_at: completedAt,
+    status: errors.length > 0 && !updatedRun.blueprint ? "failed" : "completed",
     render_md: safeTruncate(renderMd, 60000),
-    raw_json: safeTruncate(JSON.stringify(normalizedData), MAX_RAW_JSON_LENGTH),
-    validation_errors: allErrors,
-    error_message: success ? "" : allErrors.join("\n"),
+    raw_json: safeTruncate(JSON.stringify(validation.normalized || fullData), MAX_RAW_JSON_LENGTH),
+    validation_errors: [...(updatedRun.validation_errors || []).filter(e => !e.includes("blueprint")), ...errors],
   });
 
-  onProgress({ domain: null, status: success ? "completed" : "failed", detail: success ? "Blueprint re-run complete" : "Blueprint re-run failed; partial output was preserved" });
-  return { success, errors: allErrors };
+  onProgress({ domain: null, status: "completed", detail: "Blueprint re-run complete" });
+  return { success: errors.length === 0, errors };
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
-import { ArrowLeft, AlertTriangle, Play } from "lucide-react";
+import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { light, dark, glassCard, glassSurface, glassBtn, glassError } from "@/components/ui/LiquidGlass";
 import StatusPill from "@/components/janus/StatusPill";
@@ -60,9 +60,6 @@ export default function Results() {
 
   const mode = EXECUTION_MODES[run.execution_mode?.toUpperCase()] || EXECUTION_MODES.STANDARD;
   const hasFailed = run.status === "failed";
-  const hasAnyOutput = Boolean(
-    run.refresh || run.corpus || run.cogito || run.animus || run.actus || run.synthesis || run.blueprint
-  );
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 20px 40px" }}>
@@ -87,28 +84,7 @@ export default function Results() {
           <ArrowLeft style={{ width: 14, height: 14 }} />
           History
         </motion.button>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {hasFailed && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => navigate(`/NewQuery?resume=${run.id}`)}
-              style={{
-                ...glassBtn(t),
-                padding: "7px 12px",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              <Play style={{ width: 13, height: 13 }} />
-              Resume Checkpoint
-            </motion.button>
-          )}
-          <StatusPill status={run.status} />
-        </div>
+        <StatusPill status={run.status} />
       </motion.div>
 
       {/* Query summary card */}
@@ -187,8 +163,8 @@ export default function Results() {
         }}
       />
 
-      {/* Persisted checkpoints remain inspectable even when the overall run failed. */}
-      {hasAnyOutput && (
+      {/* Results tabs */}
+      {!hasFailed && (
         <GlassResultTabs run={run} mode={mode} t={t} isDark={isDark} isAdmin={isAdmin} />
       )}
     </div>

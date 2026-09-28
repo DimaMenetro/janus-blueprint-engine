@@ -16,7 +16,7 @@
 import React, { useRef, useLayoutEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, History, FileText, Zap } from "lucide-react";
+import { Plus, History, Zap } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { 
   light, dark,
@@ -25,10 +25,9 @@ import {
 import BottomAccessory from "@/components/ui/BottomAccessory";
 
 const tabs = [
-  { path: "/NewQuery",       label: "New",       icon: Plus },
-  { path: "/history",        label: "History",   icon: History },
-  { path: "/BlueprintPrint", label: "Blueprint", icon: FileText },
-  { path: "/diagnostics",    label: "Diag",      icon: Zap },
+  { path: "/NewQuery",    label: "New",         icon: Plus },
+  { path: "/history",     label: "History",     icon: History },
+  { path: "/diagnostics", label: "Diagnostics", icon: Zap },
 ];
 
 export default function GlassTabBar() {
@@ -66,9 +65,9 @@ export default function GlassTabBar() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))",
-        paddingLeft: "calc(16px + env(safe-area-inset-left, 0px))",
-        paddingRight: "calc(16px + env(safe-area-inset-right, 0px))",
+        paddingBottom: 12,
+        paddingLeft: 16,
+        paddingRight: 16,
         pointerEvents: "none",
       }}
     >
@@ -78,17 +77,19 @@ export default function GlassTabBar() {
       </div>
 
       {/* ─── TAB BAR PILL ─── */}
-      <nav
+      <motion.nav
         ref={containerRef}
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30, delay: 0.1 }}
         style={{
           ...glassTabBar(t),
-          isolation: "isolate",
           display: "flex",
           alignItems: "center",
           gap: 4,
           padding: "6px 8px",
           position: "relative",
-          maxWidth: 440,
+          maxWidth: 380,
           width: "100%",
           pointerEvents: "auto",
         }}
@@ -101,7 +102,7 @@ export default function GlassTabBar() {
               position: "absolute",
               top: 5,
               bottom: 5,
-              ...glassTabActive(t, { density: "focused" }),
+              ...glassTabActive(t),
             }}
             animate={{
               left: indicator.left,
@@ -161,7 +162,7 @@ export default function GlassTabBar() {
             </Link>
           );
         })}
-      </nav>
+      </motion.nav>
     </div>
   );
 }

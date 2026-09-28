@@ -51,8 +51,6 @@ import Diagnostics from './pages/Diagnostics';
 import History from './pages/History';
 import NewQuery from './pages/NewQuery';
 import Results from './pages/Results';
-import ABTest from './pages/ABTest';
-import BlueprintPrint from './pages/BlueprintPrint';
 import __Layout from './Layout.jsx';
 
 
@@ -61,8 +59,6 @@ export const PAGES = {
     "History": History,
     "NewQuery": NewQuery,
     "Results": Results,
-    "ABTest": ABTest,
-    "BlueprintPrint": BlueprintPrint,
 }
 
 export const pagesConfig = {
