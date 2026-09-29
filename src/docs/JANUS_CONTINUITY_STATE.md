@@ -6,6 +6,8 @@ Read this first after any context reset.
 - **Current phase:** Phase 0 COMPLETE. **Phase 1 COMPLETE (2026-09-29)** — 11/11 Vitest tests pass (`npm test`), and the build passes. Next up: Phase 2 (Lifecycle, Completion & Quality Specification).
 - **Phase 1 artifacts:** `src/lib/janus/protocolRegistry.js` (canonical: 25 subdomains 7/6/5/7, 6 pairs, 4 patterns, confidence, threading, partial mode profiles, model policy, legacy aliases) + `protocolRegistry.test.js` (roster, pairs, patterns, no stale identities, no second roster). domainSME, both engines' pair maps/refresh keys/pattern templates, schema, EXECUTION_MODES, CorpusTab, markdown, export metadata, Layout/Diagnostics/NewQuery labels all derive from the registry.
 - **Phase 1 notes:** the canonical Corpus physics key is `physics`, and historical `theoretical_physics` is read through `readSubdomain`. This fixes a bug where the Corpus tab never rendered physics. Still open for later phases: the 2000/6000-char synthesis truncations (Phase 8) and the explicit sonnet/gemini overrides in `callLLM`/rerun (Phase 4, where the retrieval-provider operator gate applies).
+- **Model redline enforced (2026-09-29, Daionae):** no per-call model overrides remain (the Opus setting is inherited). The Gemini Refresh path is removed. Refresh ON fails closed before any Run or LLM call. A guard test enforces this.
+- **Phase 2 COMPLETE (2026-09-29):** `src/lib/janus/lifecycleContract.js` + tests (27/27 total). Spec: `JANUS_PHASE2_LIFECYCLE_COMPLETION_QUALITY_SPEC_2026-09-29.md`. Not yet wired, by design (Phase 5). Next up: **Phase 3 — Durable Stage Data Model + Legacy Adapter.**
 - **Phase 0 docs:** `JANUS_PHASE0_BASELINE_AUDIT_2026-09-29.md`, `JANUS_PHASE0_SALVAGE_MANIFEST_2026-09-29.md` (both accepted).
 - **Donor:** public repo DimaMenetro/janus-blueprint-engine @ 3f25d14c…; re-fetch command is in the manifest. A salvage source, not governing architecture.
 
@@ -26,4 +28,4 @@ Read this first after any context reset.
 - Name: `JANUS_PHASE0_RESTORED_BASELINE_PLUS_AUDIT_VITEST_2026-09-29` · ID: `6abbd5ec65beb352c8a87266` · Git: `4d029fc397083e1daed96e58f2736000b4447404` · State: restored six-month baseline + Phase 0 docs + Vitest (no cognitive rewrite).
 
 ## Next action
-Phase 1: canonical `janusProtocolRegistry` (incl. Opus-only model policy), registry-derived domainSME/pair map/labels/version display, Vitest registry tests, frontend labels in the same tranche.
+Phase 3: create the RunStage/RunAttempt entities (plan §10.2–10.4) and a read-only legacy adapter. Historical Runs are not modified.
