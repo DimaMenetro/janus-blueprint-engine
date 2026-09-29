@@ -97,4 +97,9 @@ describe("no second active roster in executable code", () => {
     const hits = files.filter(f => /\[\s*"distributed_systems"\s*,/.test(fs.readFileSync(f, "utf8")));
     expect(hits).toEqual([]);
   });
+
+  it("model policy: no per-call model overrides, no Gemini, no web-context path", () => {
+    const hits = files.filter(f => /\bmodel:\s*["']|gemini_|add_context_from_internet/.test(fs.readFileSync(f, "utf8")));
+    expect(hits.map(f => path.relative(root, f))).toEqual([]);
+  });
 });

@@ -344,16 +344,14 @@ function parseLLMResponse(result, expectedKey) {
 
 // ─── LLM CALL HELPER ─────────────────────────────────────────────────────────
 
-async function callLLM(prompt, domain, refreshEnabled) {
-  const llmParams = { prompt };
-  if (domain === "refresh" && refreshEnabled) {
-    llmParams.add_context_from_internet = true;
-    llmParams.model = "gemini_3_flash";
-  } else {
-    llmParams.model = "claude_sonnet_4_6";
-  }
-  return await base44.integrations.Core.InvokeLLM(llmParams);
+// Model policy: no per-call override — inherits the operator's Claude Opus setting.
+// Gemini is prohibited; live Refresh fails closed in executeJanus until provider-neutral retrieval exists.
+async function callLLM(prompt) {
+  return await base44.integrations.Core.InvokeLLM({ prompt });
 }
+
+export const REFRESH_UNAVAILABLE_MESSAGE =
+  "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
 
 // ─── MAIN EXECUTION ──────────────────────────────────────────────────────────
 
@@ -363,6 +361,7 @@ async function callLLM(prompt, domain, refreshEnabled) {
  */
 export async function executeJanus(params, onProgress, generateMarkdown, buildFullPrompt) {
   const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = params;
+  if (refreshEnabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE);
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
   const domains = mode.domains;
 
@@ -403,7 +402,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     // ── Execute domain LLM call
     let domainResult;
     try {
-      domainResult = await callLLM(domainPrompt, domain, refreshEnabled);
+      domainResult = await callLLM(domainPrompt);
     } catch (err) {
       domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
       continue;
@@ -444,7 +443,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
 
         try {
           const pairPrompt = buildIntersectionPrompt(trigger.pair, trigger.model, dA, dB, mergedData[dA], mergedData[dB], queryText);
-          const pairResult = await callLLM(pairPrompt, "intersection", false);
+          const pairResult = await callLLM(pairPrompt);
           const pairParsed = parseLLMResponse(pairResult, trigger.pair);
 
           if (pairParsed.data) {

@@ -20,7 +20,6 @@ function safeTruncate(str, max) {
 async function callLLM(prompt) {
   return await base44.integrations.Core.InvokeLLM({
     prompt,
-    model: "claude_sonnet_4_6",
   });
 }
 
