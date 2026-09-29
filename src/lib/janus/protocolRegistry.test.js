@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import process from "node:process";
 import {
   PROTOCOL, DOMAINS, DOMAIN_ORDER, PAIRS, PATTERNS, MODE_PROFILES, MODEL_POLICY,
   allSubdomains, lowestConfidence, readSubdomain, LEGACY_SUBDOMAIN_ALIASES,
