@@ -23,10 +23,13 @@ Duplicate pair maps/prompts: ExecutionEngine.jsx:20-30 and rerunEngine.jsx (viol
 ## 3. Model policy — verified and adjudicated
 Base44 SDK docs: explicit per-call `model` overrides the app-level setting. Live overrides: ExecutionEngine.jsx:367 `gemini_3_flash` (Refresh), :369 `claude_sonnet_4_6` (all other stages); rerunEngine.jsx:22 sonnet; test* functions sonnet. Donor identical (manifest §C). **No stage has ever run on the operator Opus setting.**
 Web context (`add_context_from_internet`) is supported only on `gemini_3_flash` / `gemini_3_1_pro`.
-**DIMA adjudication (2026-09-29, binding):**
-- Refresh live-research stage only: explicit `gemini_3_1_pro`, declared and recorded; output = untrusted, provenance-bearing research input.
-- Corpus, Cogito, Animus, Actus, Synthesis, Blueprint, critique/refinement, quality qualification: inherit the operator-selected Claude Opus policy (no per-call `model` argument).
-- Effective model/provider recorded per stage. No hidden fallback.
+**DIMA adjudication (2026-09-29, SUPERSEDING — Operator-level Cephalon rule):**
+- **Gemini is PROHIBITED from all operational Janus execution in every stage, including Refresh** (`gemini_3_flash`, `gemini_3_1_pro`, any Gemini). The earlier Gemini-for-Refresh ruling is WITHDRAWN and void.
+- Refresh = provider-neutral external search/retrieval → provenance-bearing source corpus (URLs, metadata, excerpts, timestamps, documents) → **Claude Opus** Refresh analysis. Retrieval is not Janus cognition.
+- Claude Opus is the operational model for Refresh analysis, Corpus, Cogito, Animus, Actus, Synthesis, Blueprint, adversarial critique, refinement, quality qualification.
+- Effective model/provider recorded per stage. **No hidden fallback.**
+- Consequence: `add_context_from_internet` (Gemini-only) must NOT be used. Existing `gemini_3_flash` and `claude_sonnet_4_6` overrides are to be removed.
+- **Operator gate:** if the retrieval layer needs an API key, paid service, package, or provider choice, halt and present options to DIMA. Never fall back to Gemini.
 Implementation lands in Phase 1/4 (registry model-policy entry + stage engine); no code changed in Phase 0.
 
 ## 4. Truncation classification (§3.7)
@@ -77,7 +80,9 @@ Candidate set (structural signals; quality judgment pending ledger + DIMA):
 ## 11. Test tooling (item 14)
 Vitest approved by DIMA as dev dependency; installed (`vitest ^3.2.4`). No other build tooling changed. Test script/config added in Phase 1 with registry tests.
 
-## 12. Open Phase 0 items
-- **Builder ledger** `Janus_Blueprint_Engine_Builder_Chat_Export_2026-09-27.txt` — not received in this message (no attachment). Needed for provenance and for confirming which candidates are pre-degradation strongest.
-- **Checkpoint of restored baseline (item 1-2)** — must be created by DIMA in the Builder (Kytheion cannot create checkpoints); record ID here.
-- **Exit test** — DIMA/Daionae/Kytheion agreement on this report + manifest.
+## 12. Phase 0 gates
+- Builder ledger — **WAIVED by DIMA (2026-09-29).** Do not import or read it; it is held externally for forensic provenance. Flag specific provenance questions instead.
+- Donor/UI salvage, benchmark references, exit agreement — **ACCEPTED** by DIMA 2026-09-29. Pre/post-degradation provenance is not a blocker.
+- **Restore checkpoint — ONLY REMAINING GATE.** Record: name · ID · state = *restored six-month Janus application baseline + Phase 0 audit/documentation + approved test-tooling (Vitest) state*. It is NOT a byte-identical pre-Phase-0 snapshot. No cognitive or source-logic changes are allowed before this is recorded.
+  - Name: _pending_ · ID: _pending_
+- On record → Phase 0 COMPLETE; proceed automatically to Phase 1.
