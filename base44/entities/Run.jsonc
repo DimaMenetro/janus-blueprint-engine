@@ -1,0 +1,393 @@
+{
+  "name": "Run",
+  "type": "object",
+  "properties": {
+    "query_text": {
+      "type": "string",
+      "description": "The user's natural language query"
+    },
+    "full_prompt": {
+      "type": "string",
+      "description": "The complete prompt sent to the LLM"
+    },
+    "execution_mode": {
+      "type": "string",
+      "enum": [
+        "quick",
+        "standard",
+        "full"
+      ],
+      "default": "standard",
+      "description": "Execution mode: quick, standard, or full"
+    },
+    "output_mode": {
+      "type": "string",
+      "enum": [
+        "Blueprint",
+        "Research Plan",
+        "Product Spec",
+        "Technical Architecture"
+      ],
+      "default": "Blueprint"
+    },
+    "blueprint_level": {
+      "type": "string",
+      "enum": [
+        "L1",
+        "L2",
+        "L3"
+      ],
+      "default": "L2",
+      "description": "Blueprint detail level"
+    },
+    "novelty_dial": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "description": "Novelty/innovation level"
+    },
+    "refresh_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether external refresh was requested"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "running",
+        "validating",
+        "completed",
+        "failed"
+      ],
+      "default": "idle"
+    },
+    "validation_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Validation errors if any"
+    },
+    "refresh": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "attempted": {
+          "type": "boolean"
+        },
+        "limitations": {
+          "type": "string"
+        },
+        "would_refresh": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "properties": {
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "feasibility_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cogito": {
+      "type": "object",
+      "properties": {
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "tag": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "depends_on": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "why_believed": {
+                "type": "string"
+              },
+              "falsifiable_by": {
+                "type": "string"
+              },
+              "verify_later": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "reasoning_map": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "animus": {
+      "type": "object",
+      "properties": {
+        "boundary_checks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "disallowed_moves": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "safety_notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "actus": {
+      "type": "object",
+      "properties": {
+        "recommendations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "depends_on_claims": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "inherited_confidence": {
+                "type": "string"
+              },
+              "probability": {
+                "type": "string"
+              },
+              "failure_modes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "next_actions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "synthesis": {
+      "type": "object",
+      "properties": {
+        "key_takeaways": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "constraint_collisions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limitation_foreground": {
+          "type": "string"
+        }
+      }
+    },
+    "blueprint": {
+      "type": "object",
+      "properties": {
+        "goal": {
+          "type": "string"
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "alternative_approaches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "pros": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "why_not_chosen": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "step": {
+                "type": "number"
+              },
+              "title": {
+                "type": "string"
+              },
+              "instructions": {
+                "type": "string"
+              },
+              "inputs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "outputs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "validation": {
+                "type": "string"
+              },
+              "depends_on_steps": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "time_estimate": {
+                "type": "string"
+              },
+              "effort_level": {
+                "type": "string"
+              },
+              "substeps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "substep": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "checklist": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "acceptance_tests": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "success_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "risk_register": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "risk": {
+                "type": "string"
+              },
+              "impact": {
+                "type": "string"
+              },
+              "mitigation": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "raw_json": {
+      "type": "string",
+      "description": "The raw JSON output from the LLM"
+    },
+    "render_md": {
+      "type": "string",
+      "description": "Human-readable markdown render of the blueprint"
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Error message if validation failed"
+    }
+  },
+  "required": [
+    "query_text",
+    "execution_mode",
+    "output_mode"
+  ]
+}
