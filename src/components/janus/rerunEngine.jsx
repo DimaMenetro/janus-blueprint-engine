@@ -4,6 +4,7 @@
 import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "./janusSchema";
 import { generateMarkdown } from "./promptUtils";
+import { PAIRS, patternTaskText, patternJsonTemplate } from "@/lib/janus/protocolRegistry";
 
 // ─── Re-use the LLM call + prompt builders from ExecutionEngine ───
 // We import the module dynamically to avoid circular deps, but the functions
@@ -38,22 +39,11 @@ function parseLLMResponse(result, expectedKey) {
 }
 
 // ─── SYNTHESIS MODELS (intersection pair config) ───
-const SYNTHESIS_MODELS = {
-  knowledge_reality: { name: "Knowledge-Reality Validation", domains: ["corpus", "cogito"] },
-  conscience_boundary: { name: "Conscience Boundary", domains: ["corpus", "animus"] },
-  quantum_foresight: { name: "Quantum Foresight Model", domains: ["corpus", "actus"] },
-  governed_cogito: { name: "Governed Cogito", domains: ["cogito", "animus"] },
-  narrative_loop: { name: "The Narrative Loop", domains: ["cogito", "actus"] },
-  empathy_driven_strategy: { name: "Empathy-Driven Strategy", domains: ["animus", "actus"] },
-};
+// Derived from canonical registry — no local roster.
+const SYNTHESIS_MODELS = Object.fromEntries(PAIRS.map(p => [p.model, { name: p.resolution_label, domains: p.domains }]));
 
 const INTERSECTION_PAIRS = [
-  { pair: "corpus_x_cogito", domains: ["corpus", "cogito"], model: "knowledge_reality" },
-  { pair: "corpus_x_animus", domains: ["corpus", "animus"], model: "conscience_boundary" },
-  { pair: "corpus_x_actus", domains: ["corpus", "actus"], model: "quantum_foresight" },
-  { pair: "cogito_x_animus", domains: ["cogito", "animus"], model: "governed_cogito" },
-  { pair: "cogito_x_actus", domains: ["cogito", "actus"], model: "narrative_loop" },
-  { pair: "animus_x_actus", domains: ["animus", "actus"], model: "empathy_driven_strategy" },
+  ...PAIRS.map(p => ({ pair: p.id, domains: p.domains, model: p.model })),
 ];
 
 // ─── Build intersection prompt (same logic as ExecutionEngine) ───
@@ -100,19 +90,13 @@ Your task: produce the 4 NAMED EMERGENT PATTERNS and final cross-domain summary.
 ${matrixEntries}
 
 Produce:
-1. QUANTUM FORESIGHT (Corpus × Actus)
-2. GOVERNED COGITO (Animus × Cogito)
-3. NARRATIVE LOOP (Cogito × Actus)
-4. EMPATHY-DRIVEN STRATEGY (Animus × Actus)
+${patternTaskText()}
 
 Also: key_takeaways, constraint_collisions, limitation_foreground
 
 Output ONLY valid JSON: { "synthesis": {
   "key_takeaways": ["..."], "constraint_collisions": ["..."], "limitation_foreground": "...",
-  "quantum_foresight": {"cross_domain_insight":"...","probability_wave":["..."],"metaphor":"..."},
-  "governed_cogito": {"ethical_filter_applied":"...","conscience_verdict":"...","truth_method_soundness":"..."},
-  "narrative_loop": {"decoded_user_narrative":"...","resonant_strategy":"...","lossless_compression":"..."},
-  "empathy_driven_strategy": {"true_goal_vs_literal_prompt":"...","behavioral_model":"...","empathy_strategy":"..."}
+${patternJsonTemplate()}
 } }
 
 IMPORTANT: Do NOT include intersection_matrix — already stored separately.

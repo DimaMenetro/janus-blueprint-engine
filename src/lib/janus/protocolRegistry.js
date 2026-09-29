@@ -259,7 +259,7 @@ export const PATTERNS = [
     fields: ["decoded_user_narrative", "resonant_strategy", "lossless_compression"],
     definition: "Computational Linguistics deconstructs the underlying story; Technical Writing synthesizes a response that is factually correct and narratively resonant." },
   { id: "empathy_driven_strategy", name: "Empathy-Driven Strategy", alias: "Alignment Engine", section: "5.4", pair: "animus_x_actus",
-    fields: ["empathy_model", "non_rational_factors", "aligned_strategy"],
+    fields: ["true_goal_vs_literal_prompt", "behavioral_model", "empathy_strategy"],
     definition: "Risk Analysis models cognitive/emotional state; Behavioral Economics supplies non-rational insight; together they inform Strategic Planning." },
 ];
 
@@ -330,6 +330,14 @@ export function readSubdomain(obj, id) {
   const legacy = Object.keys(LEGACY_SUBDOMAIN_ALIASES).find(k => LEGACY_SUBDOMAIN_ALIASES[k] === id && obj[k]);
   return legacy ? obj[legacy] : undefined;
 }
+
+export const patternTaskText = () => PATTERNS.map((p, i) => {
+  const pair = PAIRS.find(x => x.id === p.pair);
+  return `${i + 1}. ${p.name.toUpperCase()} (${pair.domains.map(d => DOMAINS[d].label).join(" × ")}): ${p.definition}`;
+}).join("\n");
+
+export const patternJsonTemplate = () => PATTERNS.map(p =>
+  `  "${p.id}": {${p.fields.map((f, i) => `"${f}":${p.id === "quantum_foresight" && i === 1 ? '["..."]' : '"..."'}`).join(",")}}`).join(",\n");
 
 export const pairLabel = (pair) => `${pair.resolution_label} (${pair.domains.map(d => DOMAINS[d].label).join(" × ")})`;
 export const getPairByModel = (model) => PAIRS.find(p => p.model === model);

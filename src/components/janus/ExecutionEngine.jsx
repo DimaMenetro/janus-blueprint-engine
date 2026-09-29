@@ -1,11 +1,25 @@
 // Janus Execution Engine — Domain-by-domain sequential LLM orchestrator
-// CP-002-O-D-JNP v2.0 — Wisdom Machine Edition
+// Protocol identity/roster: @/lib/janus/protocolRegistry (canonical)
 // Architecture: Incremental Synthesis — intersection pairs computed as domains complete
 // Persists progress incrementally so page reloads don't lose completed work
 
 import { base44 } from "@/api/base44Client";
 import { EXECUTION_MODES, validateJanusOutput } from "./janusSchema";
 import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity, buildSynthesisPrompt } from "./domainSME";
+import { PAIRS, DOMAINS, DOMAIN_ORDER, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText, patternJsonTemplate } from "@/lib/janus/protocolRegistry";
+
+// ─── REGISTRY-DERIVED PROMPT FRAGMENTS ──────────────────────────────────────
+let _n = 0;
+const REFRESH_ROSTER_TEXT = DOMAIN_ORDER.map(d =>
+  `${DOMAINS[d].label.toUpperCase()} SUBDOMAINS (${DOMAINS[d].subdomains.length}):\n` +
+  DOMAINS[d].subdomains.map(s => `${++_n}. ${s.name} [key: ${s.refresh_key}]`).join(" ")
+).join("\n\n");
+const REFRESH_KEYS_JSON = allSubdomains().map(s => `"${s.refresh_key}": "..."`).join(", ");
+const CORPUS_SUBDOMAINS_JSON = subdomainIds("corpus").map((id, i) =>
+  i === 0 ? `"${id}": {"perspective": "your expert perspective as one coherent voice", "key_findings": ["specific technical findings only this expertise would produce"]}`
+          : `"${id}": {"perspective": "...", "key_findings": ["..."]}`).join(", ");
+const PATTERN_TASK_TEXT = patternTaskText();
+const PATTERN_JSON = patternJsonTemplate();
 
 const MAX_RAW_JSON_LENGTH = 200000; // Full fidelity for cephalon consumption
 const MAX_PROMPT_LENGTH = 10000;
@@ -17,33 +31,19 @@ function safeTruncate(str, max) {
 }
 
 // ─── INTERSECTION PAIR MAPPING ───────────────────────────────────────────────
-// Which intersection pairs become available after each domain completes
-const INTERSECTION_TRIGGERS = {
-  cogito:  [{ pair: "corpus_x_cogito", domains: ["corpus", "cogito"], model: "knowledge_reality" }],
-  animus:  [
-    { pair: "corpus_x_animus", domains: ["corpus", "animus"], model: "conscience_boundary" },
-    { pair: "cogito_x_animus", domains: ["cogito", "animus"], model: "governed_cogito" }
-  ],
-  actus:   [
-    { pair: "corpus_x_actus", domains: ["corpus", "actus"], model: "quantum_foresight" },
-    { pair: "cogito_x_actus", domains: ["cogito", "actus"], model: "narrative_loop" },
-    { pair: "animus_x_actus", domains: ["animus", "actus"], model: "empathy_driven_strategy" }
-  ]
-};
+// Derived from registry: a pair becomes available once its later domain completes.
+const INTERSECTION_TRIGGERS = PAIRS.reduce((acc, p) => {
+  const later = p.domains.reduce((a, b) => (DOMAIN_ORDER.indexOf(a) > DOMAIN_ORDER.indexOf(b) ? a : b));
+  (acc[later] = acc[later] || []).push({ pair: p.id, domains: p.domains, model: p.model });
+  return acc;
+}, {});
 
 // ─── CONTEXT BUILDERS ────────────────────────────────────────────────────────
 
 function buildRefreshContext(priorDomains, targetDomain) {
   if (!priorDomains.refresh?.subdomain_updates) return "";
   const updates = priorDomains.refresh.subdomain_updates;
-  const domainSubdomainMap = {
-    corpus: ["distributed_systems", "data_engineering", "cybersecurity", "systems_engineering", "theoretical_physics", "ai_ml", "neuroscience"],
-    cogito: ["unified_ai_cognitive", "knowledge_graphs", "epistemology", "computational_linguistics", "graphrag_reasoning", "neuro_symbolic"],
-    animus: ["philosophy_of_mind", "jungian_psychology", "ethical_ai", "hci_empathy", "ai_safety"],
-    actus: ["game_theory", "mlops_product", "agile_scrum", "technical_writing", "behavioral_economics", "api_design"],
-    blueprint: ["distributed_systems", "data_engineering", "cybersecurity", "ai_ml", "neuroscience"]
-  };
-  const relevantKeys = domainSubdomainMap[targetDomain] || [];
+  const relevantKeys = refreshKeysFor(targetDomain);
   const freshData = relevantKeys
     .filter(k => updates[k] && updates[k] !== "no significant update found")
     .map(k => `  ${k}: ${updates[k]}`);
@@ -197,25 +197,15 @@ function buildDomainPrompt(domain, queryText, opts, priorContext) {
   if (domain === "refresh") {
     if (refreshEnabled) {
       return `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: REFRESH (Zero-Day Patch)
-You are the Janus Refresh Module. You have INTERNET ACCESS. Your task is to research CURRENT, UP-TO-DATE information for each of the 24 subdomains listed below.
+You are the Janus Refresh Module. You have INTERNET ACCESS. Your task is to research CURRENT, UP-TO-DATE information for each of the ${allSubdomains().length} subdomains listed below.
 
 DO NOT rely on your training data alone. Your training data is outdated. It is ${new Date().getFullYear()} — the field has changed significantly. You MUST search the internet for the latest developments, papers, frameworks, vulnerabilities, standards, and breakthroughs relevant to the query.
 
 For EACH subdomain below, search for the most recent and relevant information as it relates to the query. Report what you found, including sources when possible.
 
-CORPUS SUBDOMAINS (7):
-1. Distributed Systems & Cloud Architecture 2. Data Engineering & Systemic Integrity 3. Cybersecurity & Threat Intelligence 4. Systems Engineering 5. Theoretical & Quantum Physics 6. AI/ML Systems 7. Neuroscience & Cognitive Science
+${REFRESH_ROSTER_TEXT}
 
-COGITO SUBDOMAINS (6):
-8. Unified AI & Cognitive Architectures 9. Knowledge Graph & Semantic Networks 10. Epistemology & Algorithm Auditing 11. Computational Linguistics & Narratology 12. GraphRAG & Causal Reasoning 13. Neuro-Symbolic AI
-
-ANIMUS SUBDOMAINS (5):
-14. Philosophy of Mind & Metaphysics 15. Jungian Psychology & Archetypal Theory 16. Ethical AI & Moral Frameworks 17. UI/UX & Human-Computer Interaction 18. AI Safety & Alignment
-
-ACTUS SUBDOMAINS (6):
-19. Game Theory & Strategic Foresight 20. MLOps & Product Management 21. Agile & Scrum Methodologies 22. Technical Writing & Information Design 23. Behavioral Economics 24. API Design & Integration
-
-Output ONLY valid JSON: { "refresh": { "mode": "tier1", "attempted": true, "limitations": "any search limitations encountered", "subdomain_updates": { "distributed_systems": "...", "data_engineering": "...", "cybersecurity": "...", "systems_engineering": "...", "theoretical_physics": "...", "ai_ml": "...", "neuroscience": "...", "unified_ai_cognitive": "...", "knowledge_graphs": "...", "epistemology": "...", "computational_linguistics": "...", "graphrag_reasoning": "...", "neuro_symbolic": "...", "philosophy_of_mind": "...", "jungian_psychology": "...", "ethical_ai": "...", "hci_empathy": "...", "ai_safety": "...", "game_theory": "...", "mlops_product": "...", "agile_scrum": "...", "technical_writing": "...", "behavioral_economics": "...", "api_design": "..." }, "key_developments": ["development 1", "development 2", "development 3"], "sources_consulted": ["source 1", "source 2"] } }
+Output ONLY valid JSON: { "refresh": { "mode": "tier1", "attempted": true, "limitations": "any search limitations encountered", "subdomain_updates": { ${REFRESH_KEYS_JSON} }, "key_developments": ["development 1", "development 2", "development 3"], "sources_consulted": ["source 1", "source 2"] } }
 No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
     } else {
@@ -261,10 +251,7 @@ ${matrixEntries}
 
 Using ONLY the intersection pairs above as your source material, produce:
 
-1. QUANTUM FORESIGHT (Corpus × Actus): Probabilistic decision-making grounded in physical reality. What futures become visible when physics meets strategy?
-2. GOVERNED COGITO (Animus × Cogito): Ethical truth-finding. How does conscience govern the reasoning process?
-3. NARRATIVE LOOP (Cogito × Actus): Where understanding meets expression. What story is the user telling, and what response resonates?
-4. EMPATHY-DRIVEN STRATEGY (Animus × Actus): Non-rational agent modeling. What strategies emerge when you model real human behavior, not rational actors?
+${PATTERN_TASK_TEXT}
 
 Also produce:
 - key_takeaways: The 3-5 most groundbreaking cross-domain insights from ALL 6 intersections combined
@@ -275,10 +262,7 @@ CRITICAL: Every named pattern must produce EMERGENT insight — wisdom that tran
 
 Output ONLY valid JSON: { "synthesis": {
   "key_takeaways": ["..."], "constraint_collisions": ["..."], "limitation_foreground": "...",
-  "quantum_foresight": {"cross_domain_insight":"...","probability_wave":["..."],"metaphor":"..."},
-  "governed_cogito": {"ethical_filter_applied":"...","conscience_verdict":"...","truth_method_soundness":"..."},
-  "narrative_loop": {"decoded_user_narrative":"...","resonant_strategy":"...","lossless_compression":"..."},
-  "empathy_driven_strategy": {"true_goal_vs_literal_prompt":"...","behavioral_model":"...","empathy_strategy":"..."}
+${PATTERN_JSON}
 } }
 
 IMPORTANT: Do NOT include an intersection_matrix field — the pre-computed pairs are already stored separately. Focus your output ENTIRELY on the 4 named emergent patterns and the summary fields.
@@ -314,7 +298,7 @@ QUERY: ${queryText}`;
   const contextBlock = buildDomainContext(priorContext, domain);
 
   const outputFormats = {
-    corpus: `Output ONLY valid JSON with the "corpus" key: { "corpus": { "constraints": ["hard reality constraints from your expert assessment"], "feasibility_notes": ["practical viability notes"], "subdomains": { "distributed_systems": {"perspective": "your expert perspective as one coherent voice", "key_findings": ["specific technical findings only this expertise would produce"]}, "data_engineering": {"perspective": "...", "key_findings": ["..."]}, "cybersecurity": {"perspective": "...", "key_findings": ["..."]}, "systems_engineering": {"perspective": "...", "key_findings": ["..."]}, "theoretical_physics": {"perspective": "...", "key_findings": ["..."]}, "ai_ml": {"perspective": "...", "key_findings": ["..."]}, "neuroscience": {"perspective": "...", "key_findings": ["..."]} } } }`,
+    corpus: `Output ONLY valid JSON with the "corpus" key: { "corpus": { "constraints": ["hard reality constraints from your expert assessment"], "feasibility_notes": ["practical viability notes"], "subdomains": { ${CORPUS_SUBDOMAINS_JSON} } } }`,
 
     cogito: `Output ONLY valid JSON with the "cogito" key: { "cogito": { "claims": [{"id":"C1","tag":"Established","text":"your epistemic finding","depends_on":[],"why_believed":"justified basis","falsifiable_by":"what would disprove this","verify_later":"what to check"}], "reasoning_map": ["logical chain step 1", "step 2", "..."], "graphrag_connections": ["concept A ↔ concept B: relationship"], "causal_chains": [{"cause":"...","effect":"...","confidence":"Established"}], "neuro_symbolic_insights": ["insights from bridging symbolic and connectionist reasoning"] } }`,
 
