@@ -72,7 +72,7 @@ describe("CP-002 v2.0 registry", () => {
 });
 
 describe("no second active roster in executable code", () => {
-  const root = path.resolve(__dirname, "../..");
+  const root = path.resolve(process.cwd(), "src");
   const files = [];
   const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach(e => {
     const p = path.join(dir, e.name);
