@@ -84,5 +84,5 @@ Vitest approved by DIMA as dev dependency; installed (`vitest ^3.2.4`). No other
 - Builder ledger — **WAIVED by DIMA (2026-09-29).** Do not import or read it; it is held externally for forensic provenance. Flag specific provenance questions instead.
 - Donor/UI salvage, benchmark references, exit agreement — **ACCEPTED** by DIMA 2026-09-29. Pre/post-degradation provenance is not a blocker.
 - **Restore checkpoint — ONLY REMAINING GATE.** Record: name · ID · state = *restored six-month Janus application baseline + Phase 0 audit/documentation + approved test-tooling (Vitest) state*. It is NOT a byte-identical pre-Phase-0 snapshot. No cognitive or source-logic changes are allowed before this is recorded.
-  - Name: _pending_ · ID: _pending_
-- On record → Phase 0 COMPLETE; proceed automatically to Phase 1.
+  - Name: `JANUS_PHASE0_RESTORED_BASELINE_PLUS_AUDIT_VITEST_2026-09-29` · ID: `6abbd5ec65beb352c8a87266` · Git: `4d029fc397083e1daed96e58f2736000b4447404`
+- **PHASE 0 COMPLETE — closed 2026-09-29.** Proceeding to Phase 1.

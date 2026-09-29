@@ -3,7 +3,7 @@ Read this first after any context reset.
 
 - **Governing plan:** `src/docs/JANUS_FINAL_FORM_ARCHITECTURE_IMPLEMENTATION_PLAN_v1.2_2026-09-29.md` (authorized end-to-end by DIMA; continue automatically between phases except at the plan's explicit operator gates; no stopping for documentary neatness).
 - **Protocol:** `src/docs/CP-002-O-D-JNP.md` (v2.0 Ideal Form, 25 subdomains 7/6/5/7).
-- **Current phase:** Phase 0 is accepted in substance. The ONLY remaining gate is the restore checkpoint ID from DIMA. No cognitive/source-logic changes before it is recorded. Once recorded, go to Phase 1 automatically.
+- **Current phase:** Phase 0 COMPLETE (2026-09-29). Phase 1 IN PROGRESS.
 - **Phase 0 docs:** `JANUS_PHASE0_BASELINE_AUDIT_2026-09-29.md`, `JANUS_PHASE0_SALVAGE_MANIFEST_2026-09-29.md` (both accepted).
 - **Donor:** public repo DimaMenetro/janus-blueprint-engine @ 3f25d14c…; re-fetch command is in the manifest. A salvage source, not governing architecture.
 
@@ -21,7 +21,7 @@ Read this first after any context reset.
 - The 19 `running` Runs are not mutated. Timeout/heartbeat architecture is not restored.
 
 ## Checkpoint
-- Name: _pending_ · ID: _pending_ · State: restored six-month baseline + Phase 0 docs + Vitest.
+- Name: `JANUS_PHASE0_RESTORED_BASELINE_PLUS_AUDIT_VITEST_2026-09-29` · ID: `6abbd5ec65beb352c8a87266` · Git: `4d029fc397083e1daed96e58f2736000b4447404` · State: restored six-month baseline + Phase 0 docs + Vitest (no cognitive rewrite).
 
 ## Next action
 Phase 1: canonical `janusProtocolRegistry` (incl. Opus-only model policy), registry-derived domainSME/pair map/labels/version display, Vitest registry tests, frontend labels in the same tranche.
