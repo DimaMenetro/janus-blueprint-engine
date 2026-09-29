@@ -9,6 +9,7 @@ import {
   glassCard, glassBtn, glassError
 } from "@/components/ui/LiquidGlass";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
+import { protocolLabel } from "@/lib/janus/protocolRegistry";
 import { executeJanus } from "@/components/janus/ExecutionEngine";
 import { useExecution } from "@/components/janus/ExecutionContext";
 import QueryForm from "@/components/janus/QueryForm";
@@ -80,7 +81,7 @@ export default function NewQuery() {
           </h1>
         </div>
         <p style={{ fontSize: 13, color: t.subtitle, margin: 0 }}>
-          CP-002-O-D-JNP v2.0 — Restoration Edition
+          {protocolLabel()}
         </p>
       </motion.div>
 

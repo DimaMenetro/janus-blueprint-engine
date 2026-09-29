@@ -2,6 +2,7 @@
 // Never relies on truncated raw_json or render_md stored on the entity.
 
 import { EXECUTION_MODES } from "./janusSchema";
+import { PROTOCOL } from "@/lib/janus/protocolRegistry";
 import { generateMarkdown } from "./promptUtils";
 
 const DOMAIN_KEYS = ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"];
@@ -22,7 +23,9 @@ export function reconstructFullJson(run) {
   // Include run metadata for completeness
   const exportObj = {
     _meta: {
-      protocol: "CP-002-O-D-JNP v2.0",
+      protocol: `${PROTOCOL.id} v${PROTOCOL.version}`,
+      protocol_edition: PROTOCOL.edition,
+      registry_schema_version: PROTOCOL.registry_schema_version,
       run_id: run.id,
       query_text: run.query_text,
       execution_mode: run.execution_mode,
@@ -55,7 +58,7 @@ export function reconstructFullMarkdown(run) {
   const executionMode = run.execution_mode || "standard";
 
   // Add metadata header
-  let md = `---\nprotocol: CP-002-O-D-JNP v2.0\nrun_id: ${run.id}\nquery: ${run.query_text}\nmode: ${executionMode}\noutput: ${run.output_mode}\nblueprint_level: ${run.blueprint_level}\nnovelty: ${run.novelty_dial}\nrefresh: ${run.refresh_enabled}\ndate: ${run.created_date}\n---\n\n`;
+  let md = `---\nprotocol: ${PROTOCOL.id} v${PROTOCOL.version} (${PROTOCOL.edition})\nrun_id: ${run.id}\nquery: ${run.query_text}\nmode: ${executionMode}\noutput: ${run.output_mode}\nblueprint_level: ${run.blueprint_level}\nnovelty: ${run.novelty_dial}\nrefresh: ${run.refresh_enabled}\ndate: ${run.created_date}\n---\n\n`;
 
   // Use the existing generateMarkdown function with full-fidelity data
   md += generateMarkdown(fullData, executionMode);

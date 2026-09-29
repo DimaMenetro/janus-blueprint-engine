@@ -1,11 +1,12 @@
 import { EXECUTION_MODES } from "./janusSchema";
+import { protocolLabel, subdomainIds, getSubdomains, readSubdomain } from "@/lib/janus/protocolRegistry";
 
 export function buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) {
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
   const domains = mode.domains;
 
   let prompt = `INITIATE PROTOCOL: JANUSSMEv2.0
-CP-002-O-D-JNP — Restoration Edition
+${protocolLabel()}
 
 You are the Janus SME Engine operating in full Subject Matter Expert mode.
 You are NOT a general assistant. You are a specialized, multi-domain cognitive architecture.
@@ -36,7 +37,7 @@ INVIOLABLE RULES:
     prompt += "\n";
   }
 
-  prompt += `\n═══ SECTION I: CORPUS — What I Am Made Of ═══\nObjective: Load and enforce the objective constraints of physical and technical reality.\nPerceive this problem from SEVEN distinct technical lenses simultaneously.\n\nOutput corpus as an object containing:\n- constraints: array of hard reality constraints\n- feasibility_notes: array of practical viability notes\n- subdomains: object with keys: ai_ml, distributed_systems, data_engineering, cybersecurity, neuroscience, physics, systems_engineering\n  Each subdomain has: perspective (string), key_findings (array)\n\n`;
+  prompt += `\n═══ SECTION I: CORPUS — What I Am Made Of ═══\nObjective: Load and enforce the objective constraints of physical and technical reality.\nPerceive this problem from ${subdomainIds("corpus").length} distinct technical lenses simultaneously.\n\nOutput corpus as an object containing:\n- constraints: array of hard reality constraints\n- feasibility_notes: array of practical viability notes\n- subdomains: object with keys: ${subdomainIds("corpus").join(", ")}\n  Each subdomain has: perspective (string), key_findings (array)\n\n`;
 
   prompt += `\n═══ SECTION II: COGITO — How I Think ═══\nObjective: Control how conclusions are derived. Claims must be traceable.\n\nOutput cogito as:\n- claims: array with id, tag ("Established"|"Contested"|"Speculative"), text, depends_on, why_believed, falsifiable_by, verify_later\n- reasoning_map: array of strings\n- graphrag_connections: array\n- causal_chains: array of {cause, effect, confidence}\n- neuro_symbolic_insights: array\n\n`;
 
@@ -62,7 +63,7 @@ INVIOLABLE RULES:
 export function generateMarkdown(data, executionMode) {
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
   const domains = mode.domains;
-  let md = `# Janus SME Protocol — CP-002-O-D-JNP v2.0\n\n**Mode:** ${mode.label}\n\n`;
+  let md = `# Janus SME Protocol — ${protocolLabel()}\n\n**Mode:** ${mode.label}\n\n`;
 
   if (domains.includes("refresh") && data.refresh) {
     md += "## Refresh & Verification\n\n";
@@ -78,9 +79,8 @@ export function generateMarkdown(data, executionMode) {
     if (data.corpus?.feasibility_notes?.length) { md += "**Feasibility Notes:**\n"; data.corpus.feasibility_notes.forEach(n => md += `- ${n}\n`); md += "\n"; }
     if (data.corpus?.subdomains) {
       md += "**Subdomain Perspectives:**\n\n";
-      const labels = { distributed_systems: "Distributed Systems & Cloud Architecture", data_engineering: "Data Engineering & Systemic Integrity", cybersecurity: "Cybersecurity & Threat Intelligence", systems_engineering: "Systems Engineering", theoretical_physics: "Theoretical & Quantum Physics", ai_ml: "AI/ML Systems", neuroscience: "Neuroscience" };
-      Object.entries(labels).forEach(([key, label]) => {
-        const sub = data.corpus.subdomains[key];
+      getSubdomains("corpus").forEach(({ id, name: label }) => {
+        const sub = readSubdomain(data.corpus.subdomains, id);
         if (sub?.perspective || sub?.key_findings?.length) { md += `### ${label}\n`; if (sub.perspective) md += `*${sub.perspective}*\n`; if (sub.key_findings?.length) sub.key_findings.forEach(f => md += `- ${f}\n`); md += "\n"; }
       });
     }

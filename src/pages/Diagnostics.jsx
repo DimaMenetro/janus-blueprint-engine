@@ -6,6 +6,7 @@ import { useTheme } from "@/components/theme/ThemeProvider";
 import { light, dark, glassCard, glassSurface, glassBtn } from "@/components/ui/LiquidGlass";
 import { navigationLogger } from "@/components/diagnostics/NavigationLogger";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
+import { protocolShortLabel } from "@/lib/janus/protocolRegistry";
 
 const STATUS_CONFIG = {
   PASS: { icon: CheckCircle2, label: "PASS", color: (d) => d ? "#4ade80" : "#16a34a", bg: (d) => d ? "rgba(74,222,128,0.1)" : "rgba(240,253,244,0.6)" },
@@ -83,7 +84,7 @@ export default function Diagnostics() {
       >
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: t.title, margin: "0 0 4px" }}>System Diagnostics</h1>
-          <p style={{ fontSize: 13, color: t.subtitle, margin: 0 }}>CP-002 v1.5 — Test Suite</p>
+          <p style={{ fontSize: 13, color: t.subtitle, margin: 0 }}>{protocolShortLabel()} — Test Suite</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={copyReport}

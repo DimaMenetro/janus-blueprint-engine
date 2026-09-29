@@ -7,6 +7,7 @@ import AmbientOrbs from "@/components/ui/AmbientOrbs";
 import GlassTabBar from "@/components/ui/GlassTabBar";
 import ThemeToggle from "@/components/theme/ThemeToggle";
 import { Zap } from "lucide-react";
+import { protocolShortLabel } from "@/lib/janus/protocolRegistry";
 
 function LayoutInner({ children }) {
   const { isDark } = useTheme();
@@ -55,7 +56,7 @@ function LayoutInner({ children }) {
             Janus Blueprint
           </span>
           <span style={{ fontSize: 11, color: t.muted, marginLeft: 4 }}>
-            CP-002 v1.5
+            {protocolShortLabel()}
           </span>
         </div>
         <ThemeToggle />

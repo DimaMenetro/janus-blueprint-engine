@@ -1,4 +1,5 @@
-// CP-002-O-D-JNP v2.0 — Restoration Edition
+// Janus output schema — protocol identity & roster from @/lib/janus/protocolRegistry
+import { subdomainIds, MODE_PROFILES } from "@/lib/janus/protocolRegistry";
 // Schema, constants, validation, and normalization
 
 export const JANUS_SCHEMA = {
@@ -28,57 +29,14 @@ export const JANUS_SCHEMA = {
         // v2.0 — Subdomain Perspectives
         subdomains: {
           type: "object",
-          properties: {
-            ai_ml: {
-              type: "object",
-              properties: {
-                perspective: { type: "string" },
-                key_findings: { type: "array", items: { type: "string" } }
-              }
-            },
-            distributed_systems: {
-              type: "object",
-              properties: {
-                perspective: { type: "string" },
-                key_findings: { type: "array", items: { type: "string" } }
-              }
-            },
-            data_engineering: {
-              type: "object",
-              properties: {
-                perspective: { type: "string" },
-                key_findings: { type: "array", items: { type: "string" } }
-              }
-            },
-            cybersecurity: {
-              type: "object",
-              properties: {
-                perspective: { type: "string" },
-                key_findings: { type: "array", items: { type: "string" } }
-              }
-            },
-            neuroscience: {
-              type: "object",
-              properties: {
-                perspective: { type: "string" },
-                key_findings: { type: "array", items: { type: "string" } }
-              }
-            },
-            physics: {
-              type: "object",
-              properties: {
-                perspective: { type: "string" },
-                key_findings: { type: "array", items: { type: "string" } }
-              }
-            },
-            systems_engineering: {
-              type: "object",
-              properties: {
-                perspective: { type: "string" },
-                key_findings: { type: "array", items: { type: "string" } }
-              }
+          // Derived from canonical registry
+          properties: Object.fromEntries(subdomainIds("corpus").map(id => [id, {
+            type: "object",
+            properties: {
+              perspective: { type: "string" },
+              key_findings: { type: "array", items: { type: "string" } }
             }
-          }
+          }]))
         }
       }
     },
@@ -270,7 +228,7 @@ export const JANUS_SCHEMA = {
             }
           }
         },
-        // v2.0 — 4 Named Synthesis Patterns (from CP-002-O-D-JNP v1.1)
+        // 4 formal emergent patterns — field names mirror registry PATTERNS[].fields
         quantum_foresight: {
           type: "object",
           properties: {
@@ -383,25 +341,12 @@ export const JANUS_SCHEMA = {
 };
 
 // ── EXECUTION MODES ──────────────────────────────────────────────
+// Derived from registry MODE_PROFILES — Quick/Standard are explicitly partial.
+const toMode = (p) => ({ id: p.id, label: p.label, description: p.description, partial: p.partial, domains: p.stages });
 export const EXECUTION_MODES = {
-  QUICK: {
-    id: "quick",
-    label: "Quick",
-    description: "Corpus + Cogito + Blueprint (Core Domain Loading)",
-    domains: ["corpus", "cogito", "blueprint"]
-  },
-  STANDARD: {
-    id: "standard",
-    label: "Standard",
-    description: "Full Four-Domain Execution: Corpus → Cogito → Animus → Actus",
-    domains: ["corpus", "cogito", "animus", "actus", "blueprint"]
-  },
-  FULL: {
-    id: "full",
-    label: "Full Janus v2.0",
-    description: "Complete Boot Sequence — All 24 Subdomains + 4 Synthesis Patterns",
-    domains: ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"]
-  }
+  QUICK: toMode(MODE_PROFILES.quick),
+  STANDARD: toMode(MODE_PROFILES.standard),
+  FULL: toMode(MODE_PROFILES.full),
 };
 
 // ── NORMALIZATION ─────────────────────────────────────────────────

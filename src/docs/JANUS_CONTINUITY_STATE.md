@@ -3,7 +3,9 @@ Read this first after any context reset.
 
 - **Governing plan:** `src/docs/JANUS_FINAL_FORM_ARCHITECTURE_IMPLEMENTATION_PLAN_v1.2_2026-09-29.md` (authorized end-to-end by DIMA; continue automatically between phases except at the plan's explicit operator gates; no stopping for documentary neatness).
 - **Protocol:** `src/docs/CP-002-O-D-JNP.md` (v2.0 Ideal Form, 25 subdomains 7/6/5/7).
-- **Current phase:** Phase 0 COMPLETE (2026-09-29). Phase 1 IN PROGRESS.
+- **Current phase:** Phase 0 COMPLETE. **Phase 1 COMPLETE (2026-09-29)** — 11/11 Vitest tests pass (`npm test`), and the build passes. Next up: Phase 2 (Lifecycle, Completion & Quality Specification).
+- **Phase 1 artifacts:** `src/lib/janus/protocolRegistry.js` (canonical: 25 subdomains 7/6/5/7, 6 pairs, 4 patterns, confidence, threading, partial mode profiles, model policy, legacy aliases) + `protocolRegistry.test.js` (roster, pairs, patterns, no stale identities, no second roster). domainSME, both engines' pair maps/refresh keys/pattern templates, schema, EXECUTION_MODES, CorpusTab, markdown, export metadata, Layout/Diagnostics/NewQuery labels all derive from the registry.
+- **Phase 1 notes:** the canonical Corpus physics key is `physics`, and historical `theoretical_physics` is read through `readSubdomain`. This fixes a bug where the Corpus tab never rendered physics. Still open for later phases: the 2000/6000-char synthesis truncations (Phase 8) and the explicit sonnet/gemini overrides in `callLLM`/rerun (Phase 4, where the retrieval-provider operator gate applies).
 - **Phase 0 docs:** `JANUS_PHASE0_BASELINE_AUDIT_2026-09-29.md`, `JANUS_PHASE0_SALVAGE_MANIFEST_2026-09-29.md` (both accepted).
 - **Donor:** public repo DimaMenetro/janus-blueprint-engine @ 3f25d14c…; re-fetch command is in the manifest. A salvage source, not governing architecture.
 

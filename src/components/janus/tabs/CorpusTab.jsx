@@ -1,14 +1,18 @@
 import { BookOpen, AlertCircle, Cpu, Server, Database, Shield, Brain, Atom, Settings } from "lucide-react";
+import { getSubdomains, readSubdomain } from "@/lib/janus/protocolRegistry";
 
-const SUBDOMAIN_CONFIG = {
-  ai_ml: { label: "AI / ML Systems", icon: Cpu, color: "blue" },
-  distributed_systems: { label: "Distributed Systems", icon: Server, color: "indigo" },
-  data_engineering: { label: "Data Engineering", icon: Database, color: "cyan" },
-  cybersecurity: { label: "Cybersecurity", icon: Shield, color: "red" },
-  neuroscience: { label: "Neuroscience", icon: Brain, color: "purple" },
-  physics: { label: "Physics", icon: Atom, color: "violet" },
-  systems_engineering: { label: "Systems Engineering", icon: Settings, color: "slate" },
+// Presentation only (icon/color); labels and roster come from the canonical registry.
+const SUBDOMAIN_STYLE = {
+  ai_ml: { icon: Cpu, color: "blue" },
+  distributed_systems: { icon: Server, color: "indigo" },
+  data_engineering: { icon: Database, color: "cyan" },
+  cybersecurity: { icon: Shield, color: "red" },
+  neuroscience: { icon: Brain, color: "purple" },
+  physics: { icon: Atom, color: "violet" },
+  systems_engineering: { icon: Settings, color: "slate" },
 };
+const SUBDOMAIN_CONFIG = Object.fromEntries(getSubdomains("corpus").map(s =>
+  [s.id, { label: s.name, ...(SUBDOMAIN_STYLE[s.id] || { icon: Settings, color: "slate" }) }]));
 
 const colorMap = {
   blue: { card: "bg-blue-50/[0.15] dark:bg-blue-900/[0.10] border-blue-300/60 dark:border-blue-500/35", badge: "text-blue-700 dark:text-blue-300", icon: "text-blue-600 dark:text-blue-400" },
@@ -68,11 +72,11 @@ export default function CorpusTab({ data }) {
       {data.subdomains && Object.keys(data.subdomains).length > 0 && (
         <div>
           <h4 className="font-semibold text-slate-900 dark:text-white mb-3 text-sm uppercase tracking-wider opacity-60">
-            7 Subdomain Perspectives — Active Functional Models
+            {Object.keys(SUBDOMAIN_CONFIG).length} Subdomain Perspectives — Active Functional Models
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {Object.entries(SUBDOMAIN_CONFIG).map(([key, config]) => {
-              const sub = data.subdomains?.[key];
+              const sub = readSubdomain(data.subdomains, key);
               if (!sub?.perspective && !sub?.key_findings?.length) return null;
               const colors = colorMap[config.color];
               const Icon = config.icon;
