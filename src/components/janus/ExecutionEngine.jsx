@@ -1,12 +1,16 @@
 // Janus Execution Engine — Domain-by-domain sequential LLM orchestrator
 // Protocol identity/roster: @/lib/janus/protocolRegistry (canonical)
 // Architecture: Incremental Synthesis — intersection pairs computed as domains complete
-// Persists progress incrementally so page reloads don't lose completed work
+// Durability (Phase 3): every stage — domains, the six intersections, synthesis, blueprint — is its own
+// RunStage revision with exact dependency revisions. The Run holds lifecycle/configuration only.
 
 import { base44 } from "@/api/base44Client";
 import { EXECUTION_MODES, validateJanusOutput } from "./janusSchema";
-import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity, buildSynthesisPrompt } from "./domainSME";
-import { PAIRS, DOMAINS, DOMAIN_ORDER, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText, patternJsonTemplate } from "@/lib/janus/protocolRegistry";
+import { DOMAIN_SME, SYNTHESIS_MODELS, buildSMEIdentity } from "./domainSME";
+import { PROTOCOL, MODEL_POLICY, PAIRS, DOMAINS, DOMAIN_ORDER, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText, patternJsonTemplate } from "@/lib/janus/protocolRegistry";
+import { runStage } from "@/lib/janus/stageRunner";
+import { composeRunView } from "@/lib/janus/runView";
+import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, PROMPT_TEMPLATES, INTERSECTION_KEYS, intersectionKey } from "@/lib/janus/stageModel";
 
 // ─── REGISTRY-DERIVED PROMPT FRAGMENTS ──────────────────────────────────────
 let _n = 0;
@@ -37,6 +41,20 @@ const INTERSECTION_TRIGGERS = PAIRS.reduce((acc, p) => {
   (acc[later] = acc[later] || []).push({ pair: p.id, domains: p.domains, model: p.model });
   return acc;
 }, {});
+
+// ─── ACTUAL STAGE INPUTS (provenance) ────────────────────────────────────────
+// What each prompt builder in this file actually reads, recorded as exact dependency revisions.
+// Known gap vs CONTEXT_THREADING.blueprint: Blueprint reads the six intersections — not Cogito and
+// not the four emergent patterns. Recorded truthfully here; the cognition fix is Phase 8/9.
+const STAGE_INPUTS = {
+  refresh: [],
+  corpus: ["refresh"],
+  cogito: ["refresh", "corpus"],
+  animus: ["refresh", "corpus", "cogito"],
+  actus: ["refresh", "corpus", "cogito", "animus"],
+  synthesis: ["intersections"],
+  blueprint: ["refresh", "corpus", "animus", "actus", "intersections"],
+};
 
 // ─── CONTEXT BUILDERS ────────────────────────────────────────────────────────
 
@@ -321,34 +339,10 @@ No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
 }
 
-// ─── RESPONSE PARSER ─────────────────────────────────────────────────────────
-
-function parseLLMResponse(result, expectedKey) {
-  let data;
-  if (typeof result === "string") {
-    const jsonMatch = result.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return { error: `${expectedKey}: No JSON found in string response` };
-    data = JSON.parse(jsonMatch[0]);
-  } else {
-    data = result;
-  }
-
-  if (data && data[expectedKey]) {
-    return { data: data[expectedKey] };
-  }
-  if (data && !data[expectedKey] && typeof data === "object" && Object.keys(data).length > 0) {
-    return { data };
-  }
-  return { error: `${expectedKey}: Missing key in response` };
-}
-
-// ─── LLM CALL HELPER ─────────────────────────────────────────────────────────
-
+// ─── LLM CALL + PARSING ──────────────────────────────────────────────────────
+// Shared durable stage runner (@/lib/janus/stageRunner): begin → invoke → parse → validate → settle.
 // Model policy: no per-call override — inherits the operator's Claude Opus setting.
 // Gemini is prohibited; live Refresh fails closed in executeJanus until provider-neutral retrieval exists.
-async function callLLM(prompt) {
-  return await base44.integrations.Core.InvokeLLM({ prompt });
-}
 
 export const REFRESH_UNAVAILABLE_MESSAGE =
   "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
@@ -365,7 +359,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
   const domains = mode.domains;
 
-  // Step 1: Create Run record
+  // Step 1: Create the Run — lifecycle/configuration only; cognition lives in RunStage revisions
   const fullPromptForStorage = safeTruncate(
     buildFullPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) + queryText,
     MAX_PROMPT_LENGTH
@@ -381,15 +375,36 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     refresh_enabled: refreshEnabled,
     status: "running",
     validation_errors: [],
-    raw_json: "{}"
+    raw_json: "{}",
+    storage_model: STORAGE_MODEL.staged,
+    protocol_version: PROTOCOL.version,
+    engine_version: ENGINE_VERSION,
+    orchestrator: ORCHESTRATOR,
+    model_policy_snapshot: { ...MODEL_POLICY },
   });
 
   const runId = run.id;
-  const mergedData = {};
-  const intersections = {}; // Accumulated intersection pairs
+  const mergedData = {};    // settled domain outputs feeding later prompts
+  const intersections = {}; // settled intersection outputs feeding synthesis/blueprint prompts
+  const stageIds = {};      // stage key → settled RunStage revision id (exact dependencies)
+  const records = [];       // settled stage records, composed exactly like the Results view
   const domainErrors = [];
   let completedCount = 0;
   const totalSteps = domains.length + (domains.includes("synthesis") ? 6 : 0); // 6 intersection pairs for full mode
+
+  const depsFor = (key) => STAGE_INPUTS[key]
+    .flatMap(k => (k === "intersections" ? INTERSECTION_KEYS : [k]))
+    .map(k => stageIds[k])
+    .filter(Boolean);
+
+  // One durable stage. A failure settles on its own revision and never erases settled stages.
+  const executeStage = async (stageKey, prompt, parseKey, dependsOn) => {
+    const res = await runStage({ runId, stageKey, revision: 1, dependsOn, templateVersion: PROMPT_TEMPLATES.execution, origin: "execution", prompt, parseKey });
+    if (res.record) { stageIds[stageKey] = res.record.id; records.push(res.record); }
+    else domainErrors.push(res.failure.message);
+    await base44.entities.Run.update(runId, { current_stage: stageKey, validation_errors: [...domainErrors] });
+    return res.record;
+  };
 
   // Step 2: Execute each domain sequentially
   for (const domain of domains) {
@@ -398,73 +413,22 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
     // Attach intersections to context for synthesis and blueprint
     const contextForPrompt = { ...mergedData, _intersections: intersections };
     const domainPrompt = buildDomainPrompt(domain, queryText, params, contextForPrompt);
-
-    // ── Execute domain LLM call
-    let domainResult;
-    try {
-      domainResult = await callLLM(domainPrompt);
-    } catch (err) {
-      domainErrors.push(`${domain}: LLM call failed — ${err.message || err}`);
-      continue;
-    }
-
-    try {
-      const parsed = parseLLMResponse(domainResult, domain);
-      if (parsed.error) {
-        domainErrors.push(parsed.error);
-      } else {
-        mergedData[domain] = parsed.data;
-      }
-    } catch (e) {
-      domainErrors.push(`${domain}: Parse error — ${e.message}`);
-      continue;
-    }
-
+    const record = await executeStage(domain, domainPrompt, domain, depsFor(domain));
+    if (!record) continue;
+    mergedData[domain] = record.output;
     completedCount++;
 
-    // Persist domain result immediately (NO raw_json here — saves entity size)
-    const updatePayload = {};
-    if (mergedData[domain]) {
-      updatePayload[domain] = mergedData[domain];
-    }
-    if (domainErrors.length > 0) {
-      updatePayload.validation_errors = [...domainErrors];
-    }
-    await base44.entities.Run.update(runId, updatePayload);
-
-    // ── INCREMENTAL SYNTHESIS: Compute intersection pairs as they become available
+    // ── INCREMENTAL SYNTHESIS: each intersection pair is its own durable stage
     if (INTERSECTION_TRIGGERS[domain] && domains.includes("synthesis")) {
-      const triggers = INTERSECTION_TRIGGERS[domain];
-      for (const trigger of triggers) {
+      for (const trigger of INTERSECTION_TRIGGERS[domain]) {
         const [dA, dB] = trigger.domains;
         if (!mergedData[dA] || !mergedData[dB]) continue; // Skip if prerequisite missing
 
         onProgress({ domain: `synthesis:${trigger.pair}`, status: "running", completedDomains: completedCount, totalDomains: totalSteps });
 
-        try {
-          const pairPrompt = buildIntersectionPrompt(trigger.pair, trigger.model, dA, dB, mergedData[dA], mergedData[dB], queryText);
-          const pairResult = await callLLM(pairPrompt);
-          const pairParsed = parseLLMResponse(pairResult, trigger.pair);
-
-          if (pairParsed.data) {
-            intersections[trigger.pair] = { ...pairParsed.data, _model: trigger.model };
-            // Persist intersection pairs incrementally so they survive downstream timeouts
-            const { _model, ...cleanPair } = intersections[trigger.pair];
-            const currentMatrix = {};
-            Object.entries(intersections).forEach(([k, v]) => {
-              const { _model: m, ...p } = v;
-              currentMatrix[k] = p;
-            });
-            await base44.entities.Run.update(runId, { 
-              synthesis: { intersection_matrix: currentMatrix } 
-            });
-          } else if (pairParsed.error) {
-            domainErrors.push(`intersection:${trigger.pair}: ${pairParsed.error}`);
-          }
-        } catch (e) {
-          domainErrors.push(`intersection:${trigger.pair}: ${e.message}`);
-        }
-
+        const pairPrompt = buildIntersectionPrompt(trigger.pair, trigger.model, dA, dB, mergedData[dA], mergedData[dB], queryText);
+        const pair = await executeStage(intersectionKey(trigger.pair), pairPrompt, trigger.pair, [stageIds[dA], stageIds[dB]]);
+        if (pair) intersections[trigger.pair] = { ...pair.output, _model: trigger.model };
         completedCount++;
       }
     }
@@ -472,38 +436,16 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
 
   onProgress({ domain: null, status: "validating", completedDomains: completedCount, totalDomains: totalSteps });
 
-  // Step 3: Merge pre-computed intersection pairs into synthesis data
-  if (Object.keys(intersections).length > 0) {
-    // Build intersection_matrix from the stored pairs (synthesis no longer returns these)
-    const matrix = {};
-    Object.entries(intersections).forEach(([key, val]) => {
-      const { _model, ...pairData } = val;
-      matrix[key] = pairData;
-    });
-    if (mergedData.synthesis) {
-      mergedData.synthesis.intersection_matrix = matrix;
-    } else {
-      // If synthesis itself failed but intersections succeeded, preserve them
-      mergedData.synthesis = { intersection_matrix: matrix, key_takeaways: [], constraint_collisions: [], limitation_foreground: "Synthesis named patterns failed — intersection matrix preserved from incremental computation." };
-    }
-  }
-
-  // Step 4: Validate and finalize
-  const validation = validateJanusOutput(mergedData, domains);
-  const normalizedData = validation.normalized || mergedData;
+  // Step 3: Compose artifacts exactly as the Results view does — one durable truth
+  const { artifacts } = composeRunView(run, records);
+  const validation = validateJanusOutput(artifacts, domains);
+  const normalizedData = validation.normalized || artifacts;
   const renderMd = generateMarkdown(normalizedData, executionMode);
 
-  // Determine completion status
-  const missingDomains = domains.filter(d => !normalizedData[d]);
-  const completionStatus = Object.keys(mergedData).length === 0 ? "failed" 
-    : missingDomains.length === 0 ? "completed" 
-    : "completed"; // Partial success — some domains present, errors list shows what's missing
-  
-  // ── APPEND-ONLY FINALIZATION ─────────────────────────────────────────────
-  // Only write status, cached fields (render_md, raw_json), and validation_errors.
-  // Domain fields were already persisted incrementally during execution.
-  // This prevents the finalization step from clobbering data that was
-  // written by earlier incremental persistence (e.g. intersection_matrix).
+  // Interim status semantics (unchanged): Phase 5 replaces this with the completion manifest.
+  const completionStatus = Object.keys(artifacts).length === 0 ? "failed" : "completed";
+
+  // Step 4: Finalize lifecycle + derived export caches (non-authoritative; RunStage is the truth)
   const finalPayload = {
     status: completionStatus,
     render_md: safeTruncate(renderMd, 60000),
@@ -512,7 +454,7 @@ export async function executeJanus(params, onProgress, generateMarkdown, buildFu
   };
 
   if (finalPayload.status === "failed") {
-    finalPayload.error_message = [...(validation.errors || []), ...domainErrors].join("\n");
+    finalPayload.error_message = finalPayload.validation_errors.join("\n");
   }
 
   await base44.entities.Run.update(runId, finalPayload);

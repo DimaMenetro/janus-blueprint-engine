@@ -1,40 +1,21 @@
 // Domain Re-run Engine — surgical re-execution of synthesis or blueprint
-// Reads stored domain data from an existing Run and re-executes only the target domain.
+// Reads the durable run view (stage revisions, or the legacy adapter for historical Runs) and writes
+// NEW stage revisions — earlier revisions are never overwritten. Historical Run records are never written.
 
 import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "./janusSchema";
 import { generateMarkdown } from "./promptUtils";
-import { PAIRS, patternTaskText, patternJsonTemplate } from "@/lib/janus/protocolRegistry";
-
-// ─── Re-use the LLM call + prompt builders from ExecutionEngine ───
-// We import the module dynamically to avoid circular deps, but the functions
-// we need are the same ones the main engine uses.
+import { PAIRS, STAGE_ORDER, patternTaskText, patternJsonTemplate } from "@/lib/janus/protocolRegistry";
+import { runStage } from "@/lib/janus/stageRunner";
+import { loadRunView } from "@/lib/janus/stageStore";
+import { STORAGE_MODEL, PROMPT_TEMPLATES, INTERSECTION_KEYS, intersectionKey } from "@/lib/janus/stageModel";
 
 const MAX_RAW_JSON_LENGTH = 200000;
+const CORE_DOMAINS = ["corpus", "cogito", "animus", "actus"];
 
 function safeTruncate(str, max) {
   if (!str || str.length <= max) return str;
   return str.slice(0, max) + "\n\n[TRUNCATED — original was " + str.length + " chars]";
-}
-
-async function callLLM(prompt) {
-  return await base44.integrations.Core.InvokeLLM({
-    prompt,
-  });
-}
-
-function parseLLMResponse(result, expectedKey) {
-  let data;
-  if (typeof result === "string") {
-    const jsonMatch = result.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return { error: `${expectedKey}: No JSON found in string response` };
-    data = JSON.parse(jsonMatch[0]);
-  } else {
-    data = result;
-  }
-  if (data && data[expectedKey]) return { data: data[expectedKey] };
-  if (data && typeof data === "object" && Object.keys(data).length > 0) return { data };
-  return { error: `${expectedKey}: Missing key in response` };
 }
 
 // ─── SYNTHESIS MODELS (intersection pair config) ───
@@ -103,14 +84,15 @@ No markdown fences, no prose outside JSON.
 QUERY: ${queryText}`;
 }
 
-// ─── Build blueprint prompt from stored context ───
-function buildBlueprintPrompt(run) {
+// ─── Build blueprint prompt from the composed durable view ───
+// Reads: the six intersections, Actus, Corpus, Animus (recorded as its exact dependencies below).
+function buildBlueprintPrompt(source) {
   const parts = [];
 
   // Intersection insights for blueprint context
-  if (run.synthesis?.intersection_matrix) {
+  if (source.synthesis?.intersection_matrix) {
     parts.push("═══ CROSS-DOMAIN SYNTHESIS INSIGHTS (The Nexus) ═══");
-    Object.entries(run.synthesis.intersection_matrix).forEach(([key, data]) => {
+    Object.entries(source.synthesis.intersection_matrix).forEach(([key, data]) => {
       parts.push(`  ▸ ${key}`);
       if (data.insight) parts.push(`    Insight: ${data.insight}`);
       if (data.tension) parts.push(`    Tension: ${data.tension}`);
@@ -118,33 +100,67 @@ function buildBlueprintPrompt(run) {
     });
   }
 
-  if (run.actus?.recommendations?.length) {
+  if (source.actus?.recommendations?.length) {
     parts.push("\n═══ ACTUS: Key Recommendations ═══");
-    run.actus.recommendations.forEach(r => parts.push(`  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`));
+    source.actus.recommendations.forEach(r => parts.push(`  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`));
   }
 
-  if (run.corpus?.constraints?.length) {
+  if (source.corpus?.constraints?.length) {
     parts.push("\n═══ CORPUS: Hard Constraints ═══");
-    run.corpus.constraints.forEach((x, i) => parts.push(`  ${i + 1}. ${x}`));
+    source.corpus.constraints.forEach((x, i) => parts.push(`  ${i + 1}. ${x}`));
   }
 
-  if (run.animus?.ethical_stance) {
-    parts.push(`\n═══ ANIMUS: Ethical Stance ═══\n  ${run.animus.ethical_stance}`);
+  if (source.animus?.ethical_stance) {
+    parts.push(`\n═══ ANIMUS: Ethical Stance ═══\n  ${source.animus.ethical_stance}`);
   }
 
-  const blueprintLevel = run.blueprint_level || "L2";
-  const noveltyDial = run.novelty_dial || "medium";
+  const blueprintLevel = source.blueprint_level || "L2";
+  const noveltyDial = source.novelty_dial || "medium";
 
   return `INITIATE PROTOCOL: JANUSSMEv2.0 — DOMAIN: BLUEPRINT (Executable Deliverable)
 You are the Janus Blueprint Module.
-Level: ${blueprintLevel} | Novelty: ${noveltyDial} | Output Mode: ${run.output_mode}.
+Level: ${blueprintLevel} | Novelty: ${noveltyDial} | Output Mode: ${source.output_mode}.
 ${noveltyDial === "high" ? "alternative_approaches REQUIRED." : ""}
 
 ${parts.join("\n")}
 
 Output ONLY valid JSON: { "blueprint": { "goal": "...", "assumptions": ["..."], ${noveltyDial === "high" ? '"alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], ' : ""}"steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[]${blueprintLevel !== "L1" ? ',"time_estimate":"...","effort_level":"medium"' : ""}${blueprintLevel === "L2" || blueprintLevel === "L3" ? ',"substeps":[{"substep":"1a","details":"..."}]' : ""}${blueprintLevel === "L3" ? ',"checklist":["..."],"acceptance_tests":["..."]' : ""}}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}] } }
 No markdown fences, no prose outside JSON.
-QUERY: ${run.query_text}`;
+QUERY: ${source.query_text}`;
+}
+
+// ─── DURABLE RERUN HELPERS ───
+
+async function loadForRerun(runId, target) {
+  const view = await loadRunView(runId);
+  if (!view) throw new Error("Run not found");
+  const missing = CORE_DOMAINS.filter(d => !view.artifacts[d]);
+  if (missing.length > 0) throw new Error(`Cannot re-run ${target} — missing prerequisite domains: ${missing.join(", ")}`);
+  return view;
+}
+
+const nextRevision = (view, key) => (view.stageInfo[key]?.max_revision || 0) + 1;
+
+const rerunStage = (view, stageKey, prompt, parseKey, dependsOn) => runStage({
+  runId: view.run.id, stageKey, revision: nextRevision(view, stageKey), dependsOn,
+  templateVersion: PROMPT_TEMPLATES.rerun, origin: "rerun", prompt, parseKey,
+});
+
+// Staged runs refresh their lifecycle fields and derived caches from the durable view.
+// Historical Runs are never written — their reruns live entirely in RunStage.
+async function finalizeRerun(runId, errors, errorPattern, hasTarget) {
+  const view = await loadRunView(runId);
+  if (view.storage !== STORAGE_MODEL.staged) return;
+  const keys = STAGE_ORDER.filter(d => view.artifacts[d]);
+  const validation = validateJanusOutput(view.artifacts, keys);
+  const renderMd = generateMarkdown(validation.normalized || view.artifacts, view.run.execution_mode);
+
+  await base44.entities.Run.update(runId, {
+    status: errors.length > 0 && !hasTarget(view.artifacts) ? "failed" : "completed",
+    render_md: safeTruncate(renderMd, 60000),
+    raw_json: safeTruncate(JSON.stringify(validation.normalized || view.artifacts), MAX_RAW_JSON_LENGTH),
+    validation_errors: [...(view.run.validation_errors || []).filter(e => !errorPattern.test(e)), ...errors],
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -153,149 +169,67 @@ QUERY: ${run.query_text}`;
 
 /**
  * Re-run synthesis for an existing run.
- * Recomputes all 6 intersection pairs + 4 named patterns.
- * Requires: corpus, cogito, animus, actus already stored on the run.
+ * Writes new revisions of all 6 intersection pairs + the 4 named patterns; the dependent
+ * Blueprint becomes stale (derived) until it is re-run against the new revisions.
+ * Requires: corpus, cogito, animus, actus present in the durable view.
  */
 export async function rerunSynthesis(runId, onProgress) {
   onProgress({ domain: "synthesis", status: "starting", detail: "Loading existing run data..." });
 
-  const runs = await base44.entities.Run.filter({ id: runId });
-  const run = runs[0];
-  if (!run) throw new Error("Run not found");
+  const view = await loadForRerun(runId, "synthesis");
+  const { run, artifacts, stageInfo } = view;
+  if (view.storage === STORAGE_MODEL.staged) await base44.entities.Run.update(runId, { status: "running" });
 
-  // Validate prerequisites exist
-  const missing = ["corpus", "cogito", "animus", "actus"].filter(d => !run[d]);
-  if (missing.length > 0) throw new Error(`Cannot re-run synthesis — missing prerequisite domains: ${missing.join(", ")}`);
-
-  await base44.entities.Run.update(runId, { status: "running" });
-
-  const queryText = run.query_text;
   const intersections = {};
+  const newIds = [];
   const errors = [];
 
-  // Step 1: Recompute all 6 intersection pairs
+  // Step 1: Recompute all 6 intersection pairs as new revisions
   for (let i = 0; i < INTERSECTION_PAIRS.length; i++) {
     const { pair, domains: [dA, dB], model } = INTERSECTION_PAIRS[i];
     onProgress({ domain: `synthesis:${pair}`, status: "running", detail: `Computing intersection ${i + 1}/6: ${pair}`, completedDomains: i, totalDomains: 8 });
 
-    try {
-      const prompt = buildIntersectionPrompt(pair, model, dA, dB, run[dA], run[dB], queryText);
-      const result = await callLLM(prompt);
-      const parsed = parseLLMResponse(result, pair);
-      if (parsed.data) {
-        intersections[pair] = parsed.data;
-      } else {
-        errors.push(`intersection:${pair}: ${parsed.error}`);
-      }
-    } catch (e) {
-      errors.push(`intersection:${pair}: ${e.message}`);
-    }
+    const prompt = buildIntersectionPrompt(pair, model, dA, dB, artifacts[dA], artifacts[dB], run.query_text);
+    const res = await rerunStage(view, intersectionKey(pair), prompt, pair, [stageInfo[dA].active.id, stageInfo[dB].active.id]);
+    if (res.record) { intersections[pair] = res.record.output; newIds.push(res.record.id); }
+    else errors.push(res.failure.message);
   }
 
-  // Persist intersection pairs immediately
-  await base44.entities.Run.update(runId, {
-    synthesis: { intersection_matrix: intersections },
-  });
-
-  // Step 2: Compute named patterns
+  // Step 2: Compute named patterns from exactly the new intersection revisions
   onProgress({ domain: "synthesis:patterns", status: "running", detail: "Computing 4 named emergent patterns...", completedDomains: 6, totalDomains: 8 });
-
-  try {
-    const patternPrompt = buildSynthesisNamedPatternsPrompt(intersections, queryText);
-    const patternResult = await callLLM(patternPrompt);
-    const patternParsed = parseLLMResponse(patternResult, "synthesis");
-
-    if (patternParsed.data) {
-      // Merge named patterns with the intersection matrix
-      const fullSynthesis = {
-        ...patternParsed.data,
-        intersection_matrix: intersections,
-      };
-      await base44.entities.Run.update(runId, { synthesis: fullSynthesis });
-    } else {
-      errors.push(`synthesis:patterns: ${patternParsed.error}`);
-    }
-  } catch (e) {
-    errors.push(`synthesis:patterns: ${e.message}`);
-  }
+  const patterns = await rerunStage(view, "synthesis", buildSynthesisNamedPatternsPrompt(intersections, run.query_text), "synthesis", newIds);
+  if (!patterns.record) errors.push(patterns.failure.message);
 
   // Step 3: Finalize
   onProgress({ domain: "synthesis", status: "finalizing", detail: "Updating run record...", completedDomains: 7, totalDomains: 8 });
-
-  // Rebuild cached fields from full data
-  const updatedRuns = await base44.entities.Run.filter({ id: runId });
-  const updatedRun = updatedRuns[0];
-  const allDomains = ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"].filter(d => updatedRun[d]);
-  const fullData = {};
-  allDomains.forEach(d => { fullData[d] = updatedRun[d]; });
-
-  const validation = validateJanusOutput(fullData, allDomains);
-  const renderMd = generateMarkdown(validation.normalized || fullData, updatedRun.execution_mode);
-
-  await base44.entities.Run.update(runId, {
-    status: errors.length > 0 && !updatedRun.synthesis?.intersection_matrix ? "failed" : "completed",
-    render_md: safeTruncate(renderMd, 60000),
-    raw_json: safeTruncate(JSON.stringify(validation.normalized || fullData), MAX_RAW_JSON_LENGTH),
-    validation_errors: [...(updatedRun.validation_errors || []).filter(e => !e.includes("synthesis") && !e.includes("intersection")), ...errors],
-  });
+  await finalizeRerun(runId, errors, /synthesis|intersection/, a => !!a.synthesis?.intersection_matrix);
 
   onProgress({ domain: null, status: "completed", detail: "Synthesis re-run complete" });
   return { success: errors.length === 0, errors };
 }
 
 /**
- * Re-run blueprint for an existing run.
- * Requires: corpus, cogito, animus, actus, synthesis already stored.
+ * Re-run blueprint for an existing run as a new revision.
+ * Requires: corpus, cogito, animus, actus present; intersections are used when available.
  */
 export async function rerunBlueprint(runId, onProgress) {
   onProgress({ domain: "blueprint", status: "starting", detail: "Loading existing run data..." });
 
-  const runs = await base44.entities.Run.filter({ id: runId });
-  const run = runs[0];
-  if (!run) throw new Error("Run not found");
-
-  // Blueprint requires core domains; synthesis is used if available but not a hard prerequisite
-  const missing = ["corpus", "cogito", "animus", "actus"].filter(d => !run[d]);
-  if (missing.length > 0) throw new Error(`Cannot re-run blueprint — missing prerequisite domains: ${missing.join(", ")}`);
-
-  await base44.entities.Run.update(runId, { status: "running" });
-
-  const errors = [];
+  const view = await loadForRerun(runId, "blueprint");
+  if (view.storage === STORAGE_MODEL.staged) await base44.entities.Run.update(runId, { status: "running" });
 
   onProgress({ domain: "blueprint", status: "running", detail: "Generating blueprint from stored domain data...", completedDomains: 0, totalDomains: 1 });
 
-  try {
-    const prompt = buildBlueprintPrompt(run);
-    const result = await callLLM(prompt);
-    const parsed = parseLLMResponse(result, "blueprint");
-
-    if (parsed.data) {
-      await base44.entities.Run.update(runId, { blueprint: parsed.data });
-    } else {
-      errors.push(`blueprint: ${parsed.error}`);
-    }
-  } catch (e) {
-    errors.push(`blueprint: ${e.message}`);
-  }
+  const source = { ...view.run, ...view.artifacts };
+  const dependsOn = [...INTERSECTION_KEYS, "actus", "corpus", "animus"]
+    .map(k => view.stageInfo[k]?.active?.id)
+    .filter(Boolean);
+  const res = await rerunStage(view, "blueprint", buildBlueprintPrompt(source), "blueprint", dependsOn);
+  const errors = res.record ? [] : [res.failure.message];
 
   // Finalize
   onProgress({ domain: "blueprint", status: "finalizing", detail: "Updating run record..." });
-
-  const updatedRuns = await base44.entities.Run.filter({ id: runId });
-  const updatedRun = updatedRuns[0];
-  const allDomains = ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"].filter(d => updatedRun[d]);
-  const fullData = {};
-  allDomains.forEach(d => { fullData[d] = updatedRun[d]; });
-
-  const validation = validateJanusOutput(fullData, allDomains);
-  const renderMd = generateMarkdown(validation.normalized || fullData, updatedRun.execution_mode);
-
-  await base44.entities.Run.update(runId, {
-    status: errors.length > 0 && !updatedRun.blueprint ? "failed" : "completed",
-    render_md: safeTruncate(renderMd, 60000),
-    raw_json: safeTruncate(JSON.stringify(validation.normalized || fullData), MAX_RAW_JSON_LENGTH),
-    validation_errors: [...(updatedRun.validation_errors || []).filter(e => !e.includes("blueprint")), ...errors],
-  });
+  await finalizeRerun(runId, errors, /blueprint/, a => !!a.blueprint);
 
   onProgress({ domain: null, status: "completed", detail: "Blueprint re-run complete" });
   return { success: errors.length === 0, errors };

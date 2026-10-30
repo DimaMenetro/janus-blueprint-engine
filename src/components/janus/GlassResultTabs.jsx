@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, BookOpen, Brain, Shield, Rocket, Layers, Map, Download } from "lucide-react";
-import { glassCard, glassSurface, glassTabActive } from "@/components/ui/LiquidGlass";
+import { glassCard, glassSurface } from "@/components/ui/LiquidGlass";
 
 import RefreshTab from "@/components/janus/tabs/RefreshTab";
 import CorpusTab from "@/components/janus/tabs/CorpusTab";
@@ -22,20 +22,21 @@ const tabDefs = {
   blueprint: { label: "Blueprint", icon: Map },
 };
 
-export default function GlassResultTabs({ run, mode, t, isDark, isAdmin }) {
+export default function GlassResultTabs({ view, mode, t, isDark, isAdmin }) {
+  const { run, artifacts } = view; // artifacts: the durable view — same truth the engines write
   const availableTabs = [...mode.domains, "export"];
   const [active, setActive] = useState(availableTabs[0]);
 
   const renderContent = () => {
     switch (active) {
-      case "refresh":   return <RefreshTab data={run.refresh} />;
-      case "corpus":    return <CorpusTab data={run.corpus} />;
-      case "cogito":    return <CogitoTab data={run.cogito} />;
-      case "animus":    return <AnimusTab data={run.animus} />;
-      case "actus":     return <ActusTab data={run.actus} />;
-      case "synthesis": return <SynthesisTab data={run.synthesis} />;
-      case "blueprint": return <BlueprintTab data={run.blueprint} blueprintLevel={run.blueprint_level} />;
-      case "export":    return <ExportTab run={run} fullPrompt={run.full_prompt} isAdmin={isAdmin} />;
+      case "refresh":   return <RefreshTab data={artifacts.refresh} />;
+      case "corpus":    return <CorpusTab data={artifacts.corpus} />;
+      case "cogito":    return <CogitoTab data={artifacts.cogito} />;
+      case "animus":    return <AnimusTab data={artifacts.animus} />;
+      case "actus":     return <ActusTab data={artifacts.actus} />;
+      case "synthesis": return <SynthesisTab data={artifacts.synthesis} />;
+      case "blueprint": return <BlueprintTab data={artifacts.blueprint} blueprintLevel={run.blueprint_level} />;
+      case "export":    return <ExportTab view={view} fullPrompt={run.full_prompt} isAdmin={isAdmin} />;
       default:          return null;
     }
   };

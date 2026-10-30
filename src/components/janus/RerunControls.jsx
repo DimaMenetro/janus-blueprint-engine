@@ -1,30 +1,26 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { RefreshCw, Layers, Map, AlertTriangle, CheckCircle } from "lucide-react";
-import { glassBtn, glassError } from "@/components/ui/LiquidGlass";
+import { RefreshCw, Layers, Map, AlertTriangle } from "lucide-react";
 import { rerunSynthesis, rerunBlueprint } from "./rerunEngine";
+import { rerunNeeds } from "@/lib/janus/runView";
 
-export default function RerunControls({ run, t, isDark, onRerunComplete }) {
+export default function RerunControls({ view, t, isDark, onRerunComplete }) {
   const [rerunning, setRerunning] = useState(null); // "synthesis" | "blueprint" | null
   const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
 
-  // Gate checks reflect the actual dependency graph of the blueprint prompt:
-  // Blueprint consumes corpus constraints, actus recommendations, animus ethical stance.
-  // Synthesis is used if available but is not a hard prerequisite.
-  const hasCoreData = run.corpus && run.cogito && run.animus && run.actus;
-  const hasBlueprint = !!run.blueprint;
+  // Needs derive from durable stage state: missing, failed or invalid revisions, stale dependents,
+  // and (historical Runs only) errors recorded on the original record.
+  const needs = rerunNeeds(view);
+  const hasCoreData = needs.core;
+  const hasBlueprint = !!view.artifacts.blueprint;
+  const synthesisMissing = !view.artifacts.synthesis;
 
   const canRerunSynthesis = hasCoreData && !rerunning;
   const canRerunBlueprint = hasCoreData && !rerunning;
 
-  // Check if re-run is needed (missing or errored)
-  const synthesisErrors = (run.validation_errors || []).filter(e => e.includes("synthesis") || e.includes("intersection"));
-  const blueprintErrors = (run.validation_errors || []).filter(e => e.includes("blueprint"));
-  const synthesisMissing = !run.synthesis;
-
-  const showSynthesisRerun = synthesisMissing || synthesisErrors.length > 0;
-  const showBlueprintRerun = !hasBlueprint || blueprintErrors.length > 0;
+  const showSynthesisRerun = needs.synthesis;
+  const showBlueprintRerun = needs.blueprint;
 
   // Don't render anything if nothing needs re-running and core data exists
   if (!hasCoreData || (!showSynthesisRerun && !showBlueprintRerun)) return null;
@@ -36,7 +32,7 @@ export default function RerunControls({ run, t, isDark, onRerunComplete }) {
 
     try {
       const fn = target === "synthesis" ? rerunSynthesis : rerunBlueprint;
-      const result = await fn(run.id, setProgress);
+      const result = await fn(view.run.id, setProgress);
       if (!result.success) {
         setError(`Completed with errors: ${result.errors.join(", ")}`);
       }
@@ -125,10 +121,17 @@ export default function RerunControls({ run, t, isDark, onRerunComplete }) {
             ) : (
               <Map style={{ width: 14, height: 14 }} />
             )}
-            {rerunning === "blueprint" ? "Re-running Blueprint..." : !hasBlueprint ? "Run Blueprint" : "Re-run Blueprint"}
+            {rerunning === "blueprint" ? "Re-running Blueprint..." : !hasBlueprint ? "Run Blueprint" : needs.blueprintStale ? "Re-run Blueprint (stale)" : "Re-run Blueprint"}
           </motion.button>
         )}
       </div>
+
+      {/* Staleness is derived from exact dependency revisions */}
+      {needs.blueprintStale && !rerunning && (
+        <p style={{ marginTop: 10, marginBottom: 0, fontSize: 12, color: t.subtitle }}>
+          Blueprint is stale: {needs.blueprintStale}
+        </p>
+      )}
 
       {/* Progress indicator */}
       {progress && (

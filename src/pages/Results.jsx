@@ -9,12 +9,14 @@ import StatusPill from "@/components/janus/StatusPill";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import GlassResultTabs from "@/components/janus/GlassResultTabs";
 import RerunControls from "@/components/janus/RerunControls";
+import StageLineagePanel from "@/components/janus/StageLineagePanel";
+import { loadRunView } from "@/lib/janus/stageStore";
 
 export default function Results() {
   const navigate = useNavigate();
   const { isDark } = useTheme();
   const t = isDark ? dark : light;
-  const [run, setRun] = useState(null);
+  const [view, setView] = useState(null); // durable run view: stage revisions, or the legacy adapter
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -24,8 +26,7 @@ export default function Results() {
       const id = params.get("id");
       if (!id) { navigate("/NewQuery"); return; }
       try { const user = await base44.auth.me(); setIsAdmin(user.role === 'admin'); } catch { setIsAdmin(false); }
-      const runs = await base44.entities.Run.filter({ id });
-      if (runs.length > 0) setRun(runs[0]);
+      setView(await loadRunView(id));
       setLoading(false);
     };
     loadRun();
@@ -41,7 +42,7 @@ export default function Results() {
     );
   }
 
-  if (!run) {
+  if (!view) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
         <p style={{ color: t.subtitle, fontSize: 15 }}>Run not found</p>
@@ -58,8 +59,11 @@ export default function Results() {
     );
   }
 
+  const { run } = view;
   const mode = EXECUTION_MODES[run.execution_mode?.toUpperCase()] || EXECUTION_MODES.STANDARD;
   const hasFailed = run.status === "failed";
+  // Settled artifacts stay browsable after a failure — one failed stage never hides prior stages.
+  const hasArtifacts = Object.keys(view.artifacts).length > 0;
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 20px 40px" }}>
@@ -154,18 +158,18 @@ export default function Results() {
 
       {/* Domain re-run controls — show when synthesis or blueprint missing/errored */}
       <RerunControls
-        run={run}
+        view={view}
         t={t}
         isDark={isDark}
-        onRerunComplete={async () => {
-          const refreshed = await base44.entities.Run.filter({ id: run.id });
-          if (refreshed.length > 0) setRun(refreshed[0]);
-        }}
+        onRerunComplete={async () => setView(await loadRunView(run.id))}
       />
 
+      {/* Durable stage lineage */}
+      <StageLineagePanel view={view} t={t} />
+
       {/* Results tabs */}
-      {!hasFailed && (
-        <GlassResultTabs run={run} mode={mode} t={t} isDark={isDark} isAdmin={isAdmin} />
+      {hasArtifacts && (
+        <GlassResultTabs view={view} mode={mode} t={t} isDark={isDark} isAdmin={isAdmin} />
       )}
     </div>
   );

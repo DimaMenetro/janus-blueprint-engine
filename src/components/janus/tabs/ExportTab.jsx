@@ -4,10 +4,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { reconstructFullJson, reconstructFullMarkdown } from "../exportUtils";
 
-export default function ExportTab({ run, fullPrompt, isAdmin }) {
-  // Reconstruct full-fidelity data from individual domain fields at export time
-  const rawJson = reconstructFullJson(run);
-  const renderMd = reconstructFullMarkdown(run);
+export default function ExportTab({ view, fullPrompt, isAdmin }) {
+  // Reconstruct full-fidelity data from the durable view (stage revisions or legacy adapter)
+  const rawJson = reconstructFullJson(view);
+  const renderMd = reconstructFullMarkdown(view);
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
 

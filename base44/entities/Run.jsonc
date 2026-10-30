@@ -59,12 +59,17 @@
       "type": "string",
       "enum": [
         "idle",
+        "queued",
         "running",
         "validating",
         "completed",
-        "failed"
+        "failed",
+        "partial",
+        "cancel_requested",
+        "cancelled"
       ],
-      "default": "idle"
+      "default": "idle",
+      "description": "Lifecycle status (Phase 2 contract). idle is historical only."
     },
     "validation_errors": {
       "type": "array",
@@ -73,8 +78,72 @@
       },
       "description": "Validation errors if any"
     },
+    "storage_model": {
+      "type": "string",
+      "enum": [
+        "legacy_monolithic",
+        "staged_v1"
+      ],
+      "description": "Absent on historical runs (read as legacy_monolithic). staged_v1: cognition lives in RunStage revisions, not on this record."
+    },
+    "protocol_version": {
+      "type": "string",
+      "description": "Protocol version the run executed under"
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "orchestrator": {
+      "type": "string",
+      "description": "Who schedules execution: browser (transitional) or workflow (production target)"
+    },
+    "model_policy_snapshot": {
+      "type": "object",
+      "description": "Model policy in force when the run started",
+      "properties": {
+        "operational_model": {
+          "type": "string"
+        },
+        "prohibited_model_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "hidden_fallback_allowed": {
+          "type": "boolean"
+        },
+        "refresh_architecture": {
+          "type": "string"
+        }
+      }
+    },
+    "current_stage": {
+      "type": "string",
+      "description": "Last settled durable stage key"
+    },
+    "qualification_state": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "qualifying",
+        "qualified",
+        "refinement_required",
+        "limitation_reported"
+      ],
+      "description": "Quality-qualification axis (Phase 2 contract); populated from Phase 5"
+    },
+    "completion_manifest": {
+      "type": "object",
+      "description": "Completion manifest from the lifecycle contract; populated from Phase 5"
+    },
+    "released_blueprint_stage_id": {
+      "type": "string",
+      "description": "RunStage id of the released (JANUS-QUALIFIED) Blueprint revision; empty until released"
+    },
     "refresh": {
       "type": "object",
+      "description": "Historical monolithic storage only; staged_v1 runs keep this artifact in RunStage",
       "properties": {
         "mode": {
           "type": "string"
@@ -95,6 +164,7 @@
     },
     "corpus": {
       "type": "object",
+      "description": "Historical monolithic storage only; staged_v1 runs keep this artifact in RunStage",
       "properties": {
         "constraints": {
           "type": "array",
@@ -112,6 +182,7 @@
     },
     "cogito": {
       "type": "object",
+      "description": "Historical monolithic storage only; staged_v1 runs keep this artifact in RunStage",
       "properties": {
         "claims": {
           "type": "array",
@@ -155,6 +226,7 @@
     },
     "animus": {
       "type": "object",
+      "description": "Historical monolithic storage only; staged_v1 runs keep this artifact in RunStage",
       "properties": {
         "boundary_checks": {
           "type": "array",
@@ -178,6 +250,7 @@
     },
     "actus": {
       "type": "object",
+      "description": "Historical monolithic storage only; staged_v1 runs keep this artifact in RunStage",
       "properties": {
         "recommendations": {
           "type": "array",
@@ -221,6 +294,7 @@
     },
     "synthesis": {
       "type": "object",
+      "description": "Historical monolithic storage only; staged_v1 runs keep the six intersections and the patterns as separate RunStage revisions",
       "properties": {
         "key_takeaways": {
           "type": "array",
@@ -241,6 +315,7 @@
     },
     "blueprint": {
       "type": "object",
+      "description": "Historical monolithic storage only; staged_v1 runs keep this artifact in RunStage",
       "properties": {
         "goal": {
           "type": "string"
@@ -374,11 +449,11 @@
     },
     "raw_json": {
       "type": "string",
-      "description": "The raw JSON output from the LLM"
+      "description": "Derived export cache (non-authoritative, may be truncated). Exports rebuild from the durable view."
     },
     "render_md": {
       "type": "string",
-      "description": "Human-readable markdown render of the blueprint"
+      "description": "Derived markdown cache (non-authoritative, may be truncated). Exports rebuild from the durable view."
     },
     "error_message": {
       "type": "string",
