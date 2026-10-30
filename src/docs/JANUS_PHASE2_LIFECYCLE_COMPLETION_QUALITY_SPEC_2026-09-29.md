@@ -90,6 +90,12 @@
 3. An unanchored Actus recommendation blocks Full completion.
 4. Retry budget is 3 attempts per stage; refinement budget is 2 cycles.
 
+## 8. Corrections — Daionae review (2026-10-30, normative; supersede §5/§7 where they conflict)
+1. **`limitation_reported` is never released.** It stays inspectable and exportable under `RELEASE_LABELS.unqualified` ("not released, not JANUS-QUALIFIED"). Only `qualified` becomes the Final Blueprint.
+2. **`not_applicable` is not an evaluator verdict.** Thirteen criteria are `hard` (pass/fail only). Only `historical_no_regression` is conditional, via the contract rule `APPLICABILITY.benchmark_reference`. Any other verdict fails closed.
+3. Emergence and adversarial robustness are qualified in every mode against mode-scaled evidence (`MODE_EXPECTATIONS.*.emergence_evidence`).
+- Evidence: 20/20 lifecycle tests (5 new for these corrections).
+
 ## Exit test
 - 27/27 Vitest tests pass. 15 of them are new lifecycle/contract tests.
 - Production build passes.

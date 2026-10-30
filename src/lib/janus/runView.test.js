@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
+import process from "process";
 import { PAIRS } from "@/lib/janus/protocolRegistry";
 import { INTERSECTION_KEYS, intersectionKey } from "@/lib/janus/stageModel";
 import { composeRunView, rerunNeeds } from "@/lib/janus/runView";

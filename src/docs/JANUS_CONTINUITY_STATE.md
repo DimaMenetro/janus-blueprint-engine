@@ -27,5 +27,13 @@ Read this first after any context reset.
 ## Checkpoint
 - Name: `JANUS_PHASE0_RESTORED_BASELINE_PLUS_AUDIT_VITEST_2026-09-29` · ID: `6abbd5ec65beb352c8a87266` · Git: `4d029fc397083e1daed96e58f2736000b4447404` · State: restored six-month baseline + Phase 0 docs + Vitest (no cognitive rewrite).
 
+## Phase 2 corrections + Phase 3 (2026-10-30)
+- Phase 2 corrected per Daionae: unqualified Blueprints never released; evaluator cannot mark criteria not applicable (spec §8).
+- **Phase 3 COMPLETE:** RunStage/RunAttempt entities; Run extended (storage_model, versions, policy snapshot, qualification refs). Modules: `stageModel.js`, `runView.js` (legacy adapter + view), `stageStore.js`, `stageRunner.js`. Both engines write append-only revisions; Results/Export/Rerun read one view; Stage lineage panel. Record: `JANUS_PHASE3_DURABLE_STAGE_MODEL_2026-10-30.md`.
+- Evidence: 47/47 tests, build passes, live persistence round-trip lossless (test records removed; 69 historical Runs untouched).
+
+## Operating procedure (Daionae, 2026-10-30)
+Proceed through phases automatically; stop only at genuine operator gates (credits, provider choice, destructive historical mutation, material contradiction, production cutover).
+
 ## Next action
-Phase 3: create the RunStage/RunAttempt entities (plan §10.2–10.4) and a read-only legacy adapter. Historical Runs are not modified.
+Phase 4: one canonical stage executor for runs and reruns, resume from persisted stages, cancel-after-current-stage, untrusted-content boundary, durable progress in BottomAccessory/Results.
