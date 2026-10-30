@@ -1,0 +1,108 @@
+{
+  "name": "RunAttempt",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "stage_id": {
+      "type": "string",
+      "description": "RunStage revision this attempt executed"
+    },
+    "stage_key": {
+      "type": "string"
+    },
+    "attempt_number": {
+      "type": "number"
+    },
+    "orchestrator": {
+      "type": "string",
+      "description": "browser (transitional) or workflow (production target)"
+    },
+    "model_policy": {
+      "type": "string",
+      "description": "Model policy in force; calls inherit the operator's Claude Opus setting"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "in_flight",
+        "succeeded",
+        "provider_error",
+        "transport_settled_failure",
+        "platform_termination",
+        "parse_failure",
+        "schema_failure",
+        "quota_failure",
+        "operator_cancellation"
+      ],
+      "default": "in_flight",
+      "description": "Actual settled outcome. in_flight means a provider request may still be live."
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "retry_decision": {
+      "type": "string",
+      "enum": [
+        "none",
+        "retry_scheduled",
+        "exhausted"
+      ],
+      "default": "none"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "elapsed_ms": {
+      "type": "number",
+      "description": "Telemetry only \u2014 never failure evidence"
+    }
+  },
+  "required": [
+    "run_id",
+    "stage_id",
+    "stage_key",
+    "attempt_number",
+    "outcome"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

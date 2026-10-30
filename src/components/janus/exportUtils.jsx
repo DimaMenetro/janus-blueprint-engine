@@ -1,31 +1,30 @@
-// Lossless export utilities — reconstructs full data from individual domain fields
-// Never relies on truncated raw_json or render_md stored on the entity.
+// Lossless export utilities — reconstructs full data from the durable run view
+// (stage revisions for staged runs, the legacy adapter for historical Runs).
+// Never relies on the truncated raw_json or render_md caches stored on the Run.
 
-import { EXECUTION_MODES } from "./janusSchema";
 import { PROTOCOL } from "@/lib/janus/protocolRegistry";
 import { generateMarkdown } from "./promptUtils";
 
-const DOMAIN_KEYS = ["refresh", "corpus", "cogito", "animus", "actus", "synthesis", "blueprint"];
+/** Provenance travels with the artifact: every revision, its exact dependencies and fingerprint. */
+const lineageExport = (lineage) => lineage.map(s => ({
+  id: s.id, stage_key: s.stage_key, revision: s.revision, status: s.status,
+  lineage_state: s.lineage_state, stale: s.stale, depends_on: s.depends_on || [],
+  dependency_basis: s.dependency_basis || "recorded", input_fingerprint: s.input_fingerprint || null,
+  prompt_template_version: s.prompt_template_version || null, engine_version: s.engine_version || null,
+  started_at: s.started_at || null, completed_at: s.completed_at || null, error_class: s.error_class || null,
+}));
 
-/**
- * Reconstruct full-fidelity JSON from the individual domain fields stored on a Run entity.
- * This bypasses the truncated raw_json field entirely.
- */
-export function reconstructFullJson(run) {
-  const fullData = {};
-
-  DOMAIN_KEYS.forEach(key => {
-    if (run[key] && typeof run[key] === "object" && Object.keys(run[key]).length > 0) {
-      fullData[key] = run[key];
-    }
-  });
-
-  // Include run metadata for completeness
+/** Full-fidelity JSON export from the durable view. */
+export function reconstructFullJson(view) {
+  const { run, artifacts, lineage, storage } = view;
   const exportObj = {
     _meta: {
       protocol: `${PROTOCOL.id} v${PROTOCOL.version}`,
       protocol_edition: PROTOCOL.edition,
       registry_schema_version: PROTOCOL.registry_schema_version,
+      run_protocol_version: run.protocol_version || "unrecorded (historical run)",
+      engine_version: run.engine_version || null,
+      storage_model: storage,
       run_id: run.id,
       query_text: run.query_text,
       execution_mode: run.execution_mode,
@@ -37,31 +36,21 @@ export function reconstructFullJson(run) {
       created_date: run.created_date,
       updated_date: run.updated_date,
     },
-    ...fullData,
+    ...artifacts,
+    _lineage: lineageExport(lineage),
   };
 
   return JSON.stringify(exportObj, null, 2);
 }
 
-/**
- * Regenerate full-fidelity markdown from the individual domain fields at export time.
- * This bypasses the truncated render_md field entirely.
- */
-export function reconstructFullMarkdown(run) {
-  const fullData = {};
-  DOMAIN_KEYS.forEach(key => {
-    if (run[key] && typeof run[key] === "object" && Object.keys(run[key]).length > 0) {
-      fullData[key] = run[key];
-    }
-  });
-
+/** Full-fidelity markdown regenerated from the durable view at export time. */
+export function reconstructFullMarkdown(view) {
+  const { run, artifacts, storage } = view;
   const executionMode = run.execution_mode || "standard";
 
-  // Add metadata header
-  let md = `---\nprotocol: ${PROTOCOL.id} v${PROTOCOL.version} (${PROTOCOL.edition})\nrun_id: ${run.id}\nquery: ${run.query_text}\nmode: ${executionMode}\noutput: ${run.output_mode}\nblueprint_level: ${run.blueprint_level}\nnovelty: ${run.novelty_dial}\nrefresh: ${run.refresh_enabled}\ndate: ${run.created_date}\n---\n\n`;
+  let md = `---\nprotocol: ${PROTOCOL.id} v${PROTOCOL.version} (${PROTOCOL.edition})\nrun_id: ${run.id}\nstorage: ${storage}\nquery: ${run.query_text}\nmode: ${executionMode}\noutput: ${run.output_mode}\nblueprint_level: ${run.blueprint_level}\nnovelty: ${run.novelty_dial}\nrefresh: ${run.refresh_enabled}\ndate: ${run.created_date}\n---\n\n`;
 
-  // Use the existing generateMarkdown function with full-fidelity data
-  md += generateMarkdown(fullData, executionMode);
+  md += generateMarkdown(artifacts, executionMode);
 
   return md;
 }

@@ -1,0 +1,140 @@
+{
+  "name": "RunStage",
+  "type": "object",
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "description": "Run this stage artifact revision belongs to"
+    },
+    "stage_key": {
+      "type": "string",
+      "description": "Canonical stage key: refresh | corpus | cogito | animus | actus | intersection:<pair_id> | synthesis | blueprint (later phases add blueprint sub-stages)"
+    },
+    "revision": {
+      "type": "number",
+      "description": "Revision number for this run + stage key, starting at 1. Revisions are append-only."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "default": "running",
+      "description": "Settled outcome of this revision. Active/superseded and stale are derived from lineage, never stored."
+    },
+    "protocol_version": {
+      "type": "string"
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "prompt_template_version": {
+      "type": "string"
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Exact RunStage revision IDs (or legacy:<stage_key> for historical artifacts) whose outputs were read as inputs"
+    },
+    "input_fingerprint": {
+      "type": "string",
+      "description": "sha256 over stage key, template version, dependency revision IDs and the compiled prompt"
+    },
+    "output": {
+      "type": "object",
+      "description": "Structured stage output, lossless as parsed from the model"
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "validator": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "string",
+          "description": "execution | rerun"
+        },
+        "orchestrator": {
+          "type": "string"
+        },
+        "model_policy": {
+          "type": "string"
+        }
+      }
+    },
+    "error_class": {
+      "type": "string",
+      "description": "Settled failure evidence class (lifecycle contract FAILURE_EVIDENCE)"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "run_id",
+    "stage_key",
+    "revision",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

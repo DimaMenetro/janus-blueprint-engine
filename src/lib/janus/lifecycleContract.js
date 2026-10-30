@@ -32,12 +32,23 @@ export const QUALIFICATION_TRANSITIONS = {
 export const MAX_REFINEMENT_CYCLES = 2; // then limitation_reported
 export const JANUS_QUALIFIED = "JANUS-QUALIFIED";
 
-/** Release rule: JSON validity alone never releases a Blueprint. */
+/**
+ * Release rule (corrected 2026-10-30): only a JANUS-QUALIFIED Blueprint becomes the released Final Blueprint.
+ * JSON validity alone never releases. A Blueprint that fails the constitution after refinement stays
+ * inspectable and exportable, always under its unreleased label — it is never quietly promoted.
+ */
+export const RELEASE_LABELS = {
+  released: JANUS_QUALIFIED,
+  candidate: "Protocol-complete candidate — awaiting qualification · not released",
+  unqualified: "Unqualified — failed the quality constitution after refinement · not released, not JANUS-QUALIFIED",
+  incomplete: "Incomplete run — not a release candidate",
+};
 export function releaseDecision(lifecycle, qualification) {
-  if (lifecycle !== "completed") return { released: false, label: null };
-  if (qualification === "qualified") return { released: true, label: JANUS_QUALIFIED };
-  if (qualification === "limitation_reported") return { released: true, label: "Released with reported limitations — not JANUS-QUALIFIED" };
-  return { released: false, label: "Protocol-complete candidate — awaiting qualification" };
+  const status = lifecycle !== "completed" ? "incomplete"
+    : qualification === "qualified" ? "released"
+    : qualification === "limitation_reported" ? "unqualified"
+    : "candidate";
+  return { released: status === "released", status, label: RELEASE_LABELS[status], inspectable: true, exportable: true };
 }
 
 // ── 3. FAILURE / RETRY POLICY (§12) ────────────────────────────────
@@ -147,40 +158,62 @@ export function completionManifest(mode, artifacts, { refreshEnabled = false } =
 
 // ── 7. QUALITY CONSTITUTION (§7.2) as executable qualification contract ──
 // method: deterministic (code) | traceability (code over links) | critique (independent evaluation pass, never the generator)
+// hard: always applicable — the evaluator may only answer pass or fail (corrected 2026-10-30).
+// Applicability is decided by this contract from run context, never by the evaluator.
 export const QUALITY_CRITERIA = [
-  { id: "problem_understanding", method: "critique" },
-  { id: "cross_domain_necessity", method: "traceability" },
-  { id: "emergence", method: "traceability" },
-  { id: "non_obviousness", method: "critique" },
-  { id: "disciplined_novelty", method: "critique" },
-  { id: "elegance", method: "critique" },
-  { id: "explanatory_compression", method: "critique" },
-  { id: "evidence_discipline", method: "deterministic" },
-  { id: "feasibility_without_domestication", method: "critique" },
-  { id: "implementation_depth", method: "deterministic" },
-  { id: "adversarial_robustness", method: "critique" },
-  { id: "utility", method: "critique" },
-  { id: "intellectual_honesty", method: "traceability" },
-  { id: "historical_no_regression", method: "critique" }, // benchmark comparison, Phase 5/9
+  { id: "problem_understanding", method: "critique", hard: true },
+  { id: "cross_domain_necessity", method: "traceability", hard: true },
+  { id: "emergence", method: "traceability", hard: true },
+  { id: "non_obviousness", method: "critique", hard: true },
+  { id: "disciplined_novelty", method: "critique", hard: true },
+  { id: "elegance", method: "critique", hard: true },
+  { id: "explanatory_compression", method: "critique", hard: true },
+  { id: "evidence_discipline", method: "deterministic", hard: true },
+  { id: "feasibility_without_domestication", method: "critique", hard: true },
+  { id: "implementation_depth", method: "deterministic", hard: true },
+  { id: "adversarial_robustness", method: "critique", hard: true },
+  { id: "utility", method: "critique", hard: true },
+  { id: "intellectual_honesty", method: "traceability", hard: true },
+  // Comparison needs a matched historical reference (Phase 15 benchmark suite / operator-pinned reference).
+  { id: "historical_no_regression", method: "critique", hard: false, applies_when: "benchmark_reference" },
 ];
+/** The only applicability rules that exist. A criterion is not applicable only when its named rule says so. */
+export const APPLICABILITY = {
+  benchmark_reference: (ctx) => Boolean(ctx.benchmarkReferenceId),
+};
+export const criterionApplies = (criterion, ctx = {}) =>
+  criterion.hard || Boolean(APPLICABILITY[criterion.applies_when]?.(ctx));
+
 export const QUALIFICATION_RULES = {
   generator_self_assessment_counts: false,
-  all_criteria_must_pass: true,
-  verdicts: ["pass", "fail", "not_applicable"],
+  evaluator_verdicts: ["pass", "fail"],  // "not_applicable" is not an evaluator verdict
+  applicability_decided_by: "contract",  // criterionApplies(); recorded on the qualification artifact
+  invalid_verdict_outcome: "fail",       // any other verdict — including "not_applicable" — fails closed
+  all_applicable_criteria_must_pass: true,
 };
 
-export function qualify(verdicts) {
-  const missing = QUALITY_CRITERIA.filter(c => !verdicts[c.id]).map(c => c.id);
-  const failed = QUALITY_CRITERIA.filter(c => verdicts[c.id] === "fail").map(c => c.id);
-  if (missing.length) return { state: "qualifying", missing, failed };
-  return { state: failed.length ? "refinement_required" : "qualified", missing, failed };
+export function qualify(verdicts = {}, ctx = {}) {
+  const r = { missing: [], failed: [], invalid: [], not_applicable: [] };
+  for (const c of QUALITY_CRITERIA) {
+    const v = verdicts[c.id];
+    if (!criterionApplies(c, ctx)) r.not_applicable.push(c.id);
+    else if (v == null) r.missing.push(c.id);
+    else if (v === "fail") r.failed.push(c.id);
+    else if (v !== "pass") r.invalid.push(c.id); // an evaluator cannot skip a criterion
+  }
+  const state = r.missing.length ? "qualifying"
+    : r.failed.length || r.invalid.length ? "refinement_required"
+    : "qualified";
+  return { state, ...r };
 }
 
 // ── 8. MODE EXPECTATIONS (§7.4) ────────────────────────────────────
+// adversarial_critique / refinement_after_critique describe the GENERATION pipeline. Qualification still
+// evaluates every hard criterion in every mode (incl. emergence, adversarial robustness) against mode-scaled evidence.
 export const MODE_EXPECTATIONS = {
-  quick: { min_alternatives: 1, min_non_obvious_insights: 1, adversarial_critique: false, refinement_after_critique: false },
-  standard: { min_alternatives: 2, min_non_obvious_insights: 1, adversarial_critique: true, refinement_after_critique: false },
-  full: { min_alternatives: 3, min_non_obvious_insights: 1, adversarial_critique: true, refinement_after_critique: true,
+  quick: { min_alternatives: 1, min_non_obvious_insights: 1, adversarial_critique: false, refinement_after_critique: false, emergence_evidence: "cross_domain_conclusions" },
+  standard: { min_alternatives: 2, min_non_obvious_insights: 1, adversarial_critique: true, refinement_after_critique: false, emergence_evidence: "cross_domain_conclusions" },
+  full: { min_alternatives: 3, min_non_obvious_insights: 1, adversarial_critique: true, refinement_after_critique: true, emergence_evidence: "intersections_and_patterns",
     requires: ["refresh_25_when_enabled", "six_intersections", "four_patterns", "cross_domain_candidates", "higher_order_synthesis"] },
 };
 
@@ -201,4 +234,6 @@ export const UI_RULES = [
   "Elapsed time is shown as telemetry, never as a failure or stall verdict.",
   "Confidence corrections made by code are visible on the affected recommendation.",
   "Failure shows its settled evidence type; preserved stage artifacts remain browsable.",
+  "An unqualified Blueprint stays viewable and exportable under RELEASE_LABELS.unqualified and is never presented as the Final Blueprint.",
+  "A criterion shows as not applicable only by its contract rule (with that rule named); the evaluator can never mark one not applicable.",
 ];

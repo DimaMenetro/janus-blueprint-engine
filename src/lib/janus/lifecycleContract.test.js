@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { PAIRS, PATTERNS, DOMAIN_ORDER, subdomainIds } from "@/lib/janus/protocolRegistry";
 import {
   LIFECYCLE_STATES, TRANSITIONS, TERMINAL_STATES, canTransition, releaseDecision, qualify, QUALITY_CRITERIA,
+  JANUS_QUALIFIED, APPLICABILITY,
   enforceConfidencePropagation, completionManifest, UI_STATES, outcomeAfterStageFailure, RETRY_POLICY,
 } from "@/lib/janus/lifecycleContract";
 
@@ -97,5 +98,31 @@ describe("qualification & release", () => {
     expect(qualify({ ...all("pass"), elegance: "fail" }).state).toBe("refinement_required");
     expect(qualify({}).state).toBe("qualifying");
     expect(releaseDecision("completed", "qualified").label).toBe("JANUS-QUALIFIED");
+  });
+
+  // ── Corrections, Daionae review 2026-10-30 ──
+  it("an unqualified Blueprint stays inspectable/exportable but is never the released Final Blueprint", () => {
+    const d = releaseDecision("completed", "limitation_reported");
+    expect(d).toMatchObject({ released: false, status: "unqualified", inspectable: true, exportable: true });
+    expect(d.label).toMatch(/not released/);
+    expect(d.label).not.toBe(JANUS_QUALIFIED);
+  });
+  it("the evaluator cannot skip a hard criterion with not_applicable", () => {
+    const q = qualify({ ...all("pass"), elegance: "not_applicable" });
+    expect(q.state).toBe("refinement_required");
+    expect(q.invalid).toEqual(["elegance"]);
+  });
+  it("any unknown verdict fails closed", () => {
+    expect(qualify({ ...all("pass"), utility: "skip" }).state).toBe("refinement_required");
+  });
+  it("only historical no-regression is conditional, and only through a named contract rule", () => {
+    const soft = QUALITY_CRITERIA.filter(c => !c.hard);
+    expect(soft.map(c => c.id)).toEqual(["historical_no_regression"]);
+    soft.forEach(c => expect(typeof APPLICABILITY[c.applies_when]).toBe("function"));
+  });
+  it("historical no-regression becomes required once a benchmark reference exists", () => {
+    const { historical_no_regression: _skip, ...thirteen } = all("pass");
+    expect(qualify(thirteen)).toMatchObject({ state: "qualified", not_applicable: ["historical_no_regression"] });
+    expect(qualify(thirteen, { benchmarkReferenceId: "ref-1" })).toMatchObject({ state: "qualifying", missing: ["historical_no_regression"] });
   });
 });
