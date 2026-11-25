@@ -55,6 +55,12 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
         </p>
       )}
 
+      {state.endedIncomplete && (
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: t.subtitle }}>
+          This run has ended and is not resumed. Stages it lacks can only be produced by a re-run, which creates a new version.
+        </p>
+      )}
+
       {(state.resumable || state.cancellable) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
           {state.resumable && <button onClick={resume} disabled={busy} style={{ ...btn(t), opacity: busy ? 0.5 : 1 }}><Play style={{ width: 14, height: 14 }} />Resume from saved stages</button>}

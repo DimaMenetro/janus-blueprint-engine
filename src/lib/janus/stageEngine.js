@@ -50,7 +50,8 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
 /**
  * Advance through `keys` in order, reading durable state before every stage.
  *  - a stage that already has a valid revision is not regenerated (unless `force`: an explicit rerun);
- *  - a stage whose newest revision is still running is unresolved: nothing is started and the drive stops;
+ *  - while ANY stage of the run has a revision still running, its call is unresolved (outcome unknown):
+ *    nothing is started over it or beside it, for a resume or a rerun, and the drive stops;
  *  - a persisted cancellation request stops scheduling at the next stage boundary.
  * Ends as { errors } | { errors, cancelled } | { errors, unresolved }.
  */
@@ -59,14 +60,10 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
   for (const stageKey of keys) {
     const view = await loadRunView(runId);
     const staged = view.storage === STORAGE_MODEL.staged;
-    if (staged && view.run.status === "cancel_requested") {
-      // The safe boundary exists only when nothing is in flight; an unresolved call keeps the run open.
-      const live = Object.values(view.stageInfo).find(i => i.latest?.status === "running");
-      return live ? { errors, unresolved: live.key } : { errors, cancelled: true };
-    }
-    const info = view.stageInfo[stageKey];
-    if (info?.latest?.status === "running") return { errors, unresolved: stageKey };
-    if (!force && info?.active) continue;
+    const live = Object.values(view.stageInfo).find(i => i.latest?.status === "running");
+    if (live) return { errors, unresolved: live.key };
+    if (staged && view.run.status === "cancel_requested") return { errors, cancelled: true };
+    if (!force && view.stageInfo[stageKey]?.active) continue;
 
     const res = await executeStage({ view, stageKey, origin, onBegan: () => onDurableChange(runId) });
     if (res.skipped) continue;

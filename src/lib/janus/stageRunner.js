@@ -75,7 +75,10 @@ export async function runStage({ prompt, parseKey, onBegan, ...stage }) {
     if (parsed.error) return await fail(classifyParseError(parsed.error), parsed.error.replace(`${parseKey}: `, ""));
     const validation = validateStageOutput(stage.stageKey, parsed.data);
     // Parsed but invalid is settled failure evidence (plan §12.2), never successful cognition.
-    if (!validation.valid) return await fail("schema_failure", `Output failed mandatory validation — ${validation.errors.join("; ")}`, { output: parsed.data, validation });
+    if (!validation.valid) {
+      const shown = validation.errors.slice(0, 5).join("; ") + (validation.errors.length > 5 ? ` (+${validation.errors.length - 5} more)` : "");
+      return await fail("schema_failure", `Output failed mandatory validation — ${shown}`, { output: parsed.data, validation });
+    }
     return { record: await settleStage(handle, { output: parsed.data, validation }) };
   } finally {
     unresolved.delete(slot);

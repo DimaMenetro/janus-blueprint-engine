@@ -5,7 +5,7 @@
  */
 import { MODE_PROFILES, PAIRS, DOMAINS, DOMAIN_ORDER } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, STAGE_KEY_ORDER, intersectionKey } from "@/lib/janus/stageModel";
-import { UI_STATES } from "@/lib/janus/lifecycleContract";
+import { UI_STATES, TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
 
 const laterDomain = (pair) => pair.domains.reduce((a, b) => (DOMAIN_ORDER.indexOf(a) > DOMAIN_ORDER.indexOf(b) ? a : b));
 
@@ -58,6 +58,7 @@ export function deriveExecutionState(view, { driving = false } = {}) {
     else if (staged && status === "running") status = "interrupted";
   }
   const label = status === "cancel_requested" && !live ? "Cancelling" : UI_STATES[status]?.label || EXTRA_LABELS[status] || status;
+  const ended = staged && TERMINAL_STATES.includes(run.status);
 
   return {
     staged, status, label, rows, live,
@@ -65,10 +66,11 @@ export function deriveExecutionState(view, { driving = false } = {}) {
     total: rows.length,
     next: live ? null : remaining[0] || null,
     failures: stageFailures(view),
-    // Ordinary resume exists only for an open (interrupted) run. Terminal runs recover through a re-run.
-    resumable: staged && !driving && !live && remaining.length > 0 && run.status === "running",
-    // Also offered for a cancellation a lost session left open, once nothing is in flight, so it can close.
-    cancellable: staged && (run.status === "running" || (run.status === "cancel_requested" && !driving && !live)),
+    // Ordinary resume exists only for an open, interrupted run. A terminal run is never resumed: what it
+    // lacks can only come from an explicit re-run, which produces a new revision.
+    resumable: staged && !ended && !driving && !live && remaining.length > 0 && run.status !== "cancel_requested",
+    endedIncomplete: ended && !driving && remaining.length > 0,
+    cancellable: staged && run.status === "running",
     unresolved: !driving && !!live,
   };
 }

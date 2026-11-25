@@ -4,6 +4,7 @@
  * No prompts, no model calls and no completion rules live here.
  */
 import { PROTOCOL, MODEL_POLICY } from "@/lib/janus/protocolRegistry";
+import { TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
 import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, INTERSECTION_KEYS } from "@/lib/janus/stageModel";
 import { base44 } from "@/api/base44Client";
 import { createRun, updateRun, loadRunView } from "@/lib/janus/stageStore";
@@ -13,7 +14,7 @@ import { REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
 
 export { REFRESH_UNAVAILABLE_MESSAGE };
 const CORE_DOMAINS = ["corpus", "cogito", "animus", "actus"];
-const OPEN_STATES = ["running", "cancel_requested"];
+const liveStages = (view) => Object.values(view.stageInfo).map(i => i.latest).filter(s => s?.status === "running");
 
 /**
  * Interim containment, mirrored by the `invokeJanusStage` function: until Phase 6 gives every stage one
@@ -61,16 +62,16 @@ export async function executeJanus(params, hooks) {
 }
 
 /**
- * Continue an OPEN staged run (interrupted before it closed) from its durable stages. Valid stages are never
- * regenerated. A terminal run (completed, failed, partial, cancelled) is never moved back to running here:
- * recovery after a terminal state is an explicit revision-producing re-run (formalized in Phase 7).
+ * Continue an OPEN staged run (interrupted before its lifecycle ended) from its durable stages. Valid stages
+ * are never regenerated. A terminal run (completed, failed, partial, cancelled) is never moved back to running
+ * here: recovery after a terminal state is an explicit revision-producing re-run (formalized in Phase 7).
  */
 export async function resumeJanus(runId, hooks) {
   const view = await loadRunView(runId);
   if (!view) throw new Error("Run not found");
   if (view.storage !== STORAGE_MODEL.staged) throw new Error("Historical runs are read-only and cannot be resumed");
   if (view.run.refresh_enabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE);
-  if (view.run.status !== "running") throw new Error(`This run is ${view.run.status}, so it is not resumed: only an open, interrupted run is. A finished run recovers through a re-run, which produces a new revision.`);
+  if (TERMINAL_STATES.includes(view.run.status)) throw new Error(`This run has ended (${view.run.status}) and is not resumed. A finished run recovers through a re-run, which produces a new revision.`);
   await assertOperator();
   const result = await advance(runId, { keys: stagePlan(view.run.execution_mode), origin: "resume" }, hooks);
   return { ...result, success: result.status === "completed" };
@@ -81,6 +82,8 @@ async function rerun(runId, target, keys, hooks) {
   if (!view) throw new Error("Run not found");
   const missing = CORE_DOMAINS.filter(d => !view.artifacts[d]);
   if (missing.length > 0) throw new Error(`Cannot re-run ${target} — missing prerequisite domains: ${missing.join(", ")}`);
+  const [live] = liveStages(view);
+  if (live) throw new Error(`Cannot re-run ${target} — a call for ${live.stage_key} has not settled and its outcome is unknown`);
   await assertOperator();
   if (view.storage === STORAGE_MODEL.staged) await updateRun(runId, { status: "running" });
   const result = await advance(runId, { keys, origin: "rerun", force: true }, hooks);
@@ -92,8 +95,6 @@ export const rerunSynthesis = (runId, hooks) => rerun(runId, "synthesis", [...IN
 /** A new Blueprint revision from the currently active stages. */
 export const rerunBlueprint = (runId, hooks) => rerun(runId, "blueprint", ["blueprint"], hooks);
 
-const liveStages = (view) => Object.values(view.stageInfo).map(i => i.latest).filter(s => s?.status === "running");
-
 /**
  * Cancel after the current stage (plan §12.4). The request is persisted; an active call is left to settle
  * and its real outcome is recorded; no further stage is scheduled. If nothing is in flight and no session
@@ -101,9 +102,8 @@ const liveStages = (view) => Object.values(view.stageInfo).map(i => i.latest).fi
  */
 export async function requestCancel(runId) {
   const view = await loadRunView(runId);
-  if (!view || view.storage !== STORAGE_MODEL.staged || !OPEN_STATES.includes(view.run.status)) return;
-  if (view.run.status === "running") await updateRun(runId, { status: "cancel_requested" });
-  // Never closed over a call that is still in flight or unresolved: the run stays cancel_requested until it settles.
+  if (!view || view.storage !== STORAGE_MODEL.staged || view.run.status !== "running") return;
+  await updateRun(runId, { status: "cancel_requested" });
   if (!driving.has(runId) && liveStages(view).length === 0) await updateRun(runId, { status: "cancelled" });
 }
 // An unresolved call (outcome never recorded) has no manual resolution: a session disappearing is not
