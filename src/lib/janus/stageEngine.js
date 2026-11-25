@@ -4,8 +4,10 @@
  * It is independent of who schedules it. Adapters (browser today, server later) choose WHICH stage keys
  * to ask for; they never build prompts, call the model or decide what counts as completed.
  */
-import { MODE_PROFILES, STAGE_ORDER } from "@/lib/janus/protocolRegistry";
-import { STORAGE_MODEL } from "@/lib/janus/stageModel";
+import { STAGE_ORDER } from "@/lib/janus/protocolRegistry";
+import { STORAGE_MODEL, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
+import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
+import { completionOf, deriveQualification } from "@/lib/janus/qualification";
 import { loadRunView, updateRun } from "@/lib/janus/stageStore";
 import { runStage } from "@/lib/janus/stageRunner";
 import { compileStage, stageInputs, requiredInputs } from "@/lib/janus/stageCompiler";
@@ -19,6 +21,7 @@ const cap = (s, max) => (s.length <= max ? s : `${s.slice(0, max)}\n\n[TRUNCATED
 
 export const configOf = (run) => ({
   queryText: run.query_text,
+  executionMode: run.execution_mode,
   outputMode: run.output_mode,
   blueprintLevel: run.blueprint_level || "L2",
   noveltyDial: run.novelty_dial || "medium",
@@ -74,27 +77,47 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
   return { errors };
 }
 
-/**
- * Close a drive: lifecycle status + derived caches, all read back from durable stages.
- * Historical Runs are never written. An unresolved drive leaves the run open.
- * Interim status rule (unchanged): Phase 5 replaces it with the completion manifest.
- */
-export async function finalizeRun(runId, outcome = {}) {
-  const view = await loadRunView(runId);
-  if (view.storage !== STORAGE_MODEL.staged || outcome.unresolved) return view;
+/** Persist what the durable stages say: lifecycle, completion manifest, qualification state, release, caches. */
+async function persistClose(view, lifecycle) {
   const { run, artifacts } = view;
-  const required = MODE_PROFILES[run.execution_mode]?.stages || STAGE_ORDER.filter(k => artifacts[k]);
-  const validation = validateJanusOutput(artifacts, required);
-  const normalized = validation.normalized || artifacts;
-  const errors = [...validation.errors, ...stageFailures(view).map(f => f.message)];
-  const cancelled = outcome.cancelled || run.status === "cancel_requested";
-  const status = cancelled ? "cancelled" : Object.keys(artifacts).length === 0 ? "failed" : "completed";
-  await updateRun(runId, {
-    status,
+  const q = deriveQualification(view, lifecycle);
+  const { mode, partial, complete, completion_label, blocking, warnings, confidence_corrections } = q.completion;
+  const { normalized } = validateJanusOutput(artifacts, STAGE_ORDER.filter(k => artifacts[k]));
+  const errors = [...blocking, ...stageFailures(view).map(f => f.message)];
+  await updateRun(run.id, {
+    status: lifecycle,
+    completion_manifest: { mode, partial, complete, completion_label, blocking, warnings, confidence_corrections },
+    qualification_state: q.state,
+    released_blueprint_stage_id: q.release.released ? q.blueprintStageId : "",
     render_md: cap(generateMarkdown(normalized, run.execution_mode), MAX_MD_LENGTH),
     raw_json: cap(JSON.stringify(normalized), MAX_RAW_JSON_LENGTH),
     validation_errors: errors,
-    ...(status === "failed" ? { error_message: errors.join("\n") } : {}),
+    ...(lifecycle === "failed" ? { error_message: errors.join("\n") } : {}),
   });
+  return q;
+}
+
+/**
+ * Close a drive (Phase 5). Everything is read back from durable stages; historical Runs are never written and
+ * an unresolved drive leaves the run open.
+ *  - Lifecycle: `completed` only when the completion manifest passes for the run's mode. Otherwise the run
+ *    ends `partial` (valid artifacts preserved) or `failed` (none). A returned process is not completion.
+ *  - Qualification: a completed run whose Blueprint has no evaluation gets ONE independent evaluation stage
+ *    through the canonical engine. Its verdicts plus the code-decided criteria settle the qualification state.
+ *  - Release: only a qualified Blueprint is recorded as released.
+ */
+export async function finalizeRun(runId, outcome = {}, { origin = "execution", onDurableChange = async () => {} } = {}) {
+  let view = await loadRunView(runId);
+  if (view.storage !== STORAGE_MODEL.staged || outcome.unresolved) return view;
+  const cancelled = outcome.cancelled || view.run.status === "cancel_requested";
+  const lifecycle = cancelled ? "cancelled"
+    : completionOf(view).complete ? "completed" : outcomeAfterStageFailure(Object.keys(view.artifacts).length);
+  const q = await persistClose(view, lifecycle);
+  if (q.needsEvaluation) {
+    await onDurableChange(runId);
+    await executeStage({ view, stageKey: QUALIFICATION_KEY, origin, onBegan: () => onDurableChange(runId) });
+    view = await loadRunView(runId);
+    await persistClose(view, lifecycle);
+  }
   return loadRunView(runId);
 }

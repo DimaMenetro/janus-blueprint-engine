@@ -4,7 +4,7 @@
  * progress. Nothing here is stored and nothing here comes from a callback or a timer.
  */
 import { MODE_PROFILES, PAIRS, DOMAINS, DOMAIN_ORDER } from "@/lib/janus/protocolRegistry";
-import { STORAGE_MODEL, STAGE_KEY_ORDER, intersectionKey } from "@/lib/janus/stageModel";
+import { STORAGE_MODEL, STAGE_KEY_ORDER, QUALIFICATION_KEY, intersectionKey } from "@/lib/janus/stageModel";
 import { UI_STATES, TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
 
 const laterDomain = (pair) => pair.domains.reduce((a, b) => (DOMAIN_ORDER.indexOf(a) > DOMAIN_ORDER.indexOf(b) ? a : b));
@@ -19,6 +19,7 @@ export function stagePlan(mode) {
 export function stageLabel(key) {
   const pair = PAIRS.find(p => intersectionKey(p.id) === key);
   if (pair) return pair.domains.map(d => DOMAINS[d].label).join(" × ");
+  if (key === QUALIFICATION_KEY) return "Quality qualification";
   return DOMAINS[key]?.label || key.charAt(0).toUpperCase() + key.slice(1);
 }
 

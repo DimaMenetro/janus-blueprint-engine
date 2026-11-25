@@ -36,9 +36,9 @@ async function advance(runId, { keys, origin, force = false }, hooks = {}) {
   try {
     if (hooks.onDurableChange) await hooks.onDurableChange(runId);
     const outcome = await driveStages({ runId, keys, origin, force, onDurableChange: hooks.onDurableChange });
-    const view = await finalizeRun(runId, outcome);
+    const view = await finalizeRun(runId, outcome, { origin, onDurableChange: hooks.onDurableChange });
     return {
-      runId, status: view.run.status, stageErrors: outcome.errors, errors: view.run.validation_errors || [],
+      runId, status: view.run.status, qualification: view.run.qualification_state || null, stageErrors: outcome.errors, errors: view.run.validation_errors || [],
       cancelled: !!outcome.cancelled || view.run.status === "cancelled", unresolved: outcome.unresolved || null,
     };
   } finally {

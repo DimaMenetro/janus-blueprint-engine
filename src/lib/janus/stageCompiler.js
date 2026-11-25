@@ -4,12 +4,13 @@
  * Protocol identity comes from the registry; data enters only through the evidence boundary.
  * Layout of every prompt: control header → stage instructions → data-plane law → data blocks → output contract.
  */
-import { DOMAINS, DOMAIN_ORDER, PAIRS, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText,
+import { DOMAINS, DOMAIN_ORDER, PAIRS, PATTERNS, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText,
   patternJsonTemplate, pairLabel, protocolLabel } from "@/lib/janus/protocolRegistry";
-import { intersectionKey, INTERSECTION_KEYS } from "@/lib/janus/stageModel";
+import { intersectionKey, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
+import { QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS } from "@/lib/janus/lifecycleContract";
 import { DATA_PLANE_LAW, PLANES, sealEvidence, renderEvidenceBlock, renderDataBlock, assertBoundaryIntegrity } from "@/lib/janus/evidenceBoundary";
 
-export const PROMPT_TEMPLATE_VERSION = "stage-compiler/2026-11-25";
+export const PROMPT_TEMPLATE_VERSION = "stage-compiler/2026-11-25.2";
 export const REFRESH_UNAVAILABLE_MESSAGE =
   "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
 
@@ -18,20 +19,23 @@ const PAIR_INPUT_LIMIT = 6000; // known cognitive-input truncation — removed i
 const truncate = (s, max) => (!s || s.length <= max ? s : `${s.slice(0, max)}\n\n[TRUNCATED — original was ${s.length} chars]`);
 const pairOf = (stageKey) => PAIRS.find(p => intersectionKey(p.id) === stageKey);
 
-// What each stage actually reads. Known gap vs CONTEXT_THREADING.blueprint: Blueprint reads the six
-// intersections, not Cogito and not the four patterns. Recorded truthfully; the cognition fix is Phase 8/9.
+// What each stage actually reads. Since Phase 5 the Blueprint also reads the Cogito claims and the four
+// patterns (CONTEXT_THREADING.blueprint): its steps must be traceable to them, and it cannot cite what it
+// never saw. The deeper Blueprint cognition (candidates, critique, refinement) remains Phase 8/9.
+const ALL_ARTIFACTS = ["refresh", "corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis"];
 const STAGE_INPUTS = {
+  [QUALIFICATION_KEY]: ["blueprint", ...ALL_ARTIFACTS],
   refresh: [],
   corpus: ["refresh"],
   cogito: ["refresh", "corpus"],
   animus: ["refresh", "corpus", "cogito"],
   actus: ["refresh", "corpus", "cogito", "animus"],
   synthesis: [...INTERSECTION_KEYS],
-  blueprint: ["refresh", "corpus", "animus", "actus", ...INTERSECTION_KEYS],
+  blueprint: ALL_ARTIFACTS,
 };
 export const stageInputs = (stageKey) => (pairOf(stageKey)?.domains || STAGE_INPUTS[stageKey]).slice();
 /** Inputs without which a stage is not compiled at all. */
-export const requiredInputs = (stageKey) => (pairOf(stageKey)?.domains || []).slice();
+export const requiredInputs = (stageKey) => (pairOf(stageKey)?.domains || (stageKey === QUALIFICATION_KEY ? ["blueprint"] : [])).slice();
 
 // ── SME identity (registry-derived) ──
 function smeIdentity(domainKey) {
@@ -108,12 +112,13 @@ function domainContext(target, inp) {
     parts.push(...constraints);
   }
   if (target === "blueprint") {
+    // Every item below is shown with the handle a step cites in derived_from.
     const pairs = PAIRS.filter(p => inp[intersectionKey(p.id)]);
     if (pairs.length) {
       parts.push("CROSS-DOMAIN SYNTHESIS INSIGHTS (The Nexus) — emergent wisdom from domain intersections, full fidelity:");
       pairs.forEach(p => {
         const data = inp[intersectionKey(p.id)];
-        parts.push(`  ▸ ${pairLabel(p)}`);
+        parts.push(`  ▸ [${p.id}] ${pairLabel(p)}`);
         if (data.insight) parts.push(`    Insight: ${data.insight}`);
         if (data.tension) parts.push(`    Tension: ${data.tension}`);
         if (data.resolution) parts.push(`    Resolution: ${data.resolution}`);
@@ -125,24 +130,33 @@ function domainContext(target, inp) {
     const sp = inp.actus?.strategic_plan;
     if (sp?.immediate_horizon) parts.push(`  Immediate Horizon: ${sp.immediate_horizon}`);
     if (sp?.long_term_horizon) parts.push(`  Long-term Horizon: ${sp.long_term_horizon}`);
-    if (inp.corpus?.constraints?.length) parts.push("CORPUS: Hard Constraints (non-negotiable)", ...numbered(inp.corpus.constraints));
+    const patterns = PATTERNS.filter(p => inp.synthesis?.[p.id]);
+    if (patterns.length) {
+      parts.push("FORMAL EMERGENT PATTERNS");
+      patterns.forEach(p => parts.push(`  ▸ [pattern:${p.id}] ${p.name}`, ...p.fields.filter(f => inp.synthesis[p.id][f]).map(f => `    ${f}: ${[].concat(inp.synthesis[p.id][f]).join(" | ")}`)));
+    }
+    if (inp.cogito?.claims?.length) parts.push("COGITO: Claims (handle = claim id)", ...claimLines(inp.cogito.claims));
+    if (inp.corpus?.constraints?.length) parts.push("CORPUS: Hard Constraints (non-negotiable)", ...inp.corpus.constraints.map((x, i) => `  corpus:${i + 1} — ${x}`));
     if (inp.animus?.ethical_stance) parts.push("ANIMUS: Ethical Stance", `  ${inp.animus.ethical_stance}`);
+    if (inp.animus?.boundary_checks?.length) parts.push("ANIMUS: Boundaries", ...inp.animus.boundary_checks.map((x, i) => `  animus:${i + 1} — ${x}`));
   }
   return parts.join("\n");
 }
 
 // ── Output contracts ──
-const CORPUS_SUBDOMAINS_JSON = subdomainIds("corpus").map((id, i) =>
-  i === 0 ? `"${id}": {"perspective": "your expert perspective as one coherent voice", "key_findings": ["specific technical findings only this expertise would produce"]}`
+// Every domain reports all of its subdomains: Full completion requires the complete set (25 across the four).
+const subdomainsJson = (domain) => subdomainIds(domain).map((id, i) =>
+  i === 0 ? `"${id}": {"perspective": "your expert perspective as one coherent voice", "key_findings": ["specific findings only this expertise would produce"]}`
           : `"${id}": {"perspective": "...", "key_findings": ["..."]}`).join(", ");
+const CORPUS_SUBDOMAINS_JSON = subdomainsJson("corpus");
 
 const DOMAIN_CONTRACTS = {
   corpus: `Output ONLY valid JSON with the "corpus" key: { "corpus": { "constraints": ["hard reality constraints from your expert assessment"], "feasibility_notes": ["practical viability notes"], "subdomains": { ${CORPUS_SUBDOMAINS_JSON} } } }`,
-  cogito: `Output ONLY valid JSON with the "cogito" key: { "cogito": { "claims": [{"id":"C1","tag":"Established","text":"your epistemic finding","depends_on":[],"why_believed":"justified basis","falsifiable_by":"what would disprove this","verify_later":"what to check"}], "reasoning_map": ["logical chain step 1", "step 2", "..."], "graphrag_connections": ["concept A ↔ concept B: relationship"], "causal_chains": [{"cause":"...","effect":"...","confidence":"Established"}], "neuro_symbolic_insights": ["insights from bridging symbolic and connectionist reasoning"] } }`,
-  animus: `Output ONLY valid JSON with the "animus" key: { "animus": { "boundary_checks": ["what the user should/should not do"], "disallowed_moves": ["explicitly forbidden approaches"], "safety_notes": ["safety considerations"], "consciousness_boundary": "where agency and autonomy limits lie", "attractor_states": ["natural equilibrium points the system tends toward"], "ethical_stance": "your integrated moral assessment", "risk_analysis": {"cognitive_sync_assessment": "how well-aligned are the goals", "self_determination_factors": ["factors affecting autonomy"], "misalignment_risks": ["where intent and outcome may diverge"]} } }`,
+  cogito: `Output ONLY valid JSON with the "cogito" key: { "cogito": { "claims": [{"id":"C1","tag":"Established","text":"your epistemic finding","depends_on":[],"why_believed":"justified basis","falsifiable_by":"what would disprove this","verify_later":"what to check"}], "reasoning_map": ["logical chain step 1", "step 2", "..."], "graphrag_connections": ["concept A ↔ concept B: relationship"], "causal_chains": [{"cause":"...","effect":"...","confidence":"Established"}], "neuro_symbolic_insights": ["insights from bridging symbolic and connectionist reasoning"], "subdomains": { ${subdomainsJson("cogito")} } } }`,
+  animus: `Output ONLY valid JSON with the "animus" key: { "animus": { "boundary_checks": ["what the user should/should not do"], "disallowed_moves": ["explicitly forbidden approaches"], "safety_notes": ["safety considerations"], "consciousness_boundary": "where agency and autonomy limits lie", "attractor_states": ["natural equilibrium points the system tends toward"], "ethical_stance": "your integrated moral assessment", "risk_analysis": {"cognitive_sync_assessment": "how well-aligned are the goals", "self_determination_factors": ["factors affecting autonomy"], "misalignment_risks": ["where intent and outcome may diverge"]}, "subdomains": { ${subdomainsJson("animus")} } } }`,
   actus: `CONFIDENCE PROPAGATION LAW (NON-NEGOTIABLE): Every recommendation MUST inherit the LOWEST confidence tag of the Cogito claims it depends on. A recommendation depending on a "Speculative" claim CANNOT be marked "Established".
 
-Output ONLY valid JSON with the "actus" key: { "actus": { "recommendations": [{"id":"R1","text":"actionable recommendation","depends_on_claims":["C1"],"inherited_confidence":"Established","probability":"high","failure_modes":["what could go wrong"],"next_actions":["immediate next step"]}], "strategic_plan": {"immediate_horizon":"next 1-4 weeks","long_term_horizon":"3-12 months","key_decision_points":["decisions that must be made"]}, "game_theory_analysis": {"game_board":"who are the players and what are the stakes","nash_equilibrium":"stable outcome if all act rationally","zero_sum_assessment":"is this zero-sum or positive-sum","coalition_dynamics":["potential alliances and conflicts"]}, "technical_summary": "lossless compression of the entire analysis into one paragraph", "behavioral_factors": {"irrational_actors":["who might act irrationally and why"],"identity_economics":"how identity shapes economic decisions here","bias_mitigations":["specific debiasing strategies"]}, "integration_contracts": ["API/interface agreements needed"], "iteration_model": {"value_stream":"how value flows through the system","adaptation_triggers":["signals that should trigger strategy change"]} } }`,
+Output ONLY valid JSON with the "actus" key: { "actus": { "recommendations": [{"id":"R1","text":"actionable recommendation","depends_on_claims":["C1"],"inherited_confidence":"Established","probability":"high","failure_modes":["what could go wrong"],"next_actions":["immediate next step"]}], "strategic_plan": {"immediate_horizon":"next 1-4 weeks","long_term_horizon":"3-12 months","key_decision_points":["decisions that must be made"]}, "game_theory_analysis": {"game_board":"who are the players and what are the stakes","nash_equilibrium":"stable outcome if all act rationally","zero_sum_assessment":"is this zero-sum or positive-sum","coalition_dynamics":["potential alliances and conflicts"]}, "technical_summary": "lossless compression of the entire analysis into one paragraph", "behavioral_factors": {"irrational_actors":["who might act irrationally and why"],"identity_economics":"how identity shapes economic decisions here","bias_mitigations":["specific debiasing strategies"]}, "integration_contracts": ["API/interface agreements needed"], "iteration_model": {"value_stream":"how value flows through the system","adaptation_triggers":["signals that should trigger strategy change"]}, "subdomains": { ${subdomainsJson("actus")} } } }`,
 };
 
 const REFRESH_ROSTER = () => {
@@ -216,24 +230,51 @@ IMPORTANT: Do NOT include an intersection_matrix field — the pre-computed pair
   }),
   blueprint: (config, inp) => {
     const { blueprintLevel: lvl, noveltyDial: nov, outputMode } = config;
+    const minAlt = Math.max(MODE_EXPECTATIONS[config.executionMode]?.min_alternatives ?? 0, nov === "high" ? 3 : 0);
     return {
       parseKey: "blueprint", title: "DOMAIN: BLUEPRINT (Executable Deliverable)",
       instructions: `You are the Janus Blueprint Module — the culmination of a multi-domain cognitive architecture.
 Your task: produce a concrete, executable plan that synthesizes ALL prior domain expertise into actionable wisdom.
 Level: ${lvl} | Novelty: ${nov} | Output Mode: ${outputMode}.
-${nov === "high" ? "alternative_approaches REQUIRED (novelty=high): list 3+ alternatives with name, pros, cons, why_not_chosen." : ""}
+${minAlt ? `alternative_approaches REQUIRED: at least ${minAlt} serious, materially different alternative${minAlt === 1 ? "" : "s"}, each with name, pros, cons, why_not_chosen.` : ""}
 
 CRITICAL DIRECTIVES:
 1. Every step must be traceable to the synthesis insights and domain constraints supplied as prior stage outputs.
 2. The blueprint must respect Animus ethical boundaries.
 3. If the physics and math check out, precedent does not matter. This protocol exists to find solutions that conventional thinking misses.
 4. Blueprints must be answers of WISDOM — highest probability paths to genuinely achieving the stated goal, even if unheard of.
-5. Complexity yields emergent behaviors. Do not oversimplify. The depth of the prior analysis IS the competitive advantage.`,
+5. Complexity yields emergent behaviors. Do not oversimplify. The depth of the prior analysis IS the competitive advantage.
+6. TRACEABILITY (checked by code): every step lists in derived_from the handles of the prior material it is built on, exactly as they appear in the prior stage outputs — claim ids, recommendation ids, corpus:<n>, animus:<n>, intersection ids shown in brackets, pattern:<id>. Never invent a handle.
+7. CONFIDENCE (checked by code): every step carries confidence — the LOWEST confidence among the claims and recommendations it rests on (Established, Contested or Speculative). Never label a step stronger than its weakest support.`,
       context: domainContext("blueprint", inp),
       untrusted: refreshEvidence(inp.refresh, "blueprint"),
-      contract: `Output ONLY valid JSON: { "blueprint": { "goal": "...", "assumptions": ["..."], ${nov === "high" ? '"alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], ' : ""}"steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[]${lvl !== "L1" ? ',"time_estimate":"...","effort_level":"medium"' : ""}${lvl === "L2" || lvl === "L3" ? ',"substeps":[{"substep":"1a","details":"..."}]' : ""}${lvl === "L3" ? ',"checklist":["..."],"acceptance_tests":["..."]' : ""}}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}] } }`,
+      contract: `Output ONLY valid JSON: { "blueprint": { "goal": "...", "assumptions": ["..."], ${minAlt ? '"alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], ' : ""}"steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[],"derived_from":["C1","corpus:1"],"confidence":"Contested"${lvl !== "L1" ? ',"time_estimate":"...","effort_level":"medium"' : ""}${lvl === "L2" || lvl === "L3" ? ',"substeps":[{"substep":"1a","details":"..."}]' : ""}${lvl === "L3" ? ',"checklist":["..."],"acceptance_tests":["..."]' : ""}}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}] } }`,
     };
   },
+};
+
+// Independent evaluation: a separate call that never sees the generator's instructions or its self-assessment.
+SPECS[QUALIFICATION_KEY] = (config, inp) => {
+  const critique = QUALITY_CRITERIA.filter(c => c.method === "critique" && criterionApplies(c));
+  const expect = MODE_EXPECTATIONS[config.executionMode] || {};
+  const matrix = Object.fromEntries(PAIRS.filter(p => inp[intersectionKey(p.id)]).map(p => [p.id, inp[intersectionKey(p.id)]]));
+  return {
+    parseKey: QUALIFICATION_KEY, title: "QUALITY QUALIFICATION — INDEPENDENT EVALUATION", untruncated: true,
+    instructions: `You are the Janus Quality Evaluator. You did NOT write the Blueprint in the data block and you owe it nothing.
+Your task is to decide whether it deserves release, by trying to find where it fails. A Blueprint that is merely well-formed, generic, safe or plausible FAILS. Do not reward length or confident wording.
+
+Judge each criterion below separately, against the Blueprint and the upstream material it was built from. For each one answer exactly "pass" or "fail" and state the specific evidence. There is no "not applicable" and no partial credit: when in doubt, fail.
+Mode: ${config.executionMode || "unspecified"} — expected at least ${expect.min_alternatives ?? 0} serious alternative(s) and ${expect.min_non_obvious_insights ?? 1} non-obvious insight(s).
+
+CRITERIA:
+${critique.map((c, i) => `${i + 1}. ${c.id} — ${c.standard}`).join("\n")}`,
+    context: JSON.stringify({
+      blueprint: inp.blueprint, corpus_constraints: inp.corpus?.constraints, cogito_claims: inp.cogito?.claims,
+      animus: inp.animus && { boundary_checks: inp.animus.boundary_checks, disallowed_moves: inp.animus.disallowed_moves, ethical_stance: inp.animus.ethical_stance },
+      actus_recommendations: inp.actus?.recommendations, intersections: matrix, synthesis: inp.synthesis,
+    }, null, 1),
+    contract: `Output ONLY valid JSON: { "${QUALIFICATION_KEY}": { "verdicts": { ${critique.map(c => `"${c.id}": {"verdict":"pass or fail","reason":"specific evidence"}`).join(", ")} }, "strongest_objection": "the best argument against releasing this Blueprint" } }`,
+  };
 };
 
 function intersectionSpec(pair, inp) {
@@ -269,7 +310,7 @@ export function compileStage({ stageKey, config, inputs = {}, evidence = [] }) {
   const sealed = sealEvidence(spec.untrusted || []);
   const blocks = [
     ...(sealed.length ? [renderEvidenceBlock(sealed, spec.untrustedLabel || "refresh_derived_evidence")] : []),
-    ...(spec.context ? [renderDataBlock(PLANES.derived, "prior_stage_outputs", truncate(spec.context, MAX_CONTEXT_LENGTH))] : []),
+    ...(spec.context ? [renderDataBlock(PLANES.derived, "prior_stage_outputs", spec.untruncated ? spec.context : truncate(spec.context, MAX_CONTEXT_LENGTH))] : []),
     renderDataBlock(PLANES.operator, "query", config.queryText),
   ];
   const prompt = [

@@ -11,7 +11,8 @@
 import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
 import { beginStage, settleStage } from "@/lib/janus/stageStore";
-import { classifyFailure, classifyParseError } from "@/lib/janus/stageModel";
+import { classifyFailure, classifyParseError, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
+import { QUALITY_CRITERIA, criterionApplies } from "@/lib/janus/lifecycleContract";
 
 const STAGE_FUNCTION = "invokeJanusStage";
 
@@ -41,6 +42,14 @@ export function parseLLMResponse(result, expectedKey) {
 }
 
 export function validateStageOutput(stageKey, output) {
+  if (stageKey === QUALIFICATION_KEY) {
+    // Every applicable critique criterion needs a verdict and its evidence. Whether the verdict counts is the contract's call.
+    const errors = QUALITY_CRITERIA.filter(c => c.method === "critique" && criterionApplies(c)).flatMap(c => {
+      const v = output?.verdicts?.[c.id];
+      return typeof v?.verdict === "string" && v.reason ? [] : [`qualification.verdicts.${c.id}: verdict and reason required`];
+    });
+    return { validator: "qualification-verdicts", valid: errors.length === 0, errors };
+  }
   if (stageKey.startsWith("intersection:")) {
     const errors = ["insight", "tension", "resolution"].filter(f => !output?.[f]).map(f => `${stageKey}.${f}: missing`);
     return { validator: "intersection-fields", valid: errors.length === 0, errors };

@@ -2,7 +2,7 @@
  * JANUS LIFECYCLE, COMPLETION & QUALITY CONTRACT — Phase 2 specification (executable).
  * Pure functions over a neutral artifact bag { refresh, corpus, cogito, animus, actus, synthesis, blueprint }.
  * Independent of the persisted Run shape so it survives the Phase 3 stage model.
- * Not yet wired into the engine — that is Phase 5 (completion + qualification against the stage model).
+ * Wired into the engine in Phase 5 through `qualification.js` (completion + qualification against the stage model).
  */
 import { MODE_PROFILES, PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, CONFIDENCE_NORMALIZATION,
   lowestConfidence, subdomainIds, DOMAIN_ORDER } from "@/lib/janus/protocolRegistry";
@@ -161,21 +161,21 @@ export function completionManifest(mode, artifacts, { refreshEnabled = false } =
 // hard: always applicable — the evaluator may only answer pass or fail (corrected 2026-10-30).
 // Applicability is decided by this contract from run context, never by the evaluator.
 export const QUALITY_CRITERIA = [
-  { id: "problem_understanding", method: "critique", hard: true },
-  { id: "cross_domain_necessity", method: "traceability", hard: true },
-  { id: "emergence", method: "traceability", hard: true },
-  { id: "non_obviousness", method: "critique", hard: true },
-  { id: "disciplined_novelty", method: "critique", hard: true },
-  { id: "elegance", method: "critique", hard: true },
-  { id: "explanatory_compression", method: "critique", hard: true },
-  { id: "evidence_discipline", method: "deterministic", hard: true },
-  { id: "feasibility_without_domestication", method: "critique", hard: true },
-  { id: "implementation_depth", method: "deterministic", hard: true },
-  { id: "adversarial_robustness", method: "critique", hard: true },
-  { id: "utility", method: "critique", hard: true },
-  { id: "intellectual_honesty", method: "traceability", hard: true },
+  { id: "problem_understanding", method: "critique", hard: true, standard: "Identifies the real problem rather than paraphrasing the query." },
+  { id: "cross_domain_necessity", method: "traceability", hard: true, standard: "The output materially depends on more than one Janus domain." },
+  { id: "emergence", method: "traceability", hard: true, standard: "Important conclusions arise from intersections or synthesis." },
+  { id: "non_obviousness", method: "critique", hard: true, standard: "Surfaces at least one substantive insight that is not obvious from the query." },
+  { id: "disciplined_novelty", method: "critique", hard: true, standard: "Differentiated where it matters, without unsupported weirdness presented as novelty." },
+  { id: "elegance", method: "critique", hard: true, standard: "Satisfies many constraints with minimal unnecessary machinery." },
+  { id: "explanatory_compression", method: "critique", hard: true, standard: "Identifies unifying principles where they exist instead of listing disconnected advice." },
+  { id: "evidence_discipline", method: "deterministic", hard: true, standard: "Confidence, falsifiability and verification requirements are preserved." },
+  { id: "feasibility_without_domestication", method: "critique", hard: true, standard: "Constraints ground the ambition but do not collapse it into the easiest conventional answer." },
+  { id: "implementation_depth", method: "deterministic", hard: true, standard: "Bridges insight to dependencies, inputs, outputs, validation, acceptance and risk." },
+  { id: "adversarial_robustness", method: "critique", hard: true, standard: "The preferred solution survives a serious attempt to defeat it; its weakest points are named." },
+  { id: "utility", method: "critique", hard: true, standard: "A competent builder or researcher would know what to do next." },
+  { id: "intellectual_honesty", method: "traceability", hard: true, standard: "Speculative or contested material stays labelled as such." },
   // Comparison needs a matched historical reference (Phase 15 benchmark suite / operator-pinned reference).
-  { id: "historical_no_regression", method: "critique", hard: false, applies_when: "benchmark_reference" },
+  { id: "historical_no_regression", method: "critique", hard: false, applies_when: "benchmark_reference", standard: "Equals or outperforms the matched historical reference." },
 ];
 /** The only applicability rules that exist. A criterion is not applicable only when its named rule says so. */
 export const APPLICABILITY = {

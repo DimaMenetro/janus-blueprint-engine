@@ -13,12 +13,15 @@ export const intersectionKey = (pairId) => `intersection:${pairId}`;
 export const INTERSECTION_KEYS = PAIRS.map(p => intersectionKey(p.id));
 /** Artifacts stored as their own stage. Synthesis is composed: six intersection stages + the patterns stage. */
 export const DOMAIN_ARTIFACT_KEYS = STAGE_ORDER.filter(k => k !== "synthesis");
-/** Canonical lineage order: refresh → domains → six intersections → synthesis → blueprint. */
+/** The independent quality evaluation of a Blueprint revision. Not a Blueprint artifact: it judges one. */
+export const QUALIFICATION_KEY = "qualification";
+/** Canonical lineage order: refresh → domains → six intersections → synthesis → blueprint → qualification. */
 export const STAGE_KEY_ORDER = [
   ...STAGE_ORDER.filter(k => k !== "synthesis" && k !== "blueprint"),
   ...INTERSECTION_KEYS,
   "synthesis",
   "blueprint",
+  QUALIFICATION_KEY,
 ];
 
 export const LEGACY_ID_PREFIX = "legacy:";
