@@ -60,7 +60,16 @@ export const RETRY_POLICY = {
   requires_settled_prior_attempt: true, // never race a live provider promise
   local_inference_deadline: null,       // elapsed time is telemetry, not failure
   heartbeat_is_failure_evidence: false,
+  halts_run: ["quota_failure"],         // every further call would fail the same way: nothing more is scheduled
 };
+/**
+ * What happens after an attempt has SETTLED with `outcome` as attempt number `attemptNumber`.
+ * Only retryable evidence is retried, and only up to the bound. Quota and platform termination never are.
+ */
+export function retryDecision(outcome, attemptNumber) {
+  if (!RETRY_POLICY.retryable.includes(outcome)) return "none";
+  return attemptNumber >= RETRY_POLICY.max_attempts_per_stage ? "exhausted" : "retry_scheduled";
+}
 /** Terminal run outcome after a stage exhausts retries: successful artifacts are preserved. */
 export const outcomeAfterStageFailure = (validStageCount) => (validStageCount > 0 ? "partial" : "failed");
 

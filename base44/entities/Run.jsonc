@@ -122,6 +122,10 @@
       "type": "string",
       "description": "Last settled durable stage key"
     },
+    "active_attempt_id": {
+      "type": "string",
+      "description": "Execution slot of a staged run: the one RunAttempt whose model call may be live; empty when none is. The server takes it atomically before a call and frees it only once that call's outcome is recorded, never because time passed."
+    },
     "qualification_state": {
       "type": "string",
       "enum": [

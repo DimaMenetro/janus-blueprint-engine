@@ -6,7 +6,7 @@
 import { PAIRS, PROTOCOL, STAGE_ORDER } from "@/lib/janus/protocolRegistry";
 
 export const STORAGE_MODEL = { legacy: "legacy_monolithic", staged: "staged_v1" };
-export const ENGINE_VERSION = `janus-engine/${PROTOCOL.version}-phase4`;
+export const ENGINE_VERSION = `janus-engine/${PROTOCOL.version}-phase6`;
 export const ORCHESTRATOR = "browser"; // transitional owner (plan §18.1); production target is server-owned
 
 export const intersectionKey = (pairId) => `intersection:${pairId}`;
@@ -34,11 +34,8 @@ export async function fingerprintInputs({ stageKey, templateVersion, dependsOn =
   return "sha256:" + [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Interim settled-failure classification (plan §12.2). Phase 6 refines it with provider evidence. */
-export function classifyFailure(err) {
-  const m = String(err?.message || err || "");
-  if (/quota|credit|insufficient|limit exceeded|\b429\b/i.test(m)) return "quota_failure";
-  if (/network|failed to fetch|ECONN|socket|timed? ?out|aborted/i.test(m)) return "transport_settled_failure";
-  return "provider_error";
-}
+// Call failures are classified where the evidence is — by the server that made the call (invokeJanusStage) —
+// and resolved in stageRunner.resolveTransport. Nothing here guesses a failure from an error's wording.
+/** The key a stage's output is returned under (a pair's id for an intersection stage). */
+export const parseKeyOf = (stageKey) => stageKey.replace("intersection:", "");
 export const classifyParseError = (message) => (/Missing key/i.test(message) ? "schema_failure" : "parse_failure");

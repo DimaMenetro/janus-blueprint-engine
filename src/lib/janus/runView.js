@@ -93,10 +93,13 @@ export function composeArtifacts(active) {
   return artifacts;
 }
 
-export function composeRunView(run, records = []) {
+export function composeRunView(run, records = [], attempts = []) {
   const storage = storageOf(run);
   const graph = deriveStageGraph([...(storage === STORAGE_MODEL.legacy ? legacyStages(run) : []), ...records]);
-  return { run, storage, artifacts: composeArtifacts(graph.active), stageInfo: graph.info, lineage: graph.lineage };
+  // Attempts per stage revision, in order — telemetry, and the evidence a lost session's call is resolved from.
+  const byStage = {};
+  [...attempts].sort((a, b) => a.attempt_number - b.attempt_number).forEach(a => { (byStage[a.stage_id] ||= []).push(a); });
+  return { run, storage, artifacts: composeArtifacts(graph.active), stageInfo: graph.info, lineage: graph.lineage, attempts: byStage };
 }
 
 /** Rerun needs from durable state: missing, failed or invalid revisions, and stale dependents. */

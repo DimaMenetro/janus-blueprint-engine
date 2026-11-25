@@ -5,7 +5,7 @@
  */
 import { MODE_PROFILES, PAIRS, DOMAINS, DOMAIN_ORDER } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, STAGE_KEY_ORDER, QUALIFICATION_KEY, intersectionKey } from "@/lib/janus/stageModel";
-import { UI_STATES, TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
+import { UI_STATES, TERMINAL_STATES, RETRY_POLICY } from "@/lib/janus/lifecycleContract";
 
 const laterDomain = (pair) => pair.domains.reduce((a, b) => (DOMAIN_ORDER.indexOf(a) > DOMAIN_ORDER.indexOf(b) ? a : b));
 
@@ -27,11 +27,16 @@ export function stageLabel(key) {
 export const stageFailures = (view) => STAGE_KEY_ORDER
   .map(k => view.stageInfo[k]?.latest)
   .filter(s => s?.status === "failed")
-  .map(s => ({ key: s.stage_key, evidence: s.error_class || "provider_error", message: s.error_message || `${s.stage_key}: failed`, superseded: !!view.stageInfo[s.stage_key].active }));
+  .map(s => ({ key: s.stage_key, evidence: s.error_class || "provider_error", message: s.error_message || `${s.stage_key}: failed`,
+    attempts: attemptsMade(view, s), superseded: !!view.stageInfo[s.stage_key].active }));
+/** Attempts that actually made (or are making) a model call for a revision — retry telemetry. */
+function attemptsMade(view, stage) {
+  return (view.attempts?.[stage?.id] || []).filter(a => a.outcome !== "not_started").length;
+}
 
 const EXTRA_LABELS = {
   interrupted: "Interrupted — no session is running this",
-  unresolved: "Unresolved call — outcome unknown, nothing further can start",
+  unresolved: "Unresolved call — outcome not known here, nothing further can start",
   idle: "Idle",
 };
 
@@ -47,7 +52,7 @@ export function deriveExecutionState(view, { driving = false } = {}) {
   const rows = keys.map(key => {
     const info = stageInfo[key];
     const state = info?.latest?.status === "running" ? "live" : info?.active ? "completed" : info?.latest?.status === "failed" ? "failed" : "pending";
-    return { key, label: stageLabel(key), state, revision: info?.active?.revision ?? null };
+    return { key, label: stageLabel(key), state, revision: info?.active?.revision ?? null, attempts: attemptsMade(view, info?.latest) };
   });
   const live = rows.find(r => r.state === "live") || null;
   const remaining = rows.filter(r => r.state === "pending" || r.state === "failed");
@@ -73,5 +78,6 @@ export function deriveExecutionState(view, { driving = false } = {}) {
     endedIncomplete: ended && !driving && remaining.length > 0,
     cancellable: staged && run.status === "running",
     unresolved: !driving && !!live,
+    maxAttempts: RETRY_POLICY.max_attempts_per_stage,
   };
 }
