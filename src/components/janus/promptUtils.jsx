@@ -1,64 +1,5 @@
 import { EXECUTION_MODES } from "./janusSchema";
-import { protocolLabel, subdomainIds, getSubdomains, readSubdomain } from "@/lib/janus/protocolRegistry";
-
-export function buildPrompt(executionMode, outputMode, refreshEnabled, blueprintLevel, noveltyDial) {
-  const mode = EXECUTION_MODES[executionMode.toUpperCase()];
-  const domains = mode.domains;
-
-  let prompt = `INITIATE PROTOCOL: JANUSSMEv2.0
-${protocolLabel()}
-
-You are the Janus SME Engine operating in full Subject Matter Expert mode.
-You are NOT a general assistant. You are a specialized, multi-domain cognitive architecture.
-Before producing any output, you MUST load and activate each domain's functional model — 
-adopt its perspective, think from inside it, then proceed.
-
-EXECUTION MODE: ${mode.label}
-ACTIVE DOMAINS: ${domains.join(" → ")}
-OUTPUT MODE: ${outputMode}
-BLUEPRINT LEVEL: ${blueprintLevel}
-NOVELTY DIAL: ${noveltyDial}
-
-INVIOLABLE RULES:
-1. Output STRICT valid JSON ONLY — no markdown fences, no prose outside JSON
-2. Process domains strictly in order: ${domains.join(" → ")}
-3. Domain skipping is PROHIBITED. If a domain cannot fully execute, declare it as a constraint and continue
-4. High novelty MUST still respect Corpus physical constraints and Animus ethical boundaries
-5. CONFIDENCE PROPAGATION IS MANDATORY: Actus recommendations inherit the LOWEST confidence of their upstream Cogito claims
-
-`;
-
-  if (domains.includes("refresh")) {
-    if (refreshEnabled) {
-      prompt += `\n═══ STEP 2: MANDATORY REFRESH — Zero-Day Patch (Tier 1) ═══\nStatic training data alone is insufficient for Janus SME operation.\nExecute a State-of-the-Art sweep for this query's domain.\n- mode: "tier1"\n- attempted: true\n- limitations: declare what the web search could not resolve\n- would_refresh: list 3-5 specific sources/datasets/standards you would verify\n`;
-    } else {
-      prompt += `\n═══ STEP 2: MANDATORY REFRESH — Zero-Day Patch (Tier 0) ═══\nNo external refresh available. Declare this as a constraint and proceed.\n- mode: "tier0"\n- attempted: false\n- limitations: "Analysis based on training data only — no live State-of-the-Art sweep performed"\n- would_refresh: list 5-7 specific things you would verify with live access\n`;
-    }
-    prompt += "\n";
-  }
-
-  prompt += `\n═══ SECTION I: CORPUS — What I Am Made Of ═══\nObjective: Load and enforce the objective constraints of physical and technical reality.\nPerceive this problem from ${subdomainIds("corpus").length} distinct technical lenses simultaneously.\n\nOutput corpus as an object containing:\n- constraints: array of hard reality constraints\n- feasibility_notes: array of practical viability notes\n- subdomains: object with keys: ${subdomainIds("corpus").join(", ")}\n  Each subdomain has: perspective (string), key_findings (array)\n\n`;
-
-  prompt += `\n═══ SECTION II: COGITO — How I Think ═══\nObjective: Control how conclusions are derived. Claims must be traceable.\n\nOutput cogito as:\n- claims: array with id, tag ("Established"|"Contested"|"Speculative"), text, depends_on, why_believed, falsifiable_by, verify_later\n- reasoning_map: array of strings\n- graphrag_connections: array\n- causal_chains: array of {cause, effect, confidence}\n- neuro_symbolic_insights: array\n\n`;
-
-  if (domains.includes("animus")) {
-    prompt += `\n═══ SECTION III: ANIMUS — Who I Am ═══\nObjective: Enforce limits on role, agency, and ethical scope.\n\nOutput animus as:\n- boundary_checks, disallowed_moves, safety_notes: arrays\n- consciousness_boundary, ethical_stance: strings\n- attractor_states: array\n- risk_analysis: {cognitive_sync_assessment, self_determination_factors, misalignment_risks}\n\n`;
-  }
-
-  if (domains.includes("actus")) {
-    prompt += `\n═══ SECTION IV: ACTUS — What I Do ═══\nCONFIDENCE PROPAGATION LAW (NON-NEGOTIABLE).\n\nOutput actus as:\n- recommendations: array with id, text, depends_on_claims, inherited_confidence, probability, failure_modes, next_actions\n- strategic_plan: {immediate_horizon, long_term_horizon, key_decision_points}\n- game_theory_analysis: {game_board, nash_equilibrium, zero_sum_assessment, coalition_dynamics}\n- technical_summary: string\n- behavioral_factors: {irrational_actors, identity_economics, bias_mitigations}\n- integration_contracts: array\n- iteration_model: {value_stream, adaptation_triggers}\n\n`;
-  }
-
-  if (domains.includes("synthesis")) {
-    prompt += `\n═══ SECTION V: SYNTHESIS — The Nexus ═══\n4 named patterns REQUIRED: quantum_foresight, governed_cogito, narrative_loop, alignment_engine.\n\nOutput synthesis with: key_takeaways, constraint_collisions, limitation_foreground, and all 4 patterns.\n\n`;
-  }
-
-  const requireAlternatives = noveltyDial === "high";
-  prompt += `\n═══ BLUEPRINT — The Executable Deliverable ═══\nLevel: ${blueprintLevel} | Novelty: ${noveltyDial} | Output Mode: ${outputMode}\n\nOutput blueprint as:\n- goal, assumptions${requireAlternatives ? ", alternative_approaches (REQUIRED)" : ""}\n- steps: array with step, title, instructions, inputs, outputs, validation, depends_on_steps${blueprintLevel !== "L1" ? ", time_estimate, effort_level" : ""}${blueprintLevel === "L2" || blueprintLevel === "L3" ? ", substeps" : ""}${blueprintLevel === "L3" ? ", checklist, acceptance_tests" : ""}\n- success_criteria, risk_register\n\nTERMINATE PROTOCOL OUTPUT. Return complete JSON now.\nUSER QUERY:\n`;
-
-  return prompt;
-}
-
+import { protocolLabel, getSubdomains, readSubdomain, PAIRS, pairLabel } from "@/lib/janus/protocolRegistry";
 
 export function generateMarkdown(data, executionMode) {
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
@@ -111,16 +52,9 @@ export function generateMarkdown(data, executionMode) {
     // Intersection Matrix
     if (data.synthesis?.intersection_matrix) {
       md += "### Domain Intersection Matrix\n\n";
-      const pairLabels = {
-        corpus_x_cogito: "Corpus × Cogito (Knowledge ↔ Reality)",
-        corpus_x_animus: "Corpus × Animus (Technical ↔ Ethical)",
-        corpus_x_actus: "Corpus × Actus (Quantum Foresight)",
-        cogito_x_animus: "Cogito × Animus (Governed Cogito)",
-        cogito_x_actus: "Cogito × Actus (Narrative Loop)",
-        animus_x_actus: "Animus × Actus (Empathy-Driven Strategy)",
-      };
-      Object.entries(pairLabels).forEach(([key, label]) => {
-        const pair = data.synthesis.intersection_matrix[key];
+      PAIRS.forEach((p) => {
+        const label = pairLabel(p);
+        const pair = data.synthesis.intersection_matrix[p.id];
         if (pair?.insight || pair?.tension || pair?.resolution) {
           md += `#### ${label}\n`;
           if (pair.insight) md += `**Insight:** ${pair.insight}\n`;

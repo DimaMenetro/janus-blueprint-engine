@@ -1,41 +1,58 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
+import { loadRunView, findOpenStagedRun } from "@/lib/janus/stageStore";
+import { deriveExecutionState } from "@/lib/janus/executionState";
 
 const ExecutionContext = createContext(null);
 
+/**
+ * Execution observer. It holds the durable view of the run being watched and nothing else:
+ * progress, current stage, failures and cancellation are all derived from stage records.
+ * The only local fact is whether this session is the one scheduling the run.
+ */
 export function ExecutionProvider({ children }) {
-  const [execution, setExecution] = useState(null);
-  // execution shape: { status, currentDomain, completed, total, queryText, runId }
+  const [view, setView] = useState(null);
+  const [drivingId, setDrivingId] = useState(null);
 
-  const startExecution = useCallback((queryText) => {
-    setExecution({ status: "running", currentDomain: "", completed: 0, total: 0, queryText, runId: null });
+  const observe = useCallback(async (runId) => {
+    const next = await loadRunView(runId);
+    setView(next);
+    return next;
   }, []);
 
-  const updateProgress = useCallback(({ domain, status, completedDomains, totalDomains, runId }) => {
-    setExecution(prev => prev ? {
-      ...prev,
-      status: status || prev.status,
-      currentDomain: domain ?? prev.currentDomain,
-      completed: completedDomains ?? prev.completed,
-      total: totalDomains ?? prev.total,
-      runId: runId ?? prev.runId,
-    } : prev);
+  // Run an engine action. Every durable change it reports is re-read from storage before it is shown.
+  const drive = useCallback(async (action) => {
+    let runId = null;
+    const onDurableChange = async (id) => {
+      if (runId !== id) { runId = id; setDrivingId(id); }
+      await observe(id);
+    };
+    try {
+      return await action({ onDurableChange });
+    } finally {
+      setDrivingId(null);
+      if (runId) await observe(runId);
+    }
+  }, [observe]);
+
+  const dismiss = useCallback(() => setView(null), []);
+
+  // After a reload: find work that was in progress and reconstruct it from durable state.
+  useEffect(() => {
+    findOpenStagedRun().then(async (run) => {
+      if (!run) return;
+      const open = await loadRunView(run.id);
+      setView(prev => prev || open);
+    });
   }, []);
 
-  const finishExecution = useCallback((runId) => {
-    setExecution(prev => prev ? { ...prev, status: "completed", runId } : null);
-    // Auto-clear after a brief moment so user sees the completed state
-    setTimeout(() => setExecution(null), 3000);
-  }, []);
-
-  const failExecution = useCallback(() => {
-    setExecution(prev => prev ? { ...prev, status: "failed" } : null);
-    setTimeout(() => setExecution(null), 5000);
-  }, []);
-
-  const clearExecution = useCallback(() => setExecution(null), []);
+  const execution = useMemo(() => {
+    if (!view) return null;
+    const driving = drivingId === view.run.id;
+    return { view, runId: view.run.id, driving, state: deriveExecutionState(view, { driving }) };
+  }, [view, drivingId]);
 
   return (
-    <ExecutionContext.Provider value={{ execution, startExecution, updateProgress, finishExecution, failExecution, clearExecution }}>
+    <ExecutionContext.Provider value={{ execution, observe, drive, dismiss, busy: !!drivingId }}>
       {children}
     </ExecutionContext.Provider>
   );

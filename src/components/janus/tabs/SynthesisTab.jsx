@@ -1,13 +1,11 @@
 import { Layers, AlertTriangle, Info, Atom, Scale, MessageSquare, Crosshair, GitBranch } from "lucide-react";
+import { PAIRS, DOMAINS } from "@/lib/janus/protocolRegistry";
 
-const INTERSECTION_CONFIG = {
-  corpus_x_cogito: { label: "Corpus × Cogito", subtitle: "Knowledge ↔ Reality Validation", color: "indigo" },
-  corpus_x_animus: { label: "Corpus × Animus", subtitle: "Technical ↔ Ethical Boundary", color: "rose" },
-  corpus_x_actus: { label: "Corpus × Actus", subtitle: "Quantum Foresight Origin", color: "violet" },
-  cogito_x_animus: { label: "Cogito × Animus", subtitle: "Governed Cogito Origin", color: "emerald" },
-  cogito_x_actus: { label: "Cogito × Actus", subtitle: "Narrative Loop Origin", color: "blue" },
-  animus_x_actus: { label: "Animus × Actus", subtitle: "Empathy-Driven Strategy Origin", color: "amber" },
-};
+// Pair identity comes from the canonical registry; only the colors are local.
+const PAIR_COLORS = ["indigo", "rose", "violet", "emerald", "blue", "amber"];
+const INTERSECTION_CONFIG = Object.fromEntries(PAIRS.map((p, i) => [p.id, {
+  label: p.domains.map(d => DOMAINS[d].label).join(" × "), subtitle: p.resolution_label, color: PAIR_COLORS[i],
+}]));
 
 const intersectionColorMap = {
   indigo: { card: "bg-indigo-50/[0.15] dark:bg-indigo-900/[0.10] border-indigo-300/60 dark:border-indigo-500/35", text: "text-indigo-700 dark:text-indigo-300", label: "text-indigo-800 dark:text-indigo-200" },

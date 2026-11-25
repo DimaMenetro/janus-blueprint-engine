@@ -1,11 +1,5 @@
-import { PAIRS, DOMAINS } from "@/lib/janus/protocolRegistry";
-import { intersectionKey, revisionLabel } from "@/lib/janus/stageModel";
-
-const stageLabel = (key) => {
-  const pair = PAIRS.find(p => intersectionKey(p.id) === key);
-  if (pair) return pair.domains.map(d => DOMAINS[d].label).join(" × ");
-  return DOMAINS[key]?.label || key.charAt(0).toUpperCase() + key.slice(1);
-};
+import { revisionLabel } from "@/lib/janus/stageModel";
+import { stageLabel } from "@/lib/janus/executionState";
 
 function Chip({ children, bg, border, color }) {
   return (

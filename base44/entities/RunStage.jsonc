@@ -22,6 +22,12 @@
         "failed",
         "cancelled"
       ],
+      "enumColors": [
+        "blue",
+        "green",
+        "red",
+        "gray"
+      ],
       "default": "running",
       "description": "Settled outcome of this revision. Active/superseded and stale are derived from lineage, never stored."
     },
@@ -71,13 +77,49 @@
       "properties": {
         "origin": {
           "type": "string",
-          "description": "execution | rerun"
+          "description": "execution | resume | rerun"
         },
         "orchestrator": {
           "type": "string"
         },
         "model_policy": {
           "type": "string"
+        },
+        "sources": {
+          "type": "array",
+          "description": "Untrusted evidence records that entered this stage's prompt through the data-plane boundary (metadata only)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "origin": {
+                "type": "string"
+              },
+              "published_at": {
+                "type": "string"
+              },
+              "retrieved_at": {
+                "type": "string"
+              },
+              "quality": {
+                "type": "string"
+              },
+              "subdomains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
         }
       }
     },

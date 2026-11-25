@@ -1,0 +1,290 @@
+/**
+ * JANUS CANONICAL STAGE COMPILER — Phase 4 (pure, no I/O).
+ * The only place a Janus stage prompt is built. Ordinary runs, resumes and reruns all compile here.
+ * Protocol identity comes from the registry; data enters only through the evidence boundary.
+ * Layout of every prompt: control header → stage instructions → data-plane law → data blocks → output contract.
+ */
+import { DOMAINS, DOMAIN_ORDER, PAIRS, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText,
+  patternJsonTemplate, pairLabel, protocolLabel } from "@/lib/janus/protocolRegistry";
+import { intersectionKey, INTERSECTION_KEYS } from "@/lib/janus/stageModel";
+import { DATA_PLANE_LAW, PLANES, sealEvidence, renderEvidenceBlock, renderDataBlock, assertBoundaryIntegrity } from "@/lib/janus/evidenceBoundary";
+
+export const PROMPT_TEMPLATE_VERSION = "stage-compiler/2026-11-25";
+export const REFRESH_UNAVAILABLE_MESSAGE =
+  "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
+
+const MAX_CONTEXT_LENGTH = 20000;
+const PAIR_INPUT_LIMIT = 6000; // known cognitive-input truncation — removed in Phase 8
+const truncate = (s, max) => (!s || s.length <= max ? s : `${s.slice(0, max)}\n\n[TRUNCATED — original was ${s.length} chars]`);
+const pairOf = (stageKey) => PAIRS.find(p => intersectionKey(p.id) === stageKey);
+
+// What each stage actually reads. Known gap vs CONTEXT_THREADING.blueprint: Blueprint reads the six
+// intersections, not Cogito and not the four patterns. Recorded truthfully; the cognition fix is Phase 8/9.
+const STAGE_INPUTS = {
+  refresh: [],
+  corpus: ["refresh"],
+  cogito: ["refresh", "corpus"],
+  animus: ["refresh", "corpus", "cogito"],
+  actus: ["refresh", "corpus", "cogito", "animus"],
+  synthesis: [...INTERSECTION_KEYS],
+  blueprint: ["refresh", "corpus", "animus", "actus", ...INTERSECTION_KEYS],
+};
+export const stageInputs = (stageKey) => (pairOf(stageKey)?.domains || STAGE_INPUTS[stageKey]).slice();
+/** Inputs without which a stage is not compiled at all. */
+export const requiredInputs = (stageKey) => (pairOf(stageKey)?.domains || []).slice();
+
+// ── SME identity (registry-derived) ──
+function smeIdentity(domainKey) {
+  const domain = DOMAINS[domainKey];
+  const details = domain.subdomains.map((s, i) => `  ${i + 1}. ${s.name}
+     Objective: ${s.objective}
+${s.core_principles.map(p => `    • ${p}`).join("\n")}
+     When Active: ${s.functional_model}`).join("\n\n");
+  return `═══ DOMAIN ACTIVATION: ${domain.label.toUpperCase()} — ${domain.title.toUpperCase()} (Section ${domain.section}) — ${protocolLabel()} ═══
+
+You are consulting a Subject Matter Expert whose unified wisdom spans ${domain.subdomains.length} subdomains: ${domain.subdomains.map(s => s.name).join(", ")}.
+
+Core Insight: "${domain.core_insight}"
+Objective: ${domain.objective}
+
+This expert draws from ALL of the following subdomain expertise SIMULTANEOUSLY — they do not think in silos. Each subdomain informs and enriches the others:
+
+${details}
+
+GUARDRAILS (constraints to keep in mind, NOT your identity):
+${domain.guardrails.map(g => `  • ${g}`).join("\n")}
+
+CRITICAL INSTRUCTION: You must think FROM INSIDE this expertise. Do not produce generic observations. Every finding must reflect the depth of a genuine expert who has spent decades across these disciplines. Draw connections between your subdomains — that is where the deepest insights live.`;
+}
+
+// ── Refresh-derived material is untrusted: it originates outside Janus ──
+function refreshEvidence(refresh, target) {
+  const updates = refresh?.subdomain_updates;
+  if (!updates) return [];
+  const records = refreshKeysFor(target)
+    .filter(k => updates[k] && updates[k] !== "no significant update found")
+    .map(k => ({ kind: "refresh_update", subdomains: [k], text: updates[k] }));
+  (refresh.key_developments || []).forEach(d => records.push({ kind: "refresh_key_development", text: d }));
+  return records;
+}
+
+// ── Derived context from earlier stages ──
+const numbered = (items) => items.map((x, i) => `  ${i + 1}. ${x}`);
+const claimLines = (claims) => claims.map(c => `  ${c.id} [${c.tag}]: ${c.text}`);
+
+function domainContext(target, inp) {
+  const parts = [];
+  const constraints = inp.corpus?.constraints?.length ? ["CORPUS CONSTRAINTS", ...numbered(inp.corpus.constraints)] : [];
+
+  if (target === "cogito" && inp.corpus) {
+    const c = inp.corpus;
+    parts.push("PRIOR DOMAIN CONTEXT: CORPUS (What I Am Made Of)");
+    if (c.constraints?.length) parts.push("Hard Constraints:", ...numbered(c.constraints));
+    if (c.feasibility_notes?.length) parts.push("Feasibility Notes:", ...c.feasibility_notes.map(x => `  • ${x}`));
+    if (c.subdomains) {
+      parts.push("Subdomain Expert Perspectives:");
+      Object.entries(c.subdomains).forEach(([key, sub]) => {
+        if (sub?.perspective) parts.push(`  ${key}: ${sub.perspective}`);
+        (sub?.key_findings || []).forEach(f => parts.push(`    → ${f}`));
+      });
+    }
+  }
+  if (target === "animus") {
+    parts.push(...constraints);
+    if (inp.cogito) {
+      parts.push("COGITO CLAIMS (for ethical review)", ...claimLines(inp.cogito.claims || []));
+      if (inp.cogito.causal_chains?.length) parts.push("Causal Chains:", ...inp.cogito.causal_chains.map(cc => `  ${cc.cause} → ${cc.effect} [${cc.confidence}]`));
+    }
+  }
+  if (target === "actus") {
+    if (inp.cogito?.claims?.length) parts.push("COGITO CLAIMS (for confidence propagation)", ...claimLines(inp.cogito.claims));
+    if (inp.animus) {
+      const a = inp.animus;
+      parts.push("ANIMUS BOUNDARIES");
+      if (a.ethical_stance) parts.push(`  Ethical Stance: ${a.ethical_stance}`);
+      (a.boundary_checks || []).forEach(b => parts.push(`  Boundary: ${b}`));
+      (a.disallowed_moves || []).forEach(d => parts.push(`  DISALLOWED: ${d}`));
+    }
+    parts.push(...constraints);
+  }
+  if (target === "blueprint") {
+    const pairs = PAIRS.filter(p => inp[intersectionKey(p.id)]);
+    if (pairs.length) {
+      parts.push("CROSS-DOMAIN SYNTHESIS INSIGHTS (The Nexus) — emergent wisdom from domain intersections, full fidelity:");
+      pairs.forEach(p => {
+        const data = inp[intersectionKey(p.id)];
+        parts.push(`  ▸ ${pairLabel(p)}`);
+        if (data.insight) parts.push(`    Insight: ${data.insight}`);
+        if (data.tension) parts.push(`    Tension: ${data.tension}`);
+        if (data.resolution) parts.push(`    Resolution: ${data.resolution}`);
+      });
+    }
+    if (inp.actus?.recommendations?.length) {
+      parts.push("ACTUS: Key Recommendations (confidence-propagated)", ...inp.actus.recommendations.map(r => `  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`));
+    }
+    const sp = inp.actus?.strategic_plan;
+    if (sp?.immediate_horizon) parts.push(`  Immediate Horizon: ${sp.immediate_horizon}`);
+    if (sp?.long_term_horizon) parts.push(`  Long-term Horizon: ${sp.long_term_horizon}`);
+    if (inp.corpus?.constraints?.length) parts.push("CORPUS: Hard Constraints (non-negotiable)", ...numbered(inp.corpus.constraints));
+    if (inp.animus?.ethical_stance) parts.push("ANIMUS: Ethical Stance", `  ${inp.animus.ethical_stance}`);
+  }
+  return parts.join("\n");
+}
+
+// ── Output contracts ──
+const CORPUS_SUBDOMAINS_JSON = subdomainIds("corpus").map((id, i) =>
+  i === 0 ? `"${id}": {"perspective": "your expert perspective as one coherent voice", "key_findings": ["specific technical findings only this expertise would produce"]}`
+          : `"${id}": {"perspective": "...", "key_findings": ["..."]}`).join(", ");
+
+const DOMAIN_CONTRACTS = {
+  corpus: `Output ONLY valid JSON with the "corpus" key: { "corpus": { "constraints": ["hard reality constraints from your expert assessment"], "feasibility_notes": ["practical viability notes"], "subdomains": { ${CORPUS_SUBDOMAINS_JSON} } } }`,
+  cogito: `Output ONLY valid JSON with the "cogito" key: { "cogito": { "claims": [{"id":"C1","tag":"Established","text":"your epistemic finding","depends_on":[],"why_believed":"justified basis","falsifiable_by":"what would disprove this","verify_later":"what to check"}], "reasoning_map": ["logical chain step 1", "step 2", "..."], "graphrag_connections": ["concept A ↔ concept B: relationship"], "causal_chains": [{"cause":"...","effect":"...","confidence":"Established"}], "neuro_symbolic_insights": ["insights from bridging symbolic and connectionist reasoning"] } }`,
+  animus: `Output ONLY valid JSON with the "animus" key: { "animus": { "boundary_checks": ["what the user should/should not do"], "disallowed_moves": ["explicitly forbidden approaches"], "safety_notes": ["safety considerations"], "consciousness_boundary": "where agency and autonomy limits lie", "attractor_states": ["natural equilibrium points the system tends toward"], "ethical_stance": "your integrated moral assessment", "risk_analysis": {"cognitive_sync_assessment": "how well-aligned are the goals", "self_determination_factors": ["factors affecting autonomy"], "misalignment_risks": ["where intent and outcome may diverge"]} } }`,
+  actus: `CONFIDENCE PROPAGATION LAW (NON-NEGOTIABLE): Every recommendation MUST inherit the LOWEST confidence tag of the Cogito claims it depends on. A recommendation depending on a "Speculative" claim CANNOT be marked "Established".
+
+Output ONLY valid JSON with the "actus" key: { "actus": { "recommendations": [{"id":"R1","text":"actionable recommendation","depends_on_claims":["C1"],"inherited_confidence":"Established","probability":"high","failure_modes":["what could go wrong"],"next_actions":["immediate next step"]}], "strategic_plan": {"immediate_horizon":"next 1-4 weeks","long_term_horizon":"3-12 months","key_decision_points":["decisions that must be made"]}, "game_theory_analysis": {"game_board":"who are the players and what are the stakes","nash_equilibrium":"stable outcome if all act rationally","zero_sum_assessment":"is this zero-sum or positive-sum","coalition_dynamics":["potential alliances and conflicts"]}, "technical_summary": "lossless compression of the entire analysis into one paragraph", "behavioral_factors": {"irrational_actors":["who might act irrationally and why"],"identity_economics":"how identity shapes economic decisions here","bias_mitigations":["specific debiasing strategies"]}, "integration_contracts": ["API/interface agreements needed"], "iteration_model": {"value_stream":"how value flows through the system","adaptation_triggers":["signals that should trigger strategy change"]} } }`,
+};
+
+const REFRESH_ROSTER = () => {
+  let n = 0;
+  return DOMAIN_ORDER.map(d => `${DOMAINS[d].label.toUpperCase()} SUBDOMAINS (${DOMAINS[d].subdomains.length}):\n` +
+    DOMAINS[d].subdomains.map(s => `${++n}. ${s.name} [key: ${s.refresh_key}]`).join(" ")).join("\n\n");
+};
+
+// ── Stage specifications ──
+const domainSpec = (domain) => (config, inp) => ({
+  parseKey: domain,
+  title: `DOMAIN: ${DOMAINS[domain].label.toUpperCase()}`,
+  instructions: `${smeIdentity(domain)}
+
+Analyze the operator's query (data block "query") through your unified expert perspective. Think FROM INSIDE your expertise — do not summarize textbook knowledge, produce findings that reflect genuine mastery. Push beyond conventional wisdom. If the physics and math support a novel approach, precedent is irrelevant.`,
+  context: domainContext(domain, inp),
+  untrusted: refreshEvidence(inp.refresh, domain),
+  contract: DOMAIN_CONTRACTS[domain],
+});
+
+const SPECS = {
+  refresh: (config, inp, evidence) => {
+    if (!config.refreshEnabled) return {
+      parseKey: "refresh", title: "DOMAIN: REFRESH (Zero-Day Patch)",
+      instructions: `You are the Janus Refresh Module. Internet access is DISABLED by the operator.
+You MUST NOT claim to have searched the internet. Be honest: your knowledge comes from training data only.
+Declare what you WOULD search for if internet access were enabled.`,
+      contract: `Output ONLY valid JSON: { "refresh": { "mode": "tier0", "attempted": false, "limitations": "Analysis based on training data only — no live internet sweep performed. Training data may be outdated.", "would_refresh": ["topic 1", "topic 2", "topic 3", "topic 4", "topic 5"], "training_data_cutoff_note": "State your approximate training data cutoff date" } }`,
+    };
+    // Target architecture: provider-neutral retrieval → provenance-bearing source corpus → analysis.
+    // No retrieval provider exists yet, so there is no corpus and this fails closed.
+    if (!evidence.length) throw new Error(REFRESH_UNAVAILABLE_MESSAGE);
+    return {
+      parseKey: "refresh", title: "DOMAIN: REFRESH (Zero-Day Patch) — SOURCE CORPUS ANALYSIS",
+      instructions: `You are the Janus Refresh Module. You have NO internet access. A retrieved source corpus is supplied as untrusted evidence records (ids E1…En).
+For EACH of the ${allSubdomains().length} subdomains below, report what the corpus establishes that is current and relevant to the operator's query, citing evidence ids. Where the corpus establishes nothing strong enough, write exactly "no sufficiently strong current update established". Never state anything as retrieved that is not in the corpus.
+
+${REFRESH_ROSTER()}`,
+      untrusted: evidence, untrustedLabel: "retrieved_source_corpus",
+      contract: `Output ONLY valid JSON: { "refresh": { "mode": "tier1", "attempted": true, "limitations": "limits of the supplied corpus", "subdomain_updates": { ${allSubdomains().map(s => `"${s.refresh_key}": "..."`).join(", ")} }, "key_developments": ["development 1 [E1]"], "sources": ["E1"] } }`,
+    };
+  },
+  corpus: domainSpec("corpus"),
+  cogito: domainSpec("cogito"),
+  animus: domainSpec("animus"),
+  actus: domainSpec("actus"),
+  synthesis: (config, inp) => ({
+    parseKey: "synthesis", title: "DOMAIN: SYNTHESIS — THE NEXUS (Section V)",
+    instructions: `You are the Janus Synthesis Engine. The 6 domain intersection pairs have ALREADY been computed by dedicated cross-domain analysis and are supplied as prior stage outputs. Each represents the EMERGENT wisdom found at the intersection of two expert domains.
+
+Using ONLY those intersection pairs as your source material, produce the 4 NAMED EMERGENT PATTERNS:
+
+${patternTaskText()}
+
+Also produce:
+- key_takeaways: The 3-5 most groundbreaking cross-domain insights from ALL 6 intersections combined
+- constraint_collisions: Where intersection findings genuinely CONFLICT with each other
+- limitation_foreground: The single most significant limitation of this entire analysis
+
+CRITICAL: Every named pattern must produce EMERGENT insight — wisdom that transcends any single intersection pair. If it could come from one pair alone, it fails. Push past convention — novel problems require novel solutions.`,
+    context: PAIRS.map(p => {
+      const v = inp[intersectionKey(p.id)] || {};
+      return `${p.id.toUpperCase()} — ${p.resolution_label}\nInsight: ${v.insight || "(not computed)"}\nTension: ${v.tension || "(not computed)"}\nResolution: ${v.resolution || "(not computed)"}`;
+    }).join("\n\n"),
+    contract: `Output ONLY valid JSON: { "synthesis": {
+  "key_takeaways": ["..."], "constraint_collisions": ["..."], "limitation_foreground": "...",
+${patternJsonTemplate()}
+} }
+
+IMPORTANT: Do NOT include an intersection_matrix field — the pre-computed pairs are already stored separately.`,
+  }),
+  blueprint: (config, inp) => {
+    const { blueprintLevel: lvl, noveltyDial: nov, outputMode } = config;
+    return {
+      parseKey: "blueprint", title: "DOMAIN: BLUEPRINT (Executable Deliverable)",
+      instructions: `You are the Janus Blueprint Module — the culmination of a multi-domain cognitive architecture.
+Your task: produce a concrete, executable plan that synthesizes ALL prior domain expertise into actionable wisdom.
+Level: ${lvl} | Novelty: ${nov} | Output Mode: ${outputMode}.
+${nov === "high" ? "alternative_approaches REQUIRED (novelty=high): list 3+ alternatives with name, pros, cons, why_not_chosen." : ""}
+
+CRITICAL DIRECTIVES:
+1. Every step must be traceable to the synthesis insights and domain constraints supplied as prior stage outputs.
+2. The blueprint must respect Animus ethical boundaries.
+3. If the physics and math check out, precedent does not matter. This protocol exists to find solutions that conventional thinking misses.
+4. Blueprints must be answers of WISDOM — highest probability paths to genuinely achieving the stated goal, even if unheard of.
+5. Complexity yields emergent behaviors. Do not oversimplify. The depth of the prior analysis IS the competitive advantage.`,
+      context: domainContext("blueprint", inp),
+      untrusted: refreshEvidence(inp.refresh, "blueprint"),
+      contract: `Output ONLY valid JSON: { "blueprint": { "goal": "...", "assumptions": ["..."], ${nov === "high" ? '"alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], ' : ""}"steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[]${lvl !== "L1" ? ',"time_estimate":"...","effort_level":"medium"' : ""}${lvl === "L2" || lvl === "L3" ? ',"substeps":[{"substep":"1a","details":"..."}]' : ""}${lvl === "L3" ? ',"checklist":["..."],"acceptance_tests":["..."]' : ""}}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}] } }`,
+    };
+  },
+};
+
+function intersectionSpec(pair, inp) {
+  const [a, b] = pair.domains;
+  const side = (tag, d) => `DOMAIN ${tag}: ${DOMAINS[d].title} (Section ${DOMAINS[d].section})\nExpert Output:\n${JSON.stringify(inp[d]).slice(0, PAIR_INPUT_LIMIT)}`;
+  return {
+    parseKey: pair.id, title: "CROSS-DOMAIN SYNTHESIS",
+    instructions: `You are the Janus Synthesis Engine performing a SINGLE intersection analysis.
+Your task: find what EMERGES at the intersection of two expert domains that NEITHER domain alone could produce.
+
+═══ INTERSECTION: ${pair.resolution_label} ═══
+${pair.description}
+Mechanism: ${pair.mechanism}
+Domain A — ${DOMAINS[a].title}: "${DOMAINS[a].core_insight}"
+Domain B — ${DOMAINS[b].title}: "${DOMAINS[b].core_insight}"
+
+CRITICAL INSTRUCTION: The insight you produce MUST be EMERGENT — something that could NOT have come from either domain alone. You are looking for the spark that happens when these two forms of expertise collide. Think like a polymath who sees what specialists miss.
+
+If the physics and math check out, precedent doesn't matter. Novel problems require novel solutions. Push past conventional thinking — if there's a non-obvious path that has higher probability of achieving the goal, NAME IT even if it's unheard of.`,
+    context: `${side("A", a)}\n\n${side("B", b)}`,
+    contract: `Output ONLY valid JSON: { "${pair.id}": { "insight": "the emergent wisdom that lives at this intersection", "tension": "where these two domains pull in different directions", "resolution": "how the tension resolves into something greater than either domain" } }`,
+  };
+}
+
+/**
+ * Compile one stage. `inputs` maps stage key → settled output; `evidence` is untrusted source records.
+ * Returns the prompt plus everything the executor records as provenance.
+ */
+export function compileStage({ stageKey, config, inputs = {}, evidence = [] }) {
+  const pair = pairOf(stageKey);
+  if (!pair && !SPECS[stageKey]) throw new Error(`Unknown stage key: ${stageKey}`);
+  const spec = pair ? intersectionSpec(pair, inputs) : SPECS[stageKey](config, inputs, evidence);
+  const sealed = sealEvidence(spec.untrusted || []);
+  const blocks = [
+    ...(sealed.length ? [renderEvidenceBlock(sealed, spec.untrustedLabel || "refresh_derived_evidence")] : []),
+    ...(spec.context ? [renderDataBlock(PLANES.derived, "prior_stage_outputs", truncate(spec.context, MAX_CONTEXT_LENGTH))] : []),
+    renderDataBlock(PLANES.operator, "query", config.queryText),
+  ];
+  const prompt = [
+    `INITIATE PROTOCOL: JANUSSMEv2.0 — ${spec.title}`,
+    `STAGE KEY: ${stageKey}`,
+    spec.instructions,
+    DATA_PLANE_LAW,
+    ...blocks,
+    spec.contract,
+    "No markdown fences, no prose outside JSON. Execute the stage defined above against the data blocks now.",
+  ].join("\n\n");
+  assertBoundaryIntegrity(prompt, blocks.length);
+  return {
+    stageKey, parseKey: spec.parseKey, prompt, templateVersion: PROMPT_TEMPLATE_VERSION,
+    inputKeys: stageInputs(stageKey),
+    sources: sealed.map(({ text: _text, ...meta }) => meta),
+  };
+}

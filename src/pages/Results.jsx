@@ -10,13 +10,20 @@ import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import GlassResultTabs from "@/components/janus/GlassResultTabs";
 import RerunControls from "@/components/janus/RerunControls";
 import StageLineagePanel from "@/components/janus/StageLineagePanel";
+import ExecutionStatePanel from "@/components/janus/ExecutionStatePanel";
+import { useExecution } from "@/components/janus/ExecutionContext";
 import { loadRunView } from "@/lib/janus/stageStore";
+import { deriveExecutionState } from "@/lib/janus/executionState";
 
 export default function Results() {
   const navigate = useNavigate();
   const { isDark } = useTheme();
   const t = isDark ? dark : light;
-  const [view, setView] = useState(null); // durable run view: stage revisions, or the legacy adapter
+  const [loaded, setView] = useState(null); // durable run view: stage revisions, or the legacy adapter
+  const { execution } = useExecution();
+  // While this run is being watched, the observer's durable view is the freshest read of the same records.
+  const watching = !!loaded && execution?.runId === loaded.run.id;
+  const view = watching ? execution.view : loaded;
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -61,6 +68,8 @@ export default function Results() {
 
   const { run } = view;
   const mode = EXECUTION_MODES[run.execution_mode?.toUpperCase()] || EXECUTION_MODES.STANDARD;
+  const state = deriveExecutionState(view, { driving: watching && execution.driving });
+  const reload = async () => setView(await loadRunView(run.id));
   const hasFailed = run.status === "failed";
   // Settled artifacts stay browsable after a failure — one failed stage never hides prior stages.
   const hasArtifacts = Object.keys(view.artifacts).length > 0;
@@ -88,7 +97,7 @@ export default function Results() {
           <ArrowLeft style={{ width: 14, height: 14 }} />
           History
         </motion.button>
-        <StatusPill status={run.status} />
+        <StatusPill status={state.status} />
       </motion.div>
 
       {/* Query summary card */}
@@ -156,13 +165,11 @@ export default function Results() {
         </motion.div>
       )}
 
+      {/* Durable execution state + operator controls */}
+      <ExecutionStatePanel state={state} runId={run.id} t={t} onChanged={reload} />
+
       {/* Domain re-run controls — show when synthesis or blueprint missing/errored */}
-      <RerunControls
-        view={view}
-        t={t}
-        isDark={isDark}
-        onRerunComplete={async () => setView(await loadRunView(run.id))}
-      />
+      <RerunControls view={view} t={t} isDark={isDark} onRerunComplete={reload} />
 
       {/* Durable stage lineage */}
       <StageLineagePanel view={view} t={t} />

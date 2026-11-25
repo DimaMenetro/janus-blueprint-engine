@@ -1,11 +1,11 @@
 /**
- * JANUS STAGE STORE — durable RunStage / RunAttempt persistence (Phase 3).
+ * JANUS STAGE STORE — durable Run / RunStage / RunAttempt persistence (Phase 3, extended in Phase 4).
  * A stage revision is created when its attempt starts and settled exactly once; it is never rewritten after.
- * Reads compose through runView, so the frontend and both engines share one durable truth.
+ * Reads compose through runView, so the frontend and the engine share one durable truth.
  */
 import { base44 } from "@/api/base44Client";
 import { PROTOCOL, MODEL_POLICY } from "@/lib/janus/protocolRegistry";
-import { ENGINE_VERSION, ORCHESTRATOR, fingerprintInputs } from "@/lib/janus/stageModel";
+import { ENGINE_VERSION, ORCHESTRATOR, STORAGE_MODEL, fingerprintInputs } from "@/lib/janus/stageModel";
 import { composeRunView } from "@/lib/janus/runView";
 
 const STAGE_LIMIT = 1000;
@@ -18,13 +18,23 @@ export async function loadRunView(runId) {
   return composeRunView(run, stages);
 }
 
-export async function beginStage({ runId, stageKey, revision, dependsOn, templateVersion, prompt, origin }) {
+export const createRun = (data) => base44.entities.Run.create(data);
+export const updateRun = (runId, patch) => base44.entities.Run.update(runId, patch);
+
+/** The newest staged run that is still open — how a reloaded session finds work in progress. */
+export async function findOpenStagedRun() {
+  const [run] = await base44.entities.Run.filter(
+    { storage_model: STORAGE_MODEL.staged, status: { $in: ["running", "cancel_requested"] } }, "-created_date", 1);
+  return run || null;
+}
+
+export async function beginStage({ runId, stageKey, revision, dependsOn, templateVersion, prompt, origin, sources = [] }) {
   const startedAt = new Date().toISOString();
   const stage = await base44.entities.RunStage.create({
     run_id: runId, stage_key: stageKey, revision, status: "running",
     protocol_version: PROTOCOL.version, engine_version: ENGINE_VERSION, prompt_template_version: templateVersion,
     depends_on: dependsOn, input_fingerprint: await fingerprintInputs({ stageKey, templateVersion, dependsOn, prompt }),
-    provenance: { origin, orchestrator: ORCHESTRATOR, model_policy: MODEL_POLICY.operational_model },
+    provenance: { origin, orchestrator: ORCHESTRATOR, model_policy: MODEL_POLICY.operational_model, ...(sources.length ? { sources } : {}) },
     started_at: startedAt,
   });
   const attempt = await base44.entities.RunAttempt.create({
@@ -48,4 +58,18 @@ export async function settleStage({ stage, attempt, startedAt }, { output, valid
     ...(evidence ? { error_message: message } : {}),
   });
   return { ...stage, ...patch };
+}
+
+/**
+ * Settle a stage whose owning session is gone, on the operator's explicit confirmation.
+ * The evidence is the operator's statement that the session ended — never elapsed time.
+ */
+export async function settleOrphanedStage(stage) {
+  const endedAt = new Date().toISOString();
+  const message = `${stage.stage_key}: the session that owned this call ended before its outcome was recorded (operator-confirmed)`;
+  await base44.entities.RunStage.update(stage.id, { status: "failed", error_class: "platform_termination", error_message: message, completed_at: endedAt });
+  const attempts = await base44.entities.RunAttempt.filter({ stage_id: stage.id });
+  for (const a of attempts.filter(x => x.outcome === "in_flight")) {
+    await base44.entities.RunAttempt.update(a.id, { outcome: "platform_termination", ended_at: endedAt, error_message: message });
+  }
 }

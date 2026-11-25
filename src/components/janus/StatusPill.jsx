@@ -1,4 +1,4 @@
-import { Loader2, CheckCircle, XCircle, Clock, Zap } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, Clock, Zap, PauseCircle, Ban } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 
 const statusConfig = {
@@ -7,6 +7,10 @@ const statusConfig = {
   validating: { label: "Validating", icon: Zap,         color: (d) => d ? "#fbbf24" : "#d97706", bg: (d) => d ? "rgba(251,191,36,0.1)" : "rgba(254,243,199,0.5)" },
   completed:  { label: "Completed",  icon: CheckCircle, color: (d) => d ? "#4ade80" : "#16a34a", bg: (d) => d ? "rgba(74,222,128,0.1)" : "rgba(240,253,244,0.5)" },
   failed:     { label: "Failed",     icon: XCircle,     color: (d) => d ? "#f87171" : "#dc2626", bg: (d) => d ? "rgba(248,113,113,0.1)" : "rgba(254,226,226,0.5)" },
+  cancel_requested: { label: "Cancelling", icon: Loader2, color: (d) => d ? "#fbbf24" : "#d97706", bg: (d) => d ? "rgba(251,191,36,0.1)" : "rgba(254,243,199,0.5)", spin: true },
+  cancelled:   { label: "Cancelled",   icon: Ban,         color: (d) => d ? "#94a3b8" : "#64748b", bg: (d) => d ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.35)" },
+  interrupted: { label: "Interrupted", icon: PauseCircle, color: (d) => d ? "#fbbf24" : "#d97706", bg: (d) => d ? "rgba(251,191,36,0.1)" : "rgba(254,243,199,0.5)" },
+  unresolved:  { label: "Unresolved",  icon: PauseCircle, color: (d) => d ? "#fbbf24" : "#d97706", bg: (d) => d ? "rgba(251,191,36,0.1)" : "rgba(254,243,199,0.5)" },
 };
 
 export default function StatusPill({ status = "idle" }) {

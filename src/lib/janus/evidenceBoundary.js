@@ -54,11 +54,14 @@ export function renderDataBlock(plane, label, text) {
   return `${open(plane, label)}\n${neutralize(text)}\n${CLOSE}`;
 }
 
+const count = (text, mark) => text.split(mark).length - 1;
+const LAW_MARKS = count(DATA_PLANE_LAW, OPEN) + count(DATA_PLANE_LAW, CLOSE); // the law names the markers once each
+
 /** Fail closed if a compiled prompt's data blocks are not perfectly paired and un-nested. */
 export function assertBoundaryIntegrity(prompt, expectedBlocks) {
   const marks = prompt.split("\n").filter(l => l.startsWith(OPEN) || l.startsWith(CLOSE));
   const paired = marks.length % 2 === 0 && marks.every((l, i) => (i % 2 === 0 ? l.startsWith(OPEN) : l === CLOSE));
-  const anywhere = prompt.split(OPEN).length - 1 + (prompt.split(CLOSE).length - 1);
+  const anywhere = count(prompt, OPEN) + count(prompt, CLOSE) - LAW_MARKS;
   if (!paired || marks.length !== expectedBlocks * 2 || anywhere !== marks.length) {
     throw new Error("Prompt compilation aborted: data-plane boundary integrity check failed");
   }

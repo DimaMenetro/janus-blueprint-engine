@@ -1,5 +1,5 @@
 // Janus output schema — protocol identity & roster from @/lib/janus/protocolRegistry
-import { subdomainIds, MODE_PROFILES } from "@/lib/janus/protocolRegistry";
+import { subdomainIds, MODE_PROFILES, PAIRS, PATTERNS } from "@/lib/janus/protocolRegistry";
 // Schema, constants, validation, and normalization
 
 export const JANUS_SCHEMA = {
@@ -177,91 +177,17 @@ export const JANUS_SCHEMA = {
         // v2.0 — 6-pair Intersection Matrix
         intersection_matrix: {
           type: "object",
-          properties: {
-            corpus_x_cogito: {
-              type: "object",
-              properties: {
-                insight: { type: "string" },
-                tension: { type: "string" },
-                resolution: { type: "string" }
-              }
-            },
-            corpus_x_animus: {
-              type: "object",
-              properties: {
-                insight: { type: "string" },
-                tension: { type: "string" },
-                resolution: { type: "string" }
-              }
-            },
-            corpus_x_actus: {
-              type: "object",
-              properties: {
-                insight: { type: "string" },
-                tension: { type: "string" },
-                resolution: { type: "string" }
-              }
-            },
-            cogito_x_animus: {
-              type: "object",
-              properties: {
-                insight: { type: "string" },
-                tension: { type: "string" },
-                resolution: { type: "string" }
-              }
-            },
-            cogito_x_actus: {
-              type: "object",
-              properties: {
-                insight: { type: "string" },
-                tension: { type: "string" },
-                resolution: { type: "string" }
-              }
-            },
-            animus_x_actus: {
-              type: "object",
-              properties: {
-                insight: { type: "string" },
-                tension: { type: "string" },
-                resolution: { type: "string" }
-              }
-            }
-          }
+          properties: Object.fromEntries(PAIRS.map(p => [p.id, {
+            type: "object",
+            properties: { insight: { type: "string" }, tension: { type: "string" }, resolution: { type: "string" } }
+          }]))
         },
-        // 4 formal emergent patterns — field names mirror registry PATTERNS[].fields
-        quantum_foresight: {
+        // 4 formal emergent patterns — derived from registry PATTERNS
+        ...Object.fromEntries(PATTERNS.map(p => [p.id, {
           type: "object",
-          properties: {
-            cross_domain_insight: { type: "string" },
-            probability_wave: { type: "array", items: { type: "string" } },
-            metaphor: { type: "string" }
-          }
-        },
-        governed_cogito: {
-          type: "object",
-          properties: {
-            ethical_filter_applied: { type: "string" },
-            conscience_verdict: { type: "string" },
-            truth_method_soundness: { type: "string" }
-          }
-        },
-        narrative_loop: {
-          type: "object",
-          properties: {
-            decoded_user_narrative: { type: "string" },
-            resonant_strategy: { type: "string" },
-            lossless_compression: { type: "string" }
-          }
-        },
-        // Renamed from alignment_engine to match original v1.1 protocol
-        empathy_driven_strategy: {
-          type: "object",
-          properties: {
-            true_goal_vs_literal_prompt: { type: "string" },
-            behavioral_model: { type: "string" },
-            empathy_strategy: { type: "string" }
-          }
-        },
+          properties: Object.fromEntries(p.fields.map(f => [f,
+            f === "probability_wave" ? { type: "array", items: { type: "string" } } : { type: "string" }]))
+        }])),
         // Backward compat: keep alignment_engine as alias
         alignment_engine: {
           type: "object",

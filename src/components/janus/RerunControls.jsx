@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, Layers, Map, AlertTriangle } from "lucide-react";
-import { rerunSynthesis, rerunBlueprint } from "./rerunEngine";
+import { rerunSynthesis, rerunBlueprint } from "@/lib/janus/browserAdapter";
 import { rerunNeeds } from "@/lib/janus/runView";
+import { useExecution } from "@/components/janus/ExecutionContext";
 
 export default function RerunControls({ view, t, isDark, onRerunComplete }) {
   const [rerunning, setRerunning] = useState(null); // "synthesis" | "blueprint" | null
-  const [progress, setProgress] = useState(null);
   const [error, setError] = useState(null);
+  const { drive, busy } = useExecution();
 
   // Needs derive from durable stage state: missing, failed or invalid revisions, stale dependents,
   // and (historical Runs only) errors recorded on the original record.
@@ -16,8 +17,8 @@ export default function RerunControls({ view, t, isDark, onRerunComplete }) {
   const hasBlueprint = !!view.artifacts.blueprint;
   const synthesisMissing = !view.artifacts.synthesis;
 
-  const canRerunSynthesis = hasCoreData && !rerunning;
-  const canRerunBlueprint = hasCoreData && !rerunning;
+  const canRerunSynthesis = hasCoreData && !rerunning && !busy;
+  const canRerunBlueprint = hasCoreData && !rerunning && !busy;
 
   const showSynthesisRerun = needs.synthesis;
   const showBlueprintRerun = needs.blueprint;
@@ -28,20 +29,17 @@ export default function RerunControls({ view, t, isDark, onRerunComplete }) {
   const handleRerun = async (target) => {
     setRerunning(target);
     setError(null);
-    setProgress({ detail: "Starting..." });
 
     try {
       const fn = target === "synthesis" ? rerunSynthesis : rerunBlueprint;
-      const result = await fn(view.run.id, setProgress);
-      if (!result.success) {
-        setError(`Completed with errors: ${result.errors.join(", ")}`);
-      }
+      const result = await drive(hooks => fn(view.run.id, hooks));
+      if (result.unresolved) setError(`Stopped: a call for ${result.unresolved} has not settled`);
+      else if (!result.success) setError(`Completed with errors: ${result.errors.join(", ")}`);
       onRerunComplete();
     } catch (e) {
       setError(e.message);
     } finally {
       setRerunning(null);
-      setProgress(null);
     }
   };
 
@@ -131,14 +129,6 @@ export default function RerunControls({ view, t, isDark, onRerunComplete }) {
         <p style={{ marginTop: 10, marginBottom: 0, fontSize: 12, color: t.subtitle }}>
           Blueprint is stale: {needs.blueprintStale}
         </p>
-      )}
-
-      {/* Progress indicator */}
-      {progress && (
-        <div style={{ marginTop: 10, fontSize: 12, color: t.subtitle, display: "flex", alignItems: "center", gap: 6 }}>
-          <RefreshCw style={{ width: 12, height: 12, animation: "spin 1s linear infinite" }} />
-          {progress.detail}
-        </div>
       )}
 
       {/* Error display */}

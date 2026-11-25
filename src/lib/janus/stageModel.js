@@ -1,14 +1,12 @@
 /**
  * JANUS DURABLE STAGE MODEL — Phase 3 (pure, no I/O).
  * Stage keys, storage markers, version identities, input fingerprints and settled-failure
- * classification shared by both engines, the legacy adapter and the frontend view model.
+ * classification shared by the engine, the legacy adapter and the frontend view model.
  */
 import { PAIRS, PROTOCOL, STAGE_ORDER } from "@/lib/janus/protocolRegistry";
 
 export const STORAGE_MODEL = { legacy: "legacy_monolithic", staged: "staged_v1" };
-export const ENGINE_VERSION = `janus-engine/${PROTOCOL.version}-phase3`;
-/** Prompt-template identities. The two engines keep separate builders until Phase 4 unifies them. */
-export const PROMPT_TEMPLATES = { execution: "execution-engine/2026-09-29", rerun: "rerun-engine/2026-09-29" };
+export const ENGINE_VERSION = `janus-engine/${PROTOCOL.version}-phase4`;
 export const ORCHESTRATOR = "browser"; // transitional owner (plan §18.1); production target is server-owned
 
 export const intersectionKey = (pairId) => `intersection:${pairId}`;
