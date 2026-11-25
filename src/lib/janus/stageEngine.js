@@ -6,7 +6,7 @@
  */
 import { STAGE_ORDER } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
-import { outcomeAfterStageFailure, RETRY_POLICY } from "@/lib/janus/lifecycleContract";
+import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
 import { completionOf, deriveQualification } from "@/lib/janus/qualification";
 import { loadRunView, updateRun } from "@/lib/janus/stageStore";
 import { runStage } from "@/lib/janus/stageRunner";
@@ -30,7 +30,8 @@ export const configOf = (run) => ({
 
 /**
  * Execute one stage against the durable view. Inputs and exact dependency revisions are whatever the view
- * holds as active. Returns { record } | { failure } (both settled) or { skipped } (a required input is absent).
+ * holds as active. Returns { record } | { failure } (both settled), { skipped } (a required input is absent),
+ * { refused } (no call was made for the new revision) or { unresolved } (outcome unknown, nothing settled).
  */
 export async function executeStage({ view, stageKey, origin, evidence = [], onBegan }) {
   const active = (k) => view.stageInfo[k]?.active;
@@ -47,6 +48,7 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
     dependsOn: inputKeys.map(k => active(k).id),
     templateVersion: compiled.templateVersion, sources: compiled.sources,
     prompt: compiled.prompt, parseKey: compiled.parseKey,
+    staged: view.storage === STORAGE_MODEL.staged, // only a staged run has an execution slot
   });
 }
 
@@ -55,10 +57,12 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
  *  - a stage that already has a valid revision is not regenerated (unless `force`: an explicit rerun);
  *  - while ANY stage of the run has a revision still running, its call is unresolved (outcome unknown):
  *    nothing is started over it or beside it, for a resume or a rerun, and the drive stops;
- *  - a persisted cancellation request stops scheduling at the next stage boundary, whichever session made it;
- *  - a failure that would repeat for every later call (quota) halts scheduling: later stages are not started.
+ *  - a persisted cancellation stops scheduling at the next stage boundary, whichever session persisted it
+ *    (`cancel_requested`, or `cancelled` when another session cancelled while nothing was in flight);
+ *  - a stage whose call outcome is unknown stops the drive: nothing was settled and nothing follows it;
+ *  - a stage for which no call was made (the function refused it) stops the drive and leaves the run open.
  * Retries happen inside a stage, only after the previous attempt settled (stageRunner).
- * Ends as { errors } | { errors, cancelled } | { errors, unresolved } | { errors, halted }.
+ * Ends as { errors } | { errors, cancelled } | { errors, unresolved } | { errors, refused }.
  */
 export async function driveStages({ runId, keys, origin, force = false, onDurableChange = async () => {} }) {
   const errors = [];
@@ -74,17 +78,18 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
     if (res.skipped) continue;
     if (res.unresolved) return { errors, unresolved: res.unresolved }; // outcome unknown: nothing was settled, nothing follows
     if (res.refused) {
-      // The server made no call. A cancellation is picked up by the next read; anything else (another call of
-      // this run is live, access refused) ends this drive without closing the run.
-      errors.push(res.refused.message);
+      // The function made no call for this stage, so there is no outcome to record against it.
       await onDurableChange(runId);
-      if (res.refused.reason === "cancel_requested") continue;
-      return { errors, unresolved: stageKey, refused: res.refused.reason };
+      // It refused because a cancellation is persisted: that is the cancellation taking effect, not an error.
+      if (res.refused.reason === "cancel_requested") return { errors, cancelled: true };
+      // Anything else (another call of this run is live, the session is no longer allowed): the run is not
+      // closed on a stage that never ran. It stays open and can be resumed.
+      errors.push(res.refused.message);
+      return { errors, refused: { stageKey, reason: res.refused.reason } };
     }
     if (res.failure) errors.push(res.failure.message);
     if (staged) await updateRun(runId, { current_stage: stageKey });
     await onDurableChange(runId);
-    if (res.failure && RETRY_POLICY.halts_run.includes(res.failure.evidence)) return { errors, halted: res.failure.evidence };
   }
   return { errors };
 }
@@ -116,8 +121,9 @@ export async function reclose(runId) {
 }
 
 /**
- * Close a drive (Phase 5). Everything is read back from durable stages; historical Runs are never written and
- * an unresolved drive leaves the run open.
+ * Close a drive (Phase 5). Everything is read back from durable stages; historical Runs are never written.
+ * A drive that ended on an unknown outcome, or on a stage for which no call was made, leaves the run open.
+ * A cancellation that is already persisted is never overwritten by another lifecycle.
  *  - Lifecycle: `completed` only when the completion manifest passes for the run's mode. Otherwise the run
  *    ends `partial` (valid artifacts preserved) or `failed` (none). A returned process is not completion.
  *  - Qualification: a completed run whose Blueprint has no evaluation gets ONE independent evaluation stage
@@ -126,8 +132,8 @@ export async function reclose(runId) {
  */
 export async function finalizeRun(runId, outcome = {}, { origin = "execution", onDurableChange = async () => {} } = {}) {
   let view = await loadRunView(runId);
-  if (view.storage !== STORAGE_MODEL.staged || outcome.unresolved) return view;
-  const cancelled = outcome.cancelled || view.run.status === "cancel_requested";
+  if (view.storage !== STORAGE_MODEL.staged || outcome.unresolved || outcome.refused) return view;
+  const cancelled = outcome.cancelled || ["cancel_requested", "cancelled"].includes(view.run.status);
   const lifecycle = cancelled ? "cancelled"
     : completionOf(view).complete ? "completed" : outcomeAfterStageFailure(Object.keys(view.artifacts).length);
   const q = await persistClose(view, lifecycle);

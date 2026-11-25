@@ -1,4 +1,5 @@
 // Phase 6 — failure, retry, cancellation and ownership semantics.
+// These tests are additions. The six inherited test files are the behavioural oracle and are not edited here.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
@@ -7,9 +8,9 @@ import process from "node:process";
 vi.mock("@/api/base44Client", async () => ({ base44: (await import("@/lib/janus/testPlatform")).platform.base44 }));
 
 import { platform as h } from "@/lib/janus/testPlatform";
-import { executeJanus, resumeJanus, rerunBlueprint, requestCancel, reconcileJanus, OPERATOR_ONLY_MESSAGE } from "@/lib/janus/browserAdapter";
+import { executeJanus, resumeJanus, requestCancel, reconcileJanus } from "@/lib/janus/browserAdapter";
 import { callLLM } from "@/lib/janus/stageRunner";
-import { openAttempt } from "@/lib/janus/stageStore";
+import { beginStage, openAttempt, settleAttempt } from "@/lib/janus/stageStore";
 import { composeRunView } from "@/lib/janus/runView";
 import { deriveExecutionState } from "@/lib/janus/executionState";
 import { RETRY_POLICY, FAILURE_EVIDENCE, retryDecision } from "@/lib/janus/lifecycleContract";
@@ -18,15 +19,29 @@ const params = (mode) => ({ queryText: "How should a city pilot autonomous trans
 const attemptsOf = (key) => h.db.RunAttempt.filter(a => a.stage_key === key);
 const stageOf = (key) => h.db.RunStage.filter(s => s.stage_key === key).pop();
 const viewOf = (runId) => composeRunView(h.db.Run.find(r => r.id === runId), h.db.RunStage.filter(s => s.run_id === runId), h.db.RunAttempt.filter(a => a.run_id === runId));
-const calls = (key) => h.llm.stages.filter(s => s === key).length;
+const modelCalls = (key) => h.llm.stages.filter(s => s === key).length; // calls that actually reached the model
+const slot = () => h.db.Run[0].active_attempt_id;
+const snapshot = (rec) => JSON.parse(JSON.stringify(rec));
 const MAX = RETRY_POLICY.max_attempts_per_stage;
-/** A session that vanished mid-call: the run is open and `key` is the stage its call was for. */
-const lostDuring = async (key, fault) => {
+const read = (p) => fs.readFileSync(path.resolve(process.cwd(), p), "utf8");
+
+/** A Quick run whose request for `key` meets a transport fault (see testPlatform). */
+const during = async (key, fault) => {
   h.llm.transport[key] = fault;
   const result = await executeJanus(params("quick"));
   h.llm.transport = {};
   return result;
 };
+/** The records a session leaves when it vanishes right after starting the revision for `key`: corpus saved, `key` running. */
+const leftBehind = async (key = "cogito", runFields = {}) => {
+  const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1", active_attempt_id: "", ...runFields });
+  await h.base44.entities.RunStage.create({ run_id: run.id, stage_key: "corpus", revision: 1, status: "succeeded", depends_on: [], output: h.out.corpus });
+  const stage = await beginStage({ runId: run.id, stageKey: key, revision: 1, dependsOn: [], templateVersion: "t", prompt: `STAGE KEY: ${key}`, origin: "execution" });
+  return { runId: run.id, stage };
+};
+/** A request for the stage's open attempt, as a session sends it. */
+const send = (stage) => callLLM(stage.id, `STAGE KEY: ${stage.stage_key}`);
+const refusedWith = async (promise) => { const err = await promise.then(() => null, e => e); return err && { evidence: err.evidence, reason: err.reason }; };
 
 beforeEach(() => h.reset());
 afterEach(() => vi.useRealTimers());
@@ -40,7 +55,7 @@ describe("settled-failure classification", () => {
     [...terminal, "succeeded", "not_started"].forEach(e => expect(retryDecision(e, 1)).toBe("none"));
   });
 
-  it("the server classifies a failed call and that class is what is recorded", async () => {
+  it("the function classifies a failed call, records it, and that record is the attempt's outcome", async () => {
     h.llm.failOn = "corpus";
     await executeJanus(params("quick"));
     expect(attemptsOf("corpus")[0]).toMatchObject({ outcome: "provider_error", claim_state: "claimed", settled_by: "session",
@@ -48,24 +63,67 @@ describe("settled-failure classification", () => {
     expect(stageOf("corpus")).toMatchObject({ status: "failed", error_class: "provider_error" });
   });
 
-  it("a request that goes silent is not a failure: with no response and no record, the outcome stays unknown", async () => {
-    const result = await lostDuring("cogito", "lost");
+  it("the app never names a call-failure class itself: a class reaches an attempt only from the function", () => {
+    const appSide = ["src/lib/janus/stageRunner.js", "src/lib/janus/stageStore.js", "src/lib/janus/stageEngine.js", "src/lib/janus/browserAdapter.js", "src/lib/janus/stageModel.js"];
+    appSide.forEach(f => expect(read(f)).not.toMatch(/provider_error|transport_settled_failure|platform_termination|quota_failure|operator_cancellation/));
+    // The function assigns only what it can see: the integration's own error. It has no evidence of termination and claims none.
+    expect(read("base44/functions/invokeJanusStage/entry.ts")).not.toMatch(/platform_termination|transport_settled_failure/);
+  });
+});
+
+describe("an unknown outcome is unresolved, never a failure", () => {
+  it.each([
+    ["the session gets no response at all", "lost"],
+    ["the platform answers the request with an HTTP error", "http"],
+  ])("attempt claimed, nothing recorded, and %s: unresolved — no failure, no retry, no replacement, slot kept", async (_name, fault) => {
+    const result = await during("cogito", fault);
     expect(result).toMatchObject({ unresolved: "cogito", status: "running" });
-    expect(stageOf("cogito")).toMatchObject({ status: "running" });
-    expect(stageOf("cogito").error_class).toBeUndefined();
-    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "in_flight", claim_state: "claimed" })]);
-    expect(h.db.Run[0].active_attempt_id).toBe(attemptsOf("cogito")[0].id); // the slot stays taken: nothing can start beside it
-    expect(calls("blueprint")).toBe(0);
+    expect(attemptsOf("cogito")).toHaveLength(1); // no retry, no replacement attempt
+    expect(attemptsOf("cogito")[0]).toMatchObject({ outcome: "in_flight", claim_state: "claimed", retry_decision: "none" });
+    expect(attemptsOf("cogito")[0].transport).toBeUndefined();
+    expect(stageOf("cogito").status).toBe("running"); // the stage is not settled
+    expect(stageOf("cogito").error_class).toBeUndefined(); // and no failure evidence was made up
+    expect(h.db.RunStage.some(s => s.status === "failed")).toBe(false);
+    expect(slot()).toBe(attemptsOf("cogito")[0].id); // the run's execution slot stays occupied
+    expect(modelCalls("blueprint")).toBe(0); // nothing further was scheduled
+    expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "unresolved", resumable: false, failures: [] });
   });
 
-  it("an HTTP error the platform actually sent, with nothing recorded, is platform termination — and is not retried", async () => {
-    h.llm.transport.cogito = "platform";
-    const result = await executeJanus(params("quick"));
-    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "platform_termination", retry_decision: "none" })]);
+  it.each([
+    ["the request never reaches the platform", "unreached"],
+    ["the platform rejects the request before the function runs", "rejected"],
+  ])("attempt never claimed because %s: closed atomically — no call was made, and no failure is invented", async (_name, fault) => {
+    const result = await during("cogito", fault);
+    expect(result).toMatchObject({ status: "running", unresolved: null, refused: { stageKey: "cogito", reason: "never_claimed" } });
+    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ claim_state: "void", outcome: "not_started", settled_by: "session" })]);
+    expect(stageOf("cogito")).toMatchObject({ status: "cancelled", error_class: "not_started" });
+    expect(modelCalls("cogito")).toBe(0);
+    expect(slot()).toBe("");
+    expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "interrupted", resumable: true, failures: [] });
+    expect((await resumeJanus(result.runId)).status).toBe("completed"); // the run was left open, not closed on a stage that never ran
+    expect(stageOf("cogito")).toMatchObject({ revision: 2, status: "succeeded" });
+  });
+
+  it("a response that is lost after the function recorded the outcome is settled from that record, not repeated", async () => {
+    const result = await during("cogito", "drop");
+    expect(result.status).toBe("completed");
+    expect(modelCalls("cogito")).toBe(1);
+    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "succeeded", settled_by: "session", transport: expect.objectContaining({ state: "returned" }) })]);
+  });
+
+  it("a termination class settles an attempt only when it is on the function's record", async () => {
+    const { runId, stage } = await leftBehind();
+    await openAttempt(stage, 1);
+    h.llm.transport.cogito = "lost";
+    await send(stage).catch(() => {});
+    expect(await reconcileJanus(runId)).toEqual({ settled: false, unresolved: "cogito" }); // claimed, no record: unresolved
+
+    // Affirmative evidence, written by the server side: the execution was terminated.
+    Object.assign(h.db.RunAttempt[0], { transport: { state: "failed", evidence: "platform_termination", message: "execution terminated by the platform", recorded_at: new Date().toISOString() } });
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null });
+    expect(h.db.RunAttempt[0]).toMatchObject({ outcome: "platform_termination", retry_decision: "none", settled_by: "recovery" });
     expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "platform_termination" });
-    expect(stageOf("cogito").error_message).toMatch(/HTTP 504/);
-    expect(h.db.Run[0].active_attempt_id).toBe(""); // settled, so the slot is free again
-    expect(result.status).toBe("partial");
+    expect(modelCalls("cogito")).toBe(0);
   });
 });
 
@@ -83,54 +141,95 @@ describe("bounded retry, only after settlement", () => {
     attempts.forEach(a => expect(a.elapsed_ms).toBeGreaterThanOrEqual(0));
   });
 
-  it("invalid output is retried too, and the bound holds: the revision fails once after the last attempt", async () => {
+  it("invalid output is retried too, and the bound holds: the revision fails once, after the last attempt", async () => {
     h.llm.invalidOn = "corpus";
     await executeJanus(params("quick"));
     expect(attemptsOf("corpus").map(a => [a.outcome, a.retry_decision])).toEqual([
       ["schema_failure", "retry_scheduled"], ["schema_failure", "retry_scheduled"], ["schema_failure", "exhausted"]]);
-    expect(calls("corpus")).toBe(MAX);
+    expect(modelCalls("corpus")).toBe(MAX);
     expect(stageOf("corpus")).toMatchObject({ status: "failed", error_class: "schema_failure" });
     expect(stageOf("corpus").error_message).toMatch(/\(after 3 attempts\)$/);
     expect(deriveExecutionState(viewOf(h.db.Run[0].id)).failures[0]).toMatchObject({ key: "corpus", attempts: 3 });
   });
 
-  it("a quota failure is not retried and nothing further is scheduled", async () => {
+  it("a quota failure is settled as such and is not retried", async () => {
     h.llm.failOn = "cogito"; h.llm.failMessage = "Integration credits quota exceeded";
-    const result = await executeJanus(params("quick"));
+    await executeJanus(params("quick"));
     expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "quota_failure", retry_decision: "none" })]);
-    expect(calls("cogito")).toBe(1);
-    expect(calls("blueprint")).toBe(0); // it would only fail the same way
-    expect(result.status).toBe("partial");
-    expect(viewOf(result.runId).artifacts.corpus).toBeDefined();
+    expect(modelCalls("cogito")).toBe(1);
+    expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "quota_failure" });
+    expect(viewOf(h.db.Run[0].id).artifacts.corpus).toEqual(h.out.corpus); // the earlier artifact is intact
   });
 
-  it("attempts never overlap: while one is live, a retry or a second caller cannot start another", async () => {
+  it("a retry that never started changes nothing: the earlier attempt's actual outcome stands", async () => {
+    h.llm.failTimes.cogito = 1;
+    h.llm.transport.cogito = [null, "unreached"]; // attempt 1 fails for real; the request for attempt 2 never arrives
+    await executeJanus(params("quick"));
+    expect(attemptsOf("cogito").map(a => [a.attempt_number, a.outcome, a.claim_state])).toEqual([[1, "provider_error", "claimed"], [2, "not_started", "void"]]);
+    expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "provider_error" });
+    expect(stageOf("cogito").error_message).toBe("cogito: LLM call failed — provider returned 500");
+    expect(modelCalls("cogito")).toBe(1);
+  });
+});
+
+describe("ownership: one live call per run, one call per attempt", () => {
+  it("attempts never overlap, and a run cannot own two calls at once", async () => {
     const gate = h.gateOn("cogito");
     h.llm.failTimes.cogito = 1;
     const pending = executeJanus(params("quick"));
     await gate.reached;
-    expect(attemptsOf("cogito")).toHaveLength(1); // no second attempt exists while the first is in flight
+    const live = attemptsOf("cogito");
+    expect(live).toHaveLength(1); // no retry attempt exists while the first is in flight
+    expect(slot()).toBe(live[0].id);
 
-    // Another tab, with no shared memory: its own attempt for the same run is refused by the server.
-    const rival = await openAttempt(stageOf("cogito"), 99);
-    expect(await callLLM(rival.id, "STAGE KEY: cogito")).toMatchObject({ state: "refused", reason: "run_busy" });
-    expect(calls("cogito")).toBe(1);
+    // A second request for the same stage (another tab, with no shared memory): its one open attempt is taken.
+    expect(await refusedWith(send(stageOf("cogito")))).toEqual({ evidence: "not_started", reason: "attempt_claimed" });
+    // A different stage of the same run, with its own fresh attempt: the run's slot is taken.
+    const other = await beginStage({ runId: h.db.Run[0].id, stageKey: "blueprint", revision: 1, dependsOn: [], templateVersion: "t", prompt: "STAGE KEY: blueprint", origin: "execution" });
+    const rival = await openAttempt(other, 1);
+    expect(await refusedWith(send(other))).toEqual({ evidence: "not_started", reason: "run_busy" });
+    expect(h.db.RunAttempt.find(a => a.id === rival.id)).toMatchObject({ claim_state: "unclaimed", outcome: "in_flight" });
+    expect(h.llm.stages).toEqual(["corpus", "cogito"]); // neither refused request reached the model
+    expect(slot()).toBe(live[0].id); // and neither disturbed the slot
 
+    h.db.RunStage.find(s => s.id === other.id).status = "cancelled"; // the rival session gives up its own revision
     gate.release();
     await pending;
-    expect(attemptsOf("cogito").filter(a => a.claim_state === "claimed").map(a => a.outcome)).toEqual(["provider_error", "succeeded"]);
+    expect(attemptsOf("cogito").map(a => [a.claim_state, a.outcome])).toEqual([["claimed", "provider_error"], ["claimed", "succeeded"]]);
+    expect(slot()).toBe("");
   });
 
-  it("one attempt is one call: a claimed attempt cannot be used again", async () => {
+  it("two simultaneous requests for one attempt buy one call (staged run: the slot decides)", async () => {
+    const { stage } = await leftBehind();
+    await openAttempt(stage, 1);
+    const outcomes = await Promise.allSettled([send(stage), send(stage)]);
+    expect(outcomes.map(o => o.status).sort()).toEqual(["fulfilled", "rejected"]);
+    expect(outcomes.find(o => o.status === "rejected").reason).toMatchObject({ evidence: "not_started" });
+    expect(modelCalls("cogito")).toBe(1);
+    expect(h.db.RunAttempt).toEqual([expect.objectContaining({ claim_state: "claimed", transport: expect.objectContaining({ state: "returned" }) })]);
+  });
+
+  it("two simultaneous requests for one attempt buy one call (historical Run: the claim decides, and the Run is not written)", async () => {
+    h.db.Run.push({ id: "legacy-1", query_text: "q", execution_mode: "full", output_mode: "Blueprint", status: "completed", corpus: { constraints: ["c"] } });
+    const before = snapshot(h.db.Run[0]);
+    const stage = await beginStage({ runId: "legacy-1", stageKey: "cogito", revision: 1, dependsOn: [], templateVersion: "t", prompt: "STAGE KEY: cogito", origin: "rerun" });
+    await openAttempt(stage, 1);
+    const outcomes = await Promise.allSettled([send(stage), send(stage)]);
+    expect(outcomes.map(o => o.status).sort()).toEqual(["fulfilled", "rejected"]);
+    expect(outcomes.find(o => o.status === "rejected").reason).toMatchObject({ evidence: "not_started", reason: "attempt_claimed" });
+    expect(modelCalls("cogito")).toBe(1);
+    expect(h.db.Run[0]).toEqual(before);
+  });
+
+  it("a spent attempt can never buy a second call, even if its records were made to look live again", async () => {
     await executeJanus(params("quick"));
-    const before = h.llm.calls.length;
-    const settled = attemptsOf("corpus")[0];
-    await rerunBlueprint(h.db.Run[0].id); // reopens the run; the old attempt is still spent
-    h.db.RunStage.find(s => s.id === settled.stage_id).status = "running"; // even if its stage were made to look live
-    settled.outcome = "in_flight";
-    expect(await callLLM(settled.id, "STAGE KEY: corpus")).toMatchObject({ state: "refused", reason: "attempt_claimed" });
-    expect(h.db.Run[0].active_attempt_id).toBe(""); // the slot it briefly took was given back
-    expect(h.llm.calls.length).toBe(before + 2); // only the re-run's own calls (blueprint, qualification)
+    const calls = h.llm.stages.length;
+    const spent = attemptsOf("corpus")[0];
+    stageOf("corpus").status = "running";
+    spent.outcome = "in_flight"; // still claimed
+    expect(await refusedWith(send(stageOf("corpus")))).toEqual({ evidence: "not_started", reason: "attempt_claimed" });
+    expect(h.llm.stages.length).toBe(calls);
+    expect(slot()).toBe("");
   });
 });
 
@@ -149,154 +248,198 @@ describe("waiting is not failing", () => {
   });
 
   it("the age of a claim alone can never fail a run, however old it is", async () => {
-    const { runId } = await lostDuring("cogito", "lost");
+    const { runId } = await during("cogito", "lost");
     const attempt = attemptsOf("cogito")[0];
-    attempt.started_at = attempt.claimed_at = "2020-01-01T00:00:00.000Z"; // years old, no outcome recorded
+    attempt.started_at = attempt.claimed_at = "2020-01-01T00:00:00.000Z"; // years old, and no outcome recorded
+    const corpus = snapshot(stageOf("corpus"));
     for (const _again of [1, 2]) {
       expect(await reconcileJanus(runId)).toEqual({ settled: false, unresolved: "cogito" });
       expect((await resumeJanus(runId)).unresolved).toBe("cogito");
     }
-    await expect(rerunBlueprint(runId)).rejects.toThrow(/has not settled/);
-    expect(attempt).toMatchObject({ outcome: "in_flight", claim_state: "claimed" });
+    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "in_flight", claim_state: "claimed" })]);
     expect(stageOf("cogito").status).toBe("running");
-    expect(h.db.Run[0].status).toBe("running");
-    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ status: "unresolved", resumable: false });
+    expect(h.db.Run[0]).toMatchObject({ status: "running", active_attempt_id: attempt.id });
+    expect(stageOf("corpus")).toEqual(corpus);
+    expect(modelCalls("cogito")).toBe(0); // "lost": the double's function never got as far as the model, and nothing replaced it
   });
 
   it("no timer, deadline or heartbeat exists in the engine, the store or the function", () => {
-    const read = (p) => fs.readFileSync(path.resolve(process.cwd(), p), "utf8");
     const files = ["src/lib/janus/stageRunner.js", "src/lib/janus/stageStore.js", "src/lib/janus/stageEngine.js", "src/lib/janus/browserAdapter.js",
       "src/lib/janus/executionState.js", "base44/functions/invokeJanusStage/entry.ts"];
     files.forEach(f => expect(read(f)).not.toMatch(/setTimeout|setInterval|Promise\.race|AbortController|AbortSignal|heartbeat_at|Date\.now\(\)\s*-/));
-    // Timestamps are written and subtracted for telemetry; none is ever compared to decide an outcome.
+    // Timestamps are written, and subtracted for telemetry; none is ever compared to decide an outcome.
     files.forEach(f => expect(read(f)).not.toMatch(/(claimed_at|started_at|recorded_at|elapsed_ms)[^\n]*[<>]=?\s*\d/));
   });
 });
 
-describe("safe orphan handling from recorded evidence", () => {
-  it("a call that finished after its session vanished is settled from the server's record, and the run resumes without repeating it", async () => {
-    const { runId, unresolved } = await lostDuring("cogito", "drop");
-    expect(unresolved).toBe("cogito");
-    expect(attemptsOf("cogito")[0]).toMatchObject({ outcome: "in_flight", transport: { state: "returned" } });
-    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ status: "unresolved", resumable: false });
+describe("recovery from durable evidence: the truth table, case by case", () => {
+  it("case 1 — attempt never claimed: closed atomically; no call occurred, none can, and no failure is recorded", async () => {
+    const { runId, stage } = await leftBehind();
+    await openAttempt(stage, 1); // the session ended before its request reached the function
+    const corpus = snapshot(stageOf("corpus"));
 
     expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null });
-    expect(attemptsOf("cogito")[0]).toMatchObject({ outcome: "succeeded", settled_by: "recovery" });
-    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "succeeded", output: h.out.cogito });
-    expect(calls("cogito")).toBe(1); // recovery made no call
+    expect(h.db.RunAttempt).toEqual([expect.objectContaining({ claim_state: "void", outcome: "not_started", settled_by: "recovery" })]);
+    expect(stageOf("cogito")).toMatchObject({ status: "cancelled", error_class: "not_started" });
+    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ status: "interrupted", resumable: true, failures: [] });
+    expect(stageOf("corpus")).toEqual(corpus);
 
-    const resumed = await resumeJanus(runId);
-    expect(resumed.status).toBe("completed");
-    expect(calls("cogito")).toBe(1); // the paid result was kept, not regenerated
+    // The request arrives late after all.
+    expect(await refusedWith(send(stage))).toEqual({ evidence: "not_started", reason: "stage_settled" });
+    stageOf("cogito").status = "running"; // even if the stage still looked live, the closed attempt cannot be claimed
+    expect(await refusedWith(send(stage))).toEqual({ evidence: "not_started", reason: "attempt_claimed" });
+    expect(modelCalls("cogito")).toBe(0);
   });
 
-  it("a recorded failure is settled as that failure; recovery itself never retries", async () => {
+  it("case 1 — a revision with no attempt at all: no call was made for it", async () => {
+    const { runId } = await leftBehind(); // the session ended between creating the revision and opening an attempt
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null });
+    expect(stageOf("cogito")).toMatchObject({ status: "cancelled", error_class: "not_started" });
+    expect(h.db.RunAttempt).toHaveLength(0);
+  });
+
+  it("case 2 — claimed, and the function recorded a response: validated and settled from that record; the paid result is kept", async () => {
+    const { runId } = await during("cogito", "late");
+    expect(await reconcileJanus(runId)).toEqual({ settled: false, unresolved: "cogito" }); // still running on the server (case 4)
+    await h.finishPending(); // the call completes there; nobody is listening
+    expect(attemptsOf("cogito")[0]).toMatchObject({ outcome: "in_flight", transport: { state: "returned" } });
+
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null });
+    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "succeeded", retry_decision: "none", settled_by: "recovery" })]);
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "succeeded", output: h.out.cogito, validation: expect.objectContaining({ valid: true }) });
+    expect(slot()).toBe("");
+    expect(modelCalls("cogito")).toBe(1); // recovery made no call
+
+    expect((await resumeJanus(runId)).status).toBe("completed");
+    expect(modelCalls("cogito")).toBe(1); // and the resume did not regenerate it
+  });
+
+  it("case 2 — a recorded response that fails validation is settled as the invalid output it is", async () => {
+    h.llm.invalidTimes.cogito = 1;
+    const { runId } = await during("cogito", "late");
+    await h.finishPending();
+    await reconcileJanus(runId);
+    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "schema_failure", settled_by: "recovery" })]);
+    expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "schema_failure", validation: expect.objectContaining({ valid: false }) });
+    expect(viewOf(runId).artifacts.cogito).toBeUndefined();
+  });
+
+  it("case 3 — claimed, and the function recorded a provider failure: settled as that class; recovery itself buys nothing", async () => {
     h.llm.failOn = "cogito";
-    const { runId } = await lostDuring("cogito", "drop");
+    const { runId } = await during("cogito", "late");
+    await h.finishPending();
     h.llm.failOn = null;
+    const corpus = snapshot(stageOf("corpus"));
+
     await reconcileJanus(runId);
     expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "none", settled_by: "recovery" })]);
-    expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "provider_error" });
-    expect(calls("cogito")).toBe(1);
-    await resumeJanus(runId); // the explicit resume is what runs the stage again, as a new revision
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "failed", error_class: "provider_error" });
+    expect(modelCalls("cogito")).toBe(1);
+    expect(stageOf("corpus")).toEqual(corpus);
+
+    // The failure actually settled, so the stage may run again — by the operator's explicit resume, as a new revision.
+    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ status: "interrupted", resumable: true });
+    await resumeJanus(runId);
     expect(stageOf("cogito")).toMatchObject({ revision: 2, status: "succeeded" });
   });
 
-  it("an attempt the server never claimed is closed atomically: no call was made, and a late request can no longer make one", async () => {
-    const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1", active_attempt_id: "" });
-    const stage = await h.base44.entities.RunStage.create({ run_id: run.id, stage_key: "corpus", revision: 1, status: "running", depends_on: [] });
-    const attempt = await openAttempt(stage, 1); // the session ended before its request reached the server
+  it("case 4 — claimed, nothing recorded: unresolved. Asking again, resuming and waiting change nothing", async () => {
+    const { runId } = await during("cogito", "late"); // the call is alive on the server
+    const before = snapshot({ stages: h.db.RunStage, attempts: h.db.RunAttempt, run: h.db.Run[0] });
+    for (const _again of [1, 2, 3]) {
+      expect(await reconcileJanus(runId)).toEqual({ settled: false, unresolved: "cogito" });
+      expect((await resumeJanus(runId)).unresolved).toBe("cogito");
+    }
+    expect(snapshot({ stages: h.db.RunStage, attempts: h.db.RunAttempt, run: h.db.Run[0] })).toEqual(before);
+    expect(before.run.active_attempt_id).toBe(before.attempts[0].id);
+    expect(h.llm.stages).toEqual(["corpus"]);
+  });
 
-    expect(await reconcileJanus(run.id)).toEqual({ settled: true, unresolved: null });
-    expect(h.db.RunAttempt[0]).toMatchObject({ claim_state: "void", outcome: "not_started" });
-    expect(h.db.RunStage[0]).toMatchObject({ status: "cancelled", error_class: "not_started" });
-    expect(deriveExecutionState(viewOf(run.id))).toMatchObject({ status: "interrupted", resumable: true, failures: [] }); // not a failure of the stage
+  it("case 5 — an earlier attempt settled as retryable, the retry attempt was never claimed: the earlier outcome is preserved", async () => {
+    const { runId, stage } = await leftBehind();
+    const first = await openAttempt(stage, 1);
+    h.llm.failOn = "cogito";
+    await send(stage).catch(() => {}); // a real call, a real recorded failure
+    h.llm.failOn = null;
+    await settleAttempt(first, { outcome: "provider_error", message: "LLM call failed — provider returned 500", retryDecision: "retry_scheduled" });
+    await openAttempt(stage, 2); // the session vanished before sending the retry
 
-    h.db.RunStage[0].status = "running"; // even if the late request found the stage live
-    expect(await callLLM(attempt.id, "STAGE KEY: corpus")).toMatchObject({ state: "refused", reason: "attempt_claimed" });
-    expect(h.llm.calls).toHaveLength(0);
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null });
+    expect(h.db.RunAttempt.map(a => [a.attempt_number, a.outcome, a.claim_state])).toEqual([[1, "provider_error", "claimed"], [2, "not_started", "void"]]);
+    expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "provider_error", error_message: "cogito: LLM call failed — provider returned 500" });
+    expect(modelCalls("cogito")).toBe(1); // no new call, and no new outcome
+  });
+
+  it("a call that succeeded but whose result was recorded nowhere is neither a success nor a provider failure", async () => {
+    const { runId, stage } = await leftBehind();
+    const attempt = await openAttempt(stage, 1);
+    await send(stage);
+    // The function could not write its record; the session settled the attempt from the response it held, then vanished.
+    await settleAttempt(attempt, { outcome: "succeeded" });
+    const rec = h.db.RunAttempt[0]; delete rec.transport; delete rec.response_text;
+
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null });
+    expect(stageOf("cogito")).toMatchObject({ status: "cancelled", error_class: "artifact_not_recorded" });
+    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ resumable: true, failures: [] });
   });
 
   it("an orphaned evaluation on a finished run is resolved without reopening the run or buying another evaluation", async () => {
-    h.llm.transport.qualification = "drop";
-    const result = await executeJanus({ ...params("quick") });
+    h.llm.transport.qualification = "late";
+    const result = await executeJanus(params("quick"));
     h.llm.transport = {};
-    expect(h.db.Run[0]).toMatchObject({ status: "completed", qualification_state: "qualifying" });
     expect(result.status).toBe("completed");
+    expect(h.db.Run[0]).toMatchObject({ status: "completed", qualification_state: "qualifying", released_blueprint_stage_id: "" });
 
-    await reconcileJanus(result.runId);
-    expect(h.db.Run[0]).toMatchObject({ status: "completed", qualification_state: "qualified" });
-    expect(h.db.Run[0].released_blueprint_stage_id).toBe(stageOf("blueprint").id);
-    expect(calls("qualification")).toBe(1);
+    await h.finishPending();
+    expect(await reconcileJanus(result.runId)).toEqual({ settled: true, unresolved: null });
+    expect(h.db.Run[0]).toMatchObject({ status: "completed", qualification_state: "qualified", released_blueprint_stage_id: stageOf("blueprint").id });
+    expect(modelCalls("qualification")).toBe(1);
   });
 });
 
-describe("truthful cancellation", () => {
-  it("cancelling during a failing call stops the retries as well as the later stages", async () => {
+describe("truthful cancellation (case 6)", () => {
+  it("cancelling during a failing call stops the retries as well as the later stages; the call keeps its real outcome", async () => {
     const gate = h.gateOn("cogito");
     h.llm.failOn = "cogito";
     const pending = executeJanus(params("quick"));
     await gate.reached;
     await requestCancel(h.db.Run[0].id);
     gate.release();
-    const result = await pending;
-    expect(result).toMatchObject({ cancelled: true, status: "cancelled" });
-    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "none" })]); // its real outcome, no retry
-    expect(calls("blueprint")).toBe(0);
+    expect(await pending).toMatchObject({ cancelled: true, status: "cancelled" });
+    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "none" })]);
+    expect(modelCalls("blueprint")).toBe(0);
   });
 
-  it("a cancellation made by another session is honoured: the server starts no further call for the run", async () => {
+  it("after a cancellation is persisted the function starts no new call for the run", async () => {
+    const { stage } = await leftBehind("cogito", { status: "cancel_requested" });
+    await openAttempt(stage, 1);
+    expect(await refusedWith(send(stage))).toEqual({ evidence: "not_started", reason: "cancel_requested" });
+    expect(modelCalls("cogito")).toBe(0);
+    expect(slot()).toBe("");
+  });
+
+  it("a cancellation persisted by another session stops this session's scheduling; the active call still lands its real outcome", async () => {
     const gate = h.gateOn("corpus");
     const pending = executeJanus(params("quick"));
     await gate.reached;
     h.db.Run[0].status = "cancelled"; // written from elsewhere, not through this session
-    const rival = await openAttempt(stageOf("corpus"), 2);
-    expect(await callLLM(rival.id, "STAGE KEY: corpus")).toMatchObject({ state: "refused", reason: "cancel_requested" });
     gate.release();
-    expect(await pending).toMatchObject({ cancelled: true });
+    expect(await pending).toMatchObject({ cancelled: true, status: "cancelled" });
     expect(h.llm.stages).toEqual(["corpus"]);
+    expect(stageOf("corpus")).toMatchObject({ status: "succeeded", output: h.out.corpus });
   });
 
   it("cancelling with an unresolved call does not pretend it stopped: the run waits, and closes once the outcome is recorded", async () => {
-    const { runId } = await lostDuring("cogito", "drop");
+    const { runId } = await during("cogito", "late");
     await requestCancel(runId);
-    expect(h.db.Run[0].status).toBe("cancel_requested"); // not cancelled: a call may be live
+    expect(h.db.Run[0].status).toBe("cancel_requested"); // not cancelled: a call may be alive
+    expect(await reconcileJanus(runId)).toEqual({ settled: false, unresolved: "cogito" });
+    expect(h.db.Run[0].status).toBe("cancel_requested");
+
+    await h.finishPending();
     await reconcileJanus(runId);
     expect(h.db.Run[0].status).toBe("cancelled");
-    expect(stageOf("cogito").status).toBe("succeeded"); // its real outcome was kept
-    expect(calls("blueprint")).toBe(0);
-  });
-});
-
-describe("ownership replaces the operator-only containment", () => {
-  const member = () => { h.session.user = { id: "user-2", role: "user" }; };
-
-  it("a signed-in member runs their own staged run end to end", async () => {
-    member();
-    const result = await executeJanus(params("quick"));
-    expect(result.status).toBe("completed");
-    expect(h.db.RunAttempt.every(a => a.created_by_id === "user-2" && a.claim_state === "claimed")).toBe(true);
-  });
-
-  it("a member cannot start a call for a run they do not own, and cannot re-run a historical Run", async () => {
-    const { runId } = await executeJanus(params("quick")); // the operator's run
-    const theirs = await openAttempt(stageOf("blueprint"), 2);
-    h.db.Run.push({ id: "legacy-1", query_text: "q", execution_mode: "full", output_mode: "Blueprint", status: "completed",
-      corpus: { constraints: ["c"] }, cogito: h.out.cogito, animus: h.out.animus, actus: h.out.actus });
-    const before = h.llm.calls.length;
-    member();
-    expect(await callLLM(theirs.id, "STAGE KEY: blueprint")).toMatchObject({ state: "refused", reason: "not_found" });
-    await expect(rerunBlueprint("legacy-1")).rejects.toThrow(OPERATOR_ONLY_MESSAGE);
-    expect(h.llm.calls.length).toBe(before);
-    expect(h.db.Run.find(r => r.id === runId).active_attempt_id).toBe("");
-  });
-
-  it("no blanket operator check remains on staged execution", () => {
-    const adapter = fs.readFileSync(path.resolve(process.cwd(), "src/lib/janus/browserAdapter.js"), "utf8");
-    expect(adapter.match(/await assertOperator\(\)/g)).toHaveLength(1);
-    expect(adapter).toMatch(/if \(view\.storage !== STORAGE_MODEL\.staged\) await assertOperator\(\)/);
-    const fn = fs.readFileSync(path.resolve(process.cwd(), "base44/functions/invokeJanusStage/entry.ts"), "utf8");
-    expect(fn.match(/user\.role !== 'admin'/g)).toHaveLength(1);
-    expect(fn).toMatch(/!staged && user\.role !== 'admin'/);
+    expect(stageOf("cogito")).toMatchObject({ status: "succeeded", output: h.out.cogito }); // its real outcome was kept
+    expect(modelCalls("blueprint")).toBe(0);
   });
 });

@@ -18,11 +18,12 @@ const CORE_DOMAINS = ["corpus", "cogito", "animus", "actus"];
 const liveStages = (view) => Object.values(view.stageInfo).map(i => i.latest).filter(s => s?.status === "running");
 
 /**
- * Ownership (Phase 6): the `invokeJanusStage` function owns every model call — one execution slot per staged
- * run, one claim per attempt — so any signed-in user may run their own staged runs. A historical Run is never
- * written and so has no slot: model work on one stays with operators (admins), as the function also enforces.
+ * Interim containment, mirrored by the `invokeJanusStage` function: only an operator (admin) may start model
+ * work. Checked before any record. The Phase 6 ownership mechanism (one execution slot per staged run, one
+ * claim per attempt, server-recorded outcomes) is in place underneath it; lifting this containment is a
+ * separate, explicit operator decision and is not made here.
  */
-export const OPERATOR_ONLY_MESSAGE = "Re-running a historical run is limited to operators";
+export const OPERATOR_ONLY_MESSAGE = "Janus execution is limited to operators until durable stage ownership is in place";
 async function assertOperator() {
   const user = await base44.auth.me();
   if (user?.role !== "admin") throw new Error(OPERATOR_ONLY_MESSAGE);
@@ -42,6 +43,7 @@ async function advance(runId, { keys, origin, force = false }, hooks = {}) {
     return {
       runId, status: view.run.status, qualification: view.run.qualification_state || null, stageErrors: outcome.errors, errors: view.run.validation_errors || [],
       cancelled: !!outcome.cancelled || view.run.status === "cancelled", unresolved: outcome.unresolved || null,
+      refused: outcome.refused || null,
     };
   } finally {
     driving.delete(runId);
@@ -52,6 +54,7 @@ async function advance(runId, { keys, origin, force = false }, hooks = {}) {
 export async function executeJanus(params, hooks) {
   const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = params;
   if (refreshEnabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE); // fail closed before any record or model call
+  await assertOperator();
   const run = await createRun({
     active_attempt_id: "", // the execution slot starts free
     query_text: queryText, execution_mode: executionMode, output_mode: outputMode, blueprint_level: blueprintLevel,
@@ -74,6 +77,7 @@ export async function resumeJanus(runId, hooks) {
   if (view.storage !== STORAGE_MODEL.staged) throw new Error("Historical runs are read-only and cannot be resumed");
   if (view.run.refresh_enabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE);
   if (TERMINAL_STATES.includes(view.run.status)) throw new Error(`This run has ended (${view.run.status}) and is not resumed. A finished run recovers through a re-run, which produces a new revision.`);
+  await assertOperator();
   const result = await advance(runId, { keys: stagePlan(view.run.execution_mode), origin: "resume" }, hooks);
   return { ...result, success: result.status === "completed" };
 }
@@ -85,10 +89,10 @@ async function rerun(runId, target, keys, hooks) {
   if (missing.length > 0) throw new Error(`Cannot re-run ${target} — missing prerequisite domains: ${missing.join(", ")}`);
   const [live] = liveStages(view);
   if (live) throw new Error(`Cannot re-run ${target} — a call for ${live.stage_key} has not settled and its outcome is unknown`);
-  if (view.storage !== STORAGE_MODEL.staged) await assertOperator();
-  else await updateRun(runId, { status: "running" });
+  await assertOperator();
+  if (view.storage === STORAGE_MODEL.staged) await updateRun(runId, { status: "running" });
   const result = await advance(runId, { keys, origin: "rerun", force: true }, hooks);
-  return { ...result, success: result.stageErrors.length === 0 && !result.unresolved && !result.cancelled, errors: result.stageErrors };
+  return { ...result, success: result.stageErrors.length === 0 && !result.unresolved && !result.refused && !result.cancelled, errors: result.stageErrors };
 }
 
 /** New revisions of the six intersections and the four patterns. The dependent Blueprint becomes stale (derived). */
@@ -119,7 +123,7 @@ export async function reconcileJanus(runId, hooks = {}) {
   if (!view) throw new Error("Run not found");
   const [live] = liveStages(view);
   if (!live || driving.has(runId)) return { settled: false, unresolved: live?.stage_key || null };
-  const res = await recoverStage(live, view.attempts[live.id] || []);
+  const res = await recoverStage(live, view.attempts[live.id] || [], { slot: view.storage === STORAGE_MODEL.staged });
   if (!res.unresolved && view.storage === STORAGE_MODEL.staged) {
     if (view.run.status === "cancel_requested") await finalizeRun(runId, { cancelled: true });
     else if (TERMINAL_STATES.includes(view.run.status)) await reclose(runId);
