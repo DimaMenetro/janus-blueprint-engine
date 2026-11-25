@@ -1,12 +1,17 @@
 /**
  * Test-only platform double (imported by *.test.js): an in-memory entity store and a deterministic
  * stand-in for the model-call backend function. No network, no credits.
+ * The store mirrors the Base44 behaviour Janus relies on, as measured against the real store (2026-11-25):
+ *  - updateMany(query, { $set }) applies to the records matching `query` only and returns
+ *    { success, updated, has_more }; of concurrent conditional writes on one record, exactly one gets updated: 1;
+ *  - an equality condition does not match a record that lacks the field ("" does not match "never set");
+ *  - { $in: [..., null] } does match a record that lacks the field.
  */
 import { subdomainIds, PAIRS, PATTERNS } from "@/lib/janus/protocolRegistry";
 import { QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
-const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k]) : rec[k] === v));
+const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k] ?? null) : rec[k] === v));
 
 const subs = (d) => Object.fromEntries(subdomainIds(d).map(id => [id, { perspective: `${id} view`, key_findings: ["f"] }]));
 const step = (n, title, derived_from) => ({ step: n, title, instructions: "Do it", inputs: ["i"], outputs: ["o"], validation: "Check it",
@@ -46,17 +51,18 @@ const INVALID = {
   qualification: { verdicts: { elegance: { verdict: "pass", reason: "only one criterion answered" } } },
 };
 const OPERATOR = { id: "user-operator", role: "admin" };
+const FAIL_MESSAGE = "provider returned 500";
 
 const db = { Run: [], RunStage: [], RunAttempt: [] };
-const FAIL_MESSAGE = "provider returned 500";
-const llm = { failOn: null, invalidOn: null, failTimes: {}, invalidTimes: {}, failMessage: FAIL_MESSAGE, transport: {}, override: {}, verdicts: {}, calls: [], prompts: [], stages: [], gate: null };
+const llm = { failOn: null, invalidOn: null, failTimes: {}, invalidTimes: {}, failMessage: FAIL_MESSAGE, transport: {}, pending: [],
+  override: {}, verdicts: {}, calls: [], prompts: [], stages: [], gate: null };
 const session = { user: { ...OPERATOR } };
 let n = 0;
 
 const entity = (name) => ({
   create: async (data) => {
     n += 1;
-    const rec = { id: `${name}-${n}`, created_date: new Date(1767225600000 + n * 1000).toISOString(), created_by_id: session.user?.id, ...clone(data) };
+    const rec = { id: `${name}-${n}`, created_date: new Date(1767225600000 + n * 1000).toISOString(), ...clone(data) };
     db[name].push(rec);
     return clone(rec);
   },
@@ -67,52 +73,81 @@ const entity = (name) => ({
     return clone(rec);
   },
   filter: async (query) => db[name].filter(r => matches(r, query)).map(clone),
-  // Conditional write, as verified against the real store: applies to the matching records only, and reports how many.
+  // Conditional write. Matching and writing happen in one synchronous step, as one atomic store operation.
   updateMany: async (query, { $set }) => {
     const hits = db[name].filter(r => matches(r, query));
     hits.forEach(r => Object.assign(r, clone($set)));
     return { success: true, updated: hits.length, has_more: false };
   },
 });
+const entities = { Run: entity("Run"), RunStage: entity("RunStage"), RunAttempt: entity("RunAttempt") };
+const took = async (write) => (await write).updated === 1;
 
 // Stand-in for the invokeJanusStage backend function (same contract as base44/functions/invokeJanusStage).
 // Failures have the shape the SDK really produces for a function call: a transport error carrying the response.
 const httpError = (status, data) => Object.assign(new Error(`Request failed with status code ${status}`), { status, response: { status, data } });
 const refusal = (status, reason, error) => httpError(status, { error, reason, evidence: "not_started" });
-const networkError = () => new Error("Network Error"); // the browser got no response at all
+const networkError = () => new Error("Network Error"); // the browser received no response at all
 const classify = (message) => (/quota|credit|insufficient|limit exceeded|rate limit|\b429\b/i.test(message) ? "quota_failure" : "provider_error");
+/**
+ * Transport faults a test can stage for a stage key (`llm.transport[key]`; an array is consumed one per request):
+ *  unreached  the request never reaches the platform: no response, nothing claimed
+ *  rejected   the platform answers 500 before the function runs: nothing claimed
+ *  lost       the function claims the attempt, then nothing: no response, no record, ever
+ *  http       the function claims the attempt, the platform answers 504: no record
+ *  late       the function claims the attempt, the session gets no response, and the call finishes on the
+ *             server later, when the test calls platform.finishPending()
+ *  drop       the call finishes and is recorded, but the response never reaches the session
+ */
+const faultFor = (key) => {
+  const f = llm.transport[key];
+  return Array.isArray(f) ? f.shift() || null : f || null;
+};
 const invoke = async (name, payload) => {
   if (name !== "invokeJanusStage") throw httpError(404, { error: `Function ${name} not found` });
-  const user = session.user;
-  if (!user) throw refusal(401, "unauthorized", "Unauthorized");
-  const mine = (rec) => rec && (user.role === "admin" || rec.created_by_id === user.id); // row-level security
-  const attempt = db.RunAttempt.find(a => a.id === payload.attempt_id);
-  const stage = attempt && db.RunStage.find(s => s.id === attempt.stage_id);
-  const run = attempt && db.Run.find(r => r.id === attempt.run_id);
-  if (![attempt, stage, run].every(mine)) throw refusal(404, "not_found", "Attempt not found");
-  if (stage.status !== "running") throw refusal(409, "stage_settled", "Stage is already settled");
-  if (["cancel_requested", "cancelled"].includes(run.status)) throw refusal(409, "cancel_requested", "Cancellation was requested for this run — no further call is started");
-  const staged = run.storage_model === "staged_v1";
-  if (!staged && user.role !== "admin") throw refusal(403, "operators_only", "Re-running a historical run is limited to operators");
-  // The two conditional writes: the run's execution slot, then the attempt's single claim.
-  if (staged && run.active_attempt_id !== "") throw refusal(409, "run_busy", "Another call of this run has not settled — no overlapping call is started");
-  if (staged) run.active_attempt_id = attempt.id;
-  if (attempt.claim_state !== "unclaimed" || attempt.outcome !== "in_flight") {
-    if (staged) run.active_attempt_id = "";
-    throw refusal(409, "attempt_claimed", "This attempt was already claimed or closed — one attempt is one call");
-  }
-  Object.assign(attempt, { claim_state: "claimed", claimed_at: new Date().toISOString() });
+  const fault = faultFor(String(payload.prompt).match(/^STAGE KEY: (\S+)$/m)?.[1]);
+  if (fault === "unreached") throw networkError();
+  if (fault === "rejected") throw httpError(500, "Internal Server Error");
+  if (!session.user) throw refusal(401, "unauthorized", "Unauthorized");
+  if (session.user.role !== "admin") throw refusal(403, "operators_only", "Janus execution is limited to operators until durable stage ownership is in place");
   llm.calls.push(Object.keys(payload));
+  const stage = db.RunStage.find(s => s.id === payload.stage_id);
+  if (!stage) throw refusal(404, "not_found", "Stage not found");
+  if (stage.status !== "running") throw refusal(409, "stage_settled", "Stage is already settled");
+  const run = db.Run.find(r => r.id === stage.run_id);
+  if (!run) throw refusal(404, "not_found", "Run not found");
+  if (["cancel_requested", "cancelled"].includes(run.status)) throw refusal(409, "cancel_requested", "Cancellation was requested for this run: no further call is started");
+  const open = db.RunAttempt.filter(a => a.stage_id === stage.id && a.outcome === "in_flight");
+  if (open.length !== 1 || open[0].claim_state !== "unclaimed") throw refusal(409, "attempt_claimed", "This stage has no unclaimed attempt: one attempt is one call");
+  const attempt = open[0];
 
-  const fault = llm.transport[stage.stage_key];
-  if (fault === "lost") throw networkError();                       // the server never reports back and records nothing
-  if (fault === "platform") throw httpError(504, "Gateway Timeout"); // the platform ended the request: nothing recorded
-  let result, failure;
-  try { result = await model(payload.prompt); } catch (e) { failure = { evidence: classify(e.message), message: e.message }; }
-  attempt.transport = { state: failure ? "failed" : "returned", ...failure, recorded_at: new Date().toISOString() };
-  if (!failure) attempt.response_text = JSON.stringify(result);
-  if (staged && run.active_attempt_id === attempt.id) run.active_attempt_id = "";
-  if (fault === "drop") throw networkError();                       // the call settled and was recorded; the session never heard
+  // SLOT, then CLAIM: the same two conditional writes the function makes.
+  const staged = run.storage_model === "staged_v1";
+  const freeSlot = () => (staged ? entities.Run.updateMany({ id: run.id, active_attempt_id: attempt.id }, { $set: { active_attempt_id: "" } }) : null);
+  if (staged && !(await took(entities.Run.updateMany({ id: run.id, active_attempt_id: { $in: ["", null] } }, { $set: { active_attempt_id: attempt.id } })))) {
+    throw refusal(409, "run_busy", "Another call of this run has not settled: no overlapping call is started");
+  }
+  if (!(await took(entities.RunAttempt.updateMany({ id: attempt.id, claim_state: "unclaimed", outcome: "in_flight" }, { $set: { claim_state: "claimed", claimed_at: new Date().toISOString() } })))) {
+    await freeSlot();
+    throw refusal(409, "attempt_claimed", "This attempt was claimed or closed by another request: one attempt is one call");
+  }
+
+  // The call, then RECORD and free the slot — what the function does once the call settles.
+  const settleOnServer = async () => {
+    let result, failure;
+    try { result = await model(payload.prompt); } catch (e) { failure = { evidence: classify(e.message), message: e.message }; }
+    await entities.RunAttempt.update(attempt.id, {
+      transport: { state: failure ? "failed" : "returned", ...failure, recorded_at: new Date().toISOString() },
+      ...(failure ? {} : { response_text: JSON.stringify(result) }),
+    });
+    await freeSlot();
+    return { result, failure };
+  };
+  if (fault === "lost") throw networkError();
+  if (fault === "http") throw httpError(504, "Gateway Timeout");
+  if (fault === "late") { llm.pending.push(settleOnServer); throw networkError(); }
+  const { result, failure } = await settleOnServer();
+  if (fault === "drop") throw networkError();
   if (failure) throw httpError(502, { error: failure.message, evidence: failure.evidence, recorded: true });
   return { status: 200, data: { result, recorded: true } };
 };
@@ -135,14 +170,15 @@ const model = async (prompt) => {
 export const platform = {
   db, llm, session, out: OUT, blueprintFor,
   base44: {
-    entities: { Run: entity("Run"), RunStage: entity("RunStage"), RunAttempt: entity("RunAttempt") },
+    entities,
     functions: { invoke },
     auth: { me: async () => { if (!session.user) throw httpError(401, { error: "Unauthorized" }); return clone(session.user); } },
   },
   reset() {
     db.Run.length = 0; db.RunStage.length = 0; db.RunAttempt.length = 0;
     session.user = { ...OPERATOR };
-    llm.failOn = null; llm.invalidOn = null; llm.failTimes = {}; llm.invalidTimes = {}; llm.failMessage = FAIL_MESSAGE; llm.transport = {}; llm.override = {}; llm.verdicts = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
+    llm.failOn = null; llm.invalidOn = null; llm.failTimes = {}; llm.invalidTimes = {}; llm.failMessage = FAIL_MESSAGE; llm.transport = {}; llm.pending.length = 0;
+    llm.override = {}; llm.verdicts = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
   },
   /** Hold the model call for one stage open until release() — an unresolved, live call. */
   gateOn(stageKey) {
@@ -151,5 +187,9 @@ export const platform = {
     const released = new Promise(r => { release = r; });
     llm.gate = { stageKey, arrive, released };
     return { reached, release };
+  },
+  /** Calls left running on the server by a `late` fault now finish there: outcome recorded, slot freed. */
+  async finishPending() {
+    for (const finish of llm.pending.splice(0)) await finish();
   },
 };

@@ -60,7 +60,6 @@ export const RETRY_POLICY = {
   requires_settled_prior_attempt: true, // never race a live provider promise
   local_inference_deadline: null,       // elapsed time is telemetry, not failure
   heartbeat_is_failure_evidence: false,
-  halts_run: ["quota_failure"],         // every further call would fail the same way: nothing more is scheduled
 };
 /**
  * What happens after an attempt has SETTLED with `outcome` as attempt number `attemptNumber`.

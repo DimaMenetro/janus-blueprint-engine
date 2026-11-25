@@ -66,9 +66,10 @@ export async function settleAttempt(attempt, { outcome, message, retryDecision =
  * for the attempt and none can be: the server's claim needs the same unclaimed state and now cannot get it.
  * If it does not, the server holds the claim and the outcome is whatever the server records.
  */
-export const voidAttempt = async (attemptId) => took(await base44.entities.RunAttempt.updateMany(
-  { id: attemptId, claim_state: "unclaimed", outcome: "in_flight" },
-  { $set: { claim_state: "void", outcome: "not_started", settled_by: "recovery", ended_at: new Date().toISOString(), error_message: "No model call was made for this attempt" } }));
+export const voidAttempt = async (attemptId, { settledBy = "recovery", message = "No model call was made for this attempt" } = {}) =>
+  took(await base44.entities.RunAttempt.updateMany(
+    { id: attemptId, claim_state: "unclaimed", outcome: "in_flight" },
+    { $set: { claim_state: "void", outcome: "not_started", settled_by: settledBy, ended_at: new Date().toISOString(), error_message: message } }));
 
 /** Free the run's execution slot if this settled attempt still holds it. Conditional, so it can only free its own. */
 export const releaseSlot = (runId, attemptId) =>
@@ -80,10 +81,13 @@ export const releaseSlot = (runId, attemptId) =>
  *  - failed: settled failure evidence. A parsed artifact that failed mandatory validation is kept on the FAILED
  *    revision, with its validation errors, for diagnosis only — a failed revision is never read as cognition;
  *  - cancelled (`notStarted`): no model call was ever made for this revision. That is not a failure of the stage.
+ *  - cancelled (`lost`): a call succeeded but its artifact was never recorded anywhere. Not a success (there
+ *    is no artifact) and not a provider failure (the provider did not fail).
  */
-export async function settleStage(stage, { output, validation, evidence, message, notStarted }) {
+export async function settleStage(stage, { output, validation, evidence, message, notStarted, lost }) {
   const completed_at = new Date().toISOString();
   const patch = notStarted ? { status: "cancelled", error_class: "not_started", error_message: notStarted, completed_at }
+    : lost ? { status: "cancelled", error_class: "artifact_not_recorded", error_message: lost, completed_at }
     : evidence ? { status: "failed", error_class: evidence, error_message: message, completed_at, ...(validation ? { output, validation } : {}) }
     : { status: "succeeded", output, validation, completed_at };
   await base44.entities.RunStage.update(stage.id, patch);

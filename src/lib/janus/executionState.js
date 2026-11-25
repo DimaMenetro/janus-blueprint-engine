@@ -36,7 +36,7 @@ function attemptsMade(view, stage) {
 
 const EXTRA_LABELS = {
   interrupted: "Interrupted — no session is running this",
-  unresolved: "Unresolved call — outcome not known here, nothing further can start",
+  unresolved: "Unresolved call — outcome unknown, nothing further can start",
   idle: "Idle",
 };
 
