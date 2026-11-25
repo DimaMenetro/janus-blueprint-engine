@@ -35,5 +35,11 @@ Read this first after any context reset.
 ## Operating procedure (Daionae, 2026-10-30)
 Proceed through phases automatically; stop only at genuine operator gates (credits, provider choice, destructive historical mutation, material contradiction, production cutover).
 
+## Phase 4 (2026-11-25)
+- **Phase 4 COMPLETE:** one canonical engine in `src/lib/janus/`: `evidenceBoundary.js`, `stageCompiler.js` (only prompt builder), `stageRunner.js` (only model call), `stageEngine.js`, `executionState.js`, `browserAdapter.js` (scheduling only). `ExecutionEngine.jsx`, `rerunEngine.jsx`, `domainSME.jsx` and `buildPrompt` are deleted. Record: `JANUS_PHASE4_CANONICAL_STAGE_ENGINE_2026-11-25.md`.
+- Resume, cancel-after-current-stage and the unresolved-call rule are live. Results and BottomAccessory read derived durable state.
+- Evidence: 68/68 tests, build passes, 69 historical Runs untouched. No live model call has gone through the new engine yet.
+- Tests share `src/lib/janus/testPlatform.js` (in-memory store + deterministic model).
+
 ## Next action
-Phase 4: one canonical stage executor for runs and reruns, resume from persisted stages, cancel-after-current-stage, untrusted-content boundary, durable progress in BottomAccessory/Results.
+Phase 5: wire `completionManifest` and qualification into `finalizeRun` (replace the interim status rule), add the qualification stages through the canonical engine, show qualification state in Results/BottomAccessory. Not started.

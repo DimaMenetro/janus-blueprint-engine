@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
 import { Play, Zap } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -8,7 +7,6 @@ import {
   light, dark,
   glassCard, glassBtn, glassError
 } from "@/components/ui/LiquidGlass";
-import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import { protocolLabel } from "@/lib/janus/protocolRegistry";
 import { executeJanus } from "@/lib/janus/browserAdapter";
 import { useExecution } from "@/components/janus/ExecutionContext";
