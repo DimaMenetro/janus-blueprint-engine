@@ -6,7 +6,7 @@
  */
 import { STAGE_ORDER } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
-import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
+import { outcomeAfterStageFailure, RETRY_POLICY } from "@/lib/janus/lifecycleContract";
 import { completionOf, deriveQualification } from "@/lib/janus/qualification";
 import { loadRunView, updateRun } from "@/lib/janus/stageStore";
 import { runStage } from "@/lib/janus/stageRunner";
@@ -55,8 +55,10 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
  *  - a stage that already has a valid revision is not regenerated (unless `force`: an explicit rerun);
  *  - while ANY stage of the run has a revision still running, its call is unresolved (outcome unknown):
  *    nothing is started over it or beside it, for a resume or a rerun, and the drive stops;
- *  - a persisted cancellation request stops scheduling at the next stage boundary.
- * Ends as { errors } | { errors, cancelled } | { errors, unresolved }.
+ *  - a persisted cancellation request stops scheduling at the next stage boundary, whichever session made it;
+ *  - a failure that would repeat for every later call (quota) halts scheduling: later stages are not started.
+ * Retries happen inside a stage, only after the previous attempt settled (stageRunner).
+ * Ends as { errors } | { errors, cancelled } | { errors, unresolved } | { errors, halted }.
  */
 export async function driveStages({ runId, keys, origin, force = false, onDurableChange = async () => {} }) {
   const errors = [];
@@ -65,14 +67,24 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
     const staged = view.storage === STORAGE_MODEL.staged;
     const live = Object.values(view.stageInfo).find(i => i.latest?.status === "running");
     if (live) return { errors, unresolved: live.key };
-    if (staged && view.run.status === "cancel_requested") return { errors, cancelled: true };
+    if (staged && ["cancel_requested", "cancelled"].includes(view.run.status)) return { errors, cancelled: true };
     if (!force && view.stageInfo[stageKey]?.active) continue;
 
     const res = await executeStage({ view, stageKey, origin, onBegan: () => onDurableChange(runId) });
     if (res.skipped) continue;
+    if (res.unresolved) return { errors, unresolved: res.unresolved }; // outcome unknown: nothing was settled, nothing follows
+    if (res.refused) {
+      // The server made no call. A cancellation is picked up by the next read; anything else (another call of
+      // this run is live, access refused) ends this drive without closing the run.
+      errors.push(res.refused.message);
+      await onDurableChange(runId);
+      if (res.refused.reason === "cancel_requested") continue;
+      return { errors, unresolved: stageKey, refused: res.refused.reason };
+    }
     if (res.failure) errors.push(res.failure.message);
     if (staged) await updateRun(runId, { current_stage: stageKey });
     await onDurableChange(runId);
+    if (res.failure && RETRY_POLICY.halts_run.includes(res.failure.evidence)) return { errors, halted: res.failure.evidence };
   }
   return { errors };
 }
@@ -95,6 +107,12 @@ async function persistClose(view, lifecycle) {
     ...(lifecycle === "failed" ? { error_message: errors.join("\n") } : {}),
   });
   return q;
+}
+
+/** Re-persist what the durable stages say for a run whose lifecycle has already ended. Starts no model call. */
+export async function reclose(runId) {
+  const view = await loadRunView(runId);
+  if (view.storage === STORAGE_MODEL.staged) await persistClose(view, view.run.status);
 }
 
 /**

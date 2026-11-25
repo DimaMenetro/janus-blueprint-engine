@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Play, Ban, AlertTriangle } from "lucide-react";
+import { Play, Ban, AlertTriangle, SearchCheck } from "lucide-react";
 import { glassSurface, glassBtn } from "@/components/ui/LiquidGlass";
 import { useExecution } from "@/components/janus/ExecutionContext";
-import { resumeJanus, requestCancel } from "@/lib/janus/browserAdapter";
+import { resumeJanus, requestCancel, reconcileJanus } from "@/lib/janus/browserAdapter";
 
 const DOT = { completed: "#22c55e", live: "#3b82f6", failed: "#ef4444", pending: "rgba(148,163,184,0.45)" };
 const btn = (t) => ({ ...glassBtn(t), minHeight: 40, padding: "0 16px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" });
@@ -19,6 +19,11 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
     await onChanged();
   };
   const resume = act(() => drive(hooks => resumeJanus(runId, hooks)));
+  const reconcile = act(async () => {
+    const { settled } = await reconcileJanus(runId);
+    await observe(runId);
+    if (!settled) throw new Error("No outcome is recorded for that call yet. It stays unresolved.");
+  });
   const cancel = act(async () => { await requestCancel(runId); await observe(runId); });
 
   return (
@@ -33,6 +38,7 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
           <span key={r.key} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: r.state === "pending" ? t.muted : t.text }}>
             <span style={{ width: 8, height: 8, borderRadius: 999, background: DOT[r.state], flexShrink: 0 }} />
             {r.label}{r.state === "live" ? " · in progress" : r.state === "failed" ? " · failed" : ""}
+            {r.state === "live" && r.attempts > 1 ? ` (attempt ${r.attempts} of ${state.maxAttempts})` : ""}
           </span>
         ))}
       </div>
@@ -40,7 +46,7 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
       {state.failures.map(f => (
         <div key={f.key} style={{ marginTop: 8, fontSize: 12, color: t.text, display: "flex", gap: 6, alignItems: "flex-start" }}>
           <AlertTriangle style={{ width: 13, height: 13, marginTop: 2, flexShrink: 0 }} />
-          <span>{f.message} <span style={{ color: t.subtitle }}>({f.evidence}{f.superseded ? " · an earlier valid version is still in use" : ""})</span></span>
+          <span>{f.message} <span style={{ color: t.subtitle }}>({f.evidence}{f.attempts > 1 ? ` · ${f.attempts} attempts` : ""}{f.superseded ? " · an earlier valid version is still in use" : ""})</span></span>
         </div>
       ))}
 
@@ -51,7 +57,7 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
       )}
       {state.unresolved && (
         <p style={{ margin: "10px 0 0", fontSize: 12, color: t.subtitle }}>
-          A call for {state.live.label} was started in a session that is no longer reporting. Its outcome is unknown, so it may still be running: nothing further is started for this run, and it cannot be marked as ended by hand.
+          A call for {state.live.label} was started in a session that is no longer reporting, so nothing further is started for this run. Checking reads what the server recorded: a finished call is saved with its real result, a call that never started is closed, and anything else stays unresolved. It cannot be marked as ended by hand.
         </p>
       )}
 
@@ -61,8 +67,9 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
         </p>
       )}
 
-      {(state.resumable || state.cancellable) && (
+      {(state.resumable || state.cancellable || state.unresolved) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+          {state.unresolved && <button onClick={reconcile} disabled={busy} style={{ ...btn(t), opacity: busy ? 0.5 : 1 }}><SearchCheck style={{ width: 14, height: 14 }} />Check recorded outcome</button>}
           {state.resumable && <button onClick={resume} disabled={busy} style={{ ...btn(t), opacity: busy ? 0.5 : 1 }}><Play style={{ width: 14, height: 14 }} />Resume from saved stages</button>}
           {state.cancellable && <button onClick={cancel} style={btn(t)}><Ban style={{ width: 14, height: 14 }} />Cancel after current stage</button>}
         </div>
