@@ -36,7 +36,7 @@ describe("execution — durable stages (Phase 3 exit tests, on the canonical eng
 
     expect(h.db.RunAttempt).toHaveLength(13);
     expect(h.db.RunAttempt.every(a => a.outcome === "succeeded" && stages.some(s => s.id === a.stage_id))).toBe(true);
-    expect(h.llm.calls.every(keys => keys.length === 1 && keys[0] === "prompt")).toBe(true); // no per-call model override
+    expect(h.llm.calls.every(keys => keys.join() === "stage_id,prompt")).toBe(true); // no per-call model override
   });
 
   it("the frontend view and the backend caches are the same durable truth", async () => {

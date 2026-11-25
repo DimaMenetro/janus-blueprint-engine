@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { internalError } from '../../shared/errorResponse.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -175,6 +176,6 @@ QUERY: Test query for synthesis parsing`;
 
     return Response.json({ error: "Unknown test_type. Use: intersection, synthesis, or check_run" });
   } catch (error) {
-    return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
+    return internalError('testSynthesis', error);
   }
 });

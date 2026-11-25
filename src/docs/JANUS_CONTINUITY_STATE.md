@@ -36,10 +36,19 @@ Read this first after any context reset.
 Proceed through phases automatically; stop only at genuine operator gates (credits, provider choice, destructive historical mutation, material contradiction, production cutover).
 
 ## Phase 4 (2026-11-25)
-- **Phase 4 COMPLETE:** one canonical engine in `src/lib/janus/`: `evidenceBoundary.js`, `stageCompiler.js` (only prompt builder), `stageRunner.js` (only model call), `stageEngine.js`, `executionState.js`, `browserAdapter.js` (scheduling only). `ExecutionEngine.jsx`, `rerunEngine.jsx`, `domainSME.jsx` and `buildPrompt` are deleted. Record: `JANUS_PHASE4_CANONICAL_STAGE_ENGINE_2026-11-25.md`.
+- **Phase 4 COMPLETE:** one canonical engine in `src/lib/janus/`: `evidenceBoundary.js`, `stageCompiler.js` (only prompt builder), `stageRunner.js` (only requester of the model call), `stageEngine.js`, `executionState.js`, `browserAdapter.js` (scheduling only). `ExecutionEngine.jsx`, `rerunEngine.jsx`, `domainSME.jsx` and `buildPrompt` are deleted. Record: `JANUS_PHASE4_CANONICAL_STAGE_ENGINE_2026-11-25.md`.
 - Resume, cancel-after-current-stage and the unresolved-call rule are live. Results and BottomAccessory read derived durable state.
 - Evidence: 68/68 tests, build passes, 69 historical Runs untouched. No live model call has gone through the new engine yet.
 - Tests share `src/lib/janus/testPlatform.js` (in-memory store + deterministic model).
+
+## Security migration (2026-11-25, after Phase 4)
+- **Model call moved server-side** on DIMA's instruction (platform rule; scan finding "Core integration protection"): backend function `invokeJanusStage`. `stageRunner.callLLM` calls it; nothing else moved. Details and evidence: Phase 4 record §7. 69/69 tests, build passes.
+- **Platform ceiling: a function request ends at 5 minutes.** Every stage call must now finish inside that. Bears on Phase 8/9 (larger prompts) and Phase 10/11 (server execution).
+- No live model call has gone through the function yet. One minimal call needs DIMA's approval (credit gate).
+- Three diagnostic functions no longer return stack traces (`base44/shared/errorResponse.ts`).
+- **Correction to the model-redline line above:** its guard test covers `src/` only. Diagnostic functions `testSynthesis` and `testCompressedSynthesis` still pass a Sonnet model override (4 calls). All 5 diagnostic functions can be called by any signed-in user and read runs with the service role. Nothing in the app calls them. Not changed; DIMA to decide: lock to admins, remove the override, or delete.
+- Package upgrades recommended, not installed (awaiting DIMA): vite 6.4.6, vitest 4.1.12, zod 4.6.7 with `@hookform/resolvers` moved to a zod-4-compatible line.
+- The app must be republished for any of this to reach the live site.
 
 ## Next action
 Phase 5: wire `completionManifest` and qualification into `finalizeRun` (replace the interim status rule), add the qualification stages through the canonical engine, show qualification state in Results/BottomAccessory. Not started.

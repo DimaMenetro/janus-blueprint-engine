@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { internalError } from '../../shared/errorResponse.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -102,6 +103,6 @@ Deno.serve(async (req) => {
       first_5_errors: (run.validation_errors || []).slice(0, 5),
     });
   } catch (error) {
-    return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
+    return internalError('testPromptSize', error);
   }
 });

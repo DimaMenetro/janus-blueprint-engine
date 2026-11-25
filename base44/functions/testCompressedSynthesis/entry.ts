@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { internalError } from '../../shared/errorResponse.ts';
 
 // Replicates the EXACT synthesis prompt the engine would now build,
 // using real domain data from an existing run, to verify it completes
@@ -237,6 +238,6 @@ QUERY: ${queryText}`;
 
     return Response.json({ error: "Unknown test_target. Use: measure, intersection, or synthesis" });
   } catch (error) {
-    return Response.json({ error: error.message, stack: error.stack }, { status: 500 });
+    return internalError('testCompressedSynthesis', error);
   }
 });

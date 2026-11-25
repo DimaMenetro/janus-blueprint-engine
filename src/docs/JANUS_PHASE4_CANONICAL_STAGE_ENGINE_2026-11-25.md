@@ -8,7 +8,7 @@
 |---|---|---|
 | Boundary | `lib/janus/evidenceBoundary.js` | Control plane / data plane. Seals untrusted records, quotes derived and operator text, checks block integrity. |
 | Compiler | `lib/janus/stageCompiler.js` | The only prompt builder. Registry-derived. Declares each stage's inputs. |
-| Runner | `lib/janus/stageRunner.js` | The only model call. begin → invoke → parse → validate → settle. Refuses an overlapping attempt. |
+| Runner | `lib/janus/stageRunner.js` | The only requester of the model call (served by backend function `invokeJanusStage`, see §7). begin → invoke → parse → validate → settle. Refuses an overlapping attempt. |
 | Engine | `lib/janus/stageEngine.js` | `executeStage`, `driveStages`, `finalizeRun`. Scheduler-independent. |
 | State | `lib/janus/executionState.js` | `stagePlan`, `deriveExecutionState`, `stageFailures`. Pure, derived from durable records. |
 | Adapter | `lib/janus/browserAdapter.js` | Scheduling only: execute, resume, rerun synthesis, rerun blueprint, cancel, abandon. |
@@ -54,3 +54,13 @@ Removed: `ExecutionEngine.jsx`, `rerunEngine.jsx`, `domainSME.jsx`, `buildPrompt
 
 ## 6. Deferred by plan
 Completion manifest and qualification → Phase 5. Retries, cross-session ownership, idempotency → Phase 6. Invalidation and impact preview → Phase 7. Truncation removal, Blueprint inputs → Phase 8/9.
+
+## 7. Addendum — model call moved to a backend function (2026-11-25, after Phase 4 exit)
+- **Why:** platform rule. Core integration calls other than file upload and signed URLs must run in a backend function. Raised by the security scan ("Core integration protection") and instructed by DIMA.
+- **What moved:** only the call. `stageRunner.callLLM` now invokes backend function `invokeJanusStage` with `{ stage_id, prompt }`. Compiler, parsing, validation, persistence and scheduling are unchanged and stay in the browser.
+- **Function contract:** signed-in caller; a stage the caller can read (RLS) whose status is `running`; prompt non-blank and at most 600,000 characters; forwards `{ prompt }` only, with the service role. A model failure returns its message (502). Any other failure returns a generic message plus a log reference.
+- **Model policy** is now enforced at the server boundary: no model, file or web parameter can be passed.
+- **New platform ceiling:** a function request is ended at 5 minutes. A stage call that runs longer now settles as a failure. Janus still adds no timer. How the browser sees that cut is unverified.
+- **Evidence:** 69/69 tests, build passes. On the deployed function: 400 (missing or blank input), 404 (unknown or malformed stage), 409 (settled stage), 413 (oversized prompt), and the failure body reaches the runner as its message. Temporary records were removed (69 runs, 0 stages after).
+- **Not verified:** the success path and the model-failure path. No model call was made (credit gate).
+- **Reach:** the live app uses this only after it is republished.

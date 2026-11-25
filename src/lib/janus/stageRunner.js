@@ -1,7 +1,9 @@
 /**
  * JANUS STAGE RUNNER — one durable LLM stage: begin → invoke → parse → validate → settle.
- * The only place Janus invokes a model. Completion-oriented: it waits for the call to settle, however long
- * that takes. Elapsed time is telemetry and is never turned into a failure.
+ * The only place Janus requests a model call. The call itself runs server-side, in the `invokeJanusStage`
+ * backend function, which accepts a stage this user owns plus its compiled prompt and forwards the prompt only.
+ * Completion-oriented: Janus adds no deadline and waits for the call to settle. The platform ends a function
+ * request after 5 minutes; that arrives here as a settled failure. Elapsed time itself is telemetry only.
  * Model policy: no per-call override — every call inherits the operator's Claude Opus setting.
  */
 import { base44 } from "@/api/base44Client";
@@ -9,8 +11,17 @@ import { validateJanusOutput } from "@/components/janus/janusSchema";
 import { beginStage, settleStage } from "@/lib/janus/stageStore";
 import { classifyFailure, classifyParseError } from "@/lib/janus/stageModel";
 
-export async function callLLM(prompt) {
-  return await base44.integrations.Core.InvokeLLM({ prompt });
+const STAGE_FUNCTION = "invokeJanusStage";
+
+export async function callLLM(stageId, prompt) {
+  try {
+    const { data } = await base44.functions.invoke(STAGE_FUNCTION, { stage_id: stageId, prompt });
+    return data.result;
+  } catch (err) {
+    // Keep the server's failure evidence, not the transport wrapper's generic text.
+    const detail = err?.response?.data?.error;
+    throw new Error(typeof detail === "string" ? detail : err?.message || String(err));
+  }
 }
 
 export function parseLLMResponse(result, expectedKey) {
@@ -57,7 +68,7 @@ export async function runStage({ prompt, parseKey, onBegan, ...stage }) {
       return { failure: { evidence, message } };
     };
     let result, parsed;
-    try { result = await callLLM(prompt); } catch (err) { return await fail(classifyFailure(err), `LLM call failed — ${err.message || err}`); }
+    try { result = await callLLM(handle.stage.id, prompt); } catch (err) { return await fail(classifyFailure(err), `LLM call failed — ${err.message || err}`); }
     try { parsed = parseLLMResponse(result, parseKey); } catch (e) { return await fail("parse_failure", `Parse error — ${e.message}`); }
     if (parsed.error) return await fail(classifyParseError(parsed.error), parsed.error.replace(`${parseKey}: `, ""));
     const validation = validateStageOutput(stage.stageKey, parsed.data);

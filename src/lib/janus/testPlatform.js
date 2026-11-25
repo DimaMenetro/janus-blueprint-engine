@@ -1,6 +1,6 @@
 /**
  * Test-only platform double (imported by *.test.js): an in-memory entity store and a deterministic
- * stand-in for the language-model integration. No network, no credits.
+ * stand-in for the model-call backend function. No network, no credits.
  */
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k]) : rec[k] === v));
@@ -35,10 +35,24 @@ const entity = (name) => ({
   filter: async (query) => db[name].filter(r => matches(r, query)).map(clone),
 });
 
-const InvokeLLM = async (args) => {
-  const stageKey = args.prompt.match(/^STAGE KEY: (\S+)$/m)[1];
+// Stand-in for the invokeJanusStage backend function (same contract as base44/functions/invokeJanusStage).
+// Failures have the shape the SDK really produces for a function call: a transport error carrying the response.
+const httpError = (status, error) => Object.assign(new Error(`Request failed with status code ${status}`), { status, response: { status, data: { error } } });
+const invoke = async (name, payload) => {
+  if (name !== "invokeJanusStage") throw httpError(404, `Function ${name} not found`);
+  llm.calls.push(Object.keys(payload));
+  const stage = db.RunStage.find(s => s.id === payload.stage_id);
+  if (!stage) throw httpError(404, "Stage not found");
+  if (stage.status !== "running") throw httpError(409, "Stage is already settled");
+  try { return { status: 200, data: { result: await model(payload.prompt) } }; }
+  catch (e) { throw httpError(502, e.message); }
+};
+
+// Deterministic model: what the integration returns for a compiled stage prompt.
+const model = async (prompt) => {
+  const stageKey = prompt.match(/^STAGE KEY: (\S+)$/m)[1];
   const key = stageKey.replace("intersection:", "");
-  llm.calls.push(Object.keys(args)); llm.prompts.push(args.prompt); llm.stages.push(stageKey);
+  llm.prompts.push(prompt); llm.stages.push(stageKey);
   if (llm.gate?.stageKey === stageKey) { llm.gate.arrive(); await llm.gate.released; }
   if (llm.failOn === key) throw new Error("provider returned 500");
   return { [key]: OUT[key] || { insight: `${key} insight`, tension: `${key} tension`, resolution: `${key} resolution` } };
@@ -46,7 +60,7 @@ const InvokeLLM = async (args) => {
 
 export const platform = {
   db, llm,
-  base44: { entities: { Run: entity("Run"), RunStage: entity("RunStage"), RunAttempt: entity("RunAttempt") }, integrations: { Core: { InvokeLLM } } },
+  base44: { entities: { Run: entity("Run"), RunStage: entity("RunStage"), RunAttempt: entity("RunAttempt") }, functions: { invoke } },
   reset() {
     db.Run.length = 0; db.RunStage.length = 0; db.RunAttempt.length = 0;
     llm.failOn = null; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
