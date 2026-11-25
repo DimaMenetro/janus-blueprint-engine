@@ -6,9 +6,13 @@ import process from "node:process";
 vi.mock("@/api/base44Client", async () => ({ base44: (await import("@/lib/janus/testPlatform")).platform.base44 }));
 
 import { platform as h } from "@/lib/janus/testPlatform";
-import { executeJanus, resumeJanus, rerunSynthesis, requestCancel, abandonUnresolved } from "@/lib/janus/browserAdapter";
+import * as adapter from "@/lib/janus/browserAdapter";
+import * as store from "@/lib/janus/stageStore";
+import { executeJanus, resumeJanus, rerunSynthesis, rerunBlueprint, requestCancel, OPERATOR_ONLY_MESSAGE } from "@/lib/janus/browserAdapter";
 import { compileStage, PROMPT_TEMPLATE_VERSION, REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
-import { runStage } from "@/lib/janus/stageRunner";
+import { runStage, callLLM } from "@/lib/janus/stageRunner";
+import { driveStages } from "@/lib/janus/stageEngine";
+import { TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
 import { deriveExecutionState, stagePlan } from "@/lib/janus/executionState";
 import { composeRunView } from "@/lib/janus/runView";
 import { MODEL_POLICY, PAIRS } from "@/lib/janus/protocolRegistry";
@@ -18,6 +22,13 @@ const params = (mode, extra = {}) => ({ queryText: "How should a city pilot auto
 const stagesOf = (runId) => h.db.RunStage.filter(s => s.run_id === runId);
 const viewOf = (runId) => composeRunView(h.db.Run.find(r => r.id === runId), stagesOf(runId));
 const config = { queryText: "Design a resilient grid", outputMode: "Blueprint", blueprintLevel: "L2", noveltyDial: "medium", refreshEnabled: false };
+const addStage = (runId, stageKey, extra = {}) => h.base44.entities.RunStage.create({ run_id: runId, stage_key: stageKey, revision: 1, status: "succeeded", depends_on: [], ...extra });
+/** A staged run as a lost session leaves it: lifecycle `status`, plus the stages it had already saved. */
+const stagedRun = async (mode, status, done = []) => {
+  const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: mode, output_mode: "Blueprint", status, storage_model: "staged_v1" });
+  for (const key of done) await addStage(run.id, key, { output: h.out[key] });
+  return run;
+};
 
 const root = path.resolve(process.cwd(), "src");
 const sources = () => {
@@ -63,7 +74,10 @@ describe("one canonical engine", () => {
     expect(fn).toContain("asServiceRole.integrations.Core.InvokeLLM({ prompt })");
     expect(fn).not.toMatch(/\bmodel\s*:|gemini/i); // with one call whose only argument is { prompt }, nothing else can be passed
     expect(fn).toMatch(/auth\.me\(\)/);                // signed-in callers only
-    expect(fn).toMatch(/stage\.status !== 'running'/); // only an in-flight stage the caller can read
+    expect(fn).toMatch(/user\.role !== 'admin'/);      // interim containment: operators only, until Phase 6 ownership
+    expect(fn).toContain(OPERATOR_ONLY_MESSAGE);
+    expect(fn.indexOf("user.role !== 'admin'")).toBeLessThan(fn.indexOf("RunStage.filter")); // refused before anything is read or called
+    expect(fn).toMatch(/stage\.status !== 'running'/); // defense in depth: only an in-flight stage the caller can read
     expect(fn).not.toMatch(/setTimeout|setInterval|Promise\.race|AbortController|AbortSignal/); // no deadline of its own
     expect(fn).not.toMatch(/stack\s*:/); // a stack never goes into a response
   });
@@ -127,49 +141,188 @@ describe("untrusted content boundary", () => {
 });
 
 describe("resume from durable stage state", () => {
-  it("completed stages are not regenerated; only what is missing runs", async () => {
-    h.llm.failOn = "blueprint";
-    const { runId } = await executeJanus(params("quick"));
-    const before = stagesOf(runId).filter(s => s.status === "succeeded").map(s => s.id);
-    h.llm.failOn = null; h.llm.stages.length = 0;
+  it("an interrupted open run continues: completed stages are not regenerated, only what is missing runs", async () => {
+    const run = await stagedRun("quick", "running", ["corpus", "cogito"]);
+    const before = stagesOf(run.id).map(s => s.id);
 
-    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ completed: 2, total: 3, resumable: true });
-    const result = await resumeJanus(runId);
+    expect(deriveExecutionState(viewOf(run.id))).toMatchObject({ status: "interrupted", completed: 2, total: 3, resumable: true });
+    const result = await resumeJanus(run.id);
     expect(h.llm.stages).toEqual(["blueprint"]);
     expect(result.status).toBe("completed");
-    expect(stagesOf(runId).filter(s => before.includes(s.id)).every(s => s.revision === 1 && s.status === "succeeded")).toBe(true);
-    expect(viewOf(runId).stageInfo.blueprint.active).toMatchObject({ revision: 2, provenance: expect.objectContaining({ origin: "resume" }) });
-    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ completed: 3, total: 3, resumable: false, status: "completed" });
+    expect(stagesOf(run.id).filter(s => before.includes(s.id)).every(s => s.revision === 1 && s.status === "succeeded")).toBe(true);
+    expect(viewOf(run.id).stageInfo.blueprint.active).toMatchObject({ revision: 1, provenance: expect.objectContaining({ origin: "resume" }) });
+    expect(deriveExecutionState(viewOf(run.id))).toMatchObject({ completed: 3, total: 3, resumable: false, status: "completed" });
   });
 
-  it("a reloaded session reconstructs progress from records alone, and never starts over an unresolved call", async () => {
-    const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1" });
-    await h.base44.entities.RunStage.create({ run_id: run.id, stage_key: "corpus", revision: 1, status: "succeeded", output: { constraints: ["c"] }, depends_on: [] });
-    const orphan = await h.base44.entities.RunStage.create({ run_id: run.id, stage_key: "cogito", revision: 1, status: "running", depends_on: [] });
+  it("a reloaded session reconstructs progress from records alone; an unresolved call stays unresolved and nothing replaces it", async () => {
+    const run = await stagedRun("quick", "running", ["corpus"]);
+    const orphan = await addStage(run.id, "cogito", { status: "running" });
     await h.base44.entities.RunAttempt.create({ run_id: run.id, stage_id: orphan.id, stage_key: "cogito", attempt_number: 1, outcome: "in_flight" });
 
     const state = deriveExecutionState(viewOf(run.id));
     expect(state).toMatchObject({ status: "unresolved", completed: 1, total: 3, unresolved: true, resumable: false });
     expect(state.live.key).toBe("cogito");
 
-    const stopped = await resumeJanus(run.id);
-    expect(stopped.unresolved).toBe("cogito");
+    for (const _again of [1, 2]) { // asking again changes nothing
+      const stopped = await resumeJanus(run.id);
+      expect(stopped.unresolved).toBe("cogito");
+    }
     expect(h.llm.calls).toHaveLength(0);
     expect(h.db.Run[0].status).toBe("running");
+    const kept = h.db.RunStage.find(s => s.id === orphan.id);
+    expect(kept.status).toBe("running"); // outcome unknown — not failed, not settled
+    expect(kept.error_class).toBeUndefined();
+    expect(h.db.RunStage).toHaveLength(2);
+    expect(h.db.RunAttempt.map(a => a.outcome)).toEqual(["in_flight"]);
+  });
 
-    await abandonUnresolved(run.id); // operator confirms the owning session is gone
-    expect(h.db.RunStage.find(s => s.id === orphan.id)).toMatchObject({ status: "failed", error_class: "platform_termination" });
-    expect(h.db.RunAttempt[0].outcome).toBe("platform_termination");
+  it("an unresolved call earlier or later in the plan stops the whole drive: nothing is started beside it", async () => {
+    const run = await stagedRun("quick", "running");
+    await addStage(run.id, "corpus", { status: "failed", error_class: "provider_error" }); // would otherwise be run again
+    await addStage(run.id, "cogito", { status: "running" });
+    expect((await resumeJanus(run.id)).unresolved).toBe("cogito");
+    expect(h.llm.calls).toHaveLength(0);
+    expect(h.db.RunStage).toHaveLength(2);
+  });
 
-    await resumeJanus(run.id);
-    expect(h.llm.stages).toEqual(["cogito", "blueprint"]);
-    expect(viewOf(run.id).stageInfo.corpus.revisions).toBe(1);
+  it("an unresolved call also blocks re-runs, and the finished run is not reopened", async () => {
+    const { runId } = await executeJanus(params("full"));
+    await addStage(runId, "blueprint", { revision: 2, status: "running" });
+    const before = [h.db.RunStage.length, h.llm.calls.length];
+    await expect(rerunSynthesis(runId)).rejects.toThrow(/has not settled/);
+    await expect(rerunBlueprint(runId)).rejects.toThrow(/has not settled/);
+    expect([h.db.RunStage.length, h.llm.calls.length]).toEqual(before);
+    expect(h.db.Run[0].status).toBe("completed");
+  });
+
+  it("no operator action can turn an unknown outcome into a settled failure", () => {
+    expect(adapter.abandonUnresolved).toBeUndefined();
+    expect(store.settleOrphanedStage).toBeUndefined();
+    expect(filesWith(/platform_termination/)).toEqual(["lib/janus/lifecycleContract.js"]); // a valid evidence class, never fabricated by the app
+    expect(filesWith(/Mark call as ended|abandonUnresolved|settleOrphanedStage/)).toEqual([]);
   });
 
   it("an open run with nothing in flight reads as interrupted, not as running", async () => {
     const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1" });
     expect(deriveExecutionState(viewOf(run.id))).toMatchObject({ status: "interrupted", resumable: true });
     expect(deriveExecutionState(viewOf(run.id), { driving: true }).status).toBe("running");
+  });
+});
+
+describe("truthful settlement: parsed but invalid output is a failure", () => {
+  it("structurally invalid output settles as schema_failure and never becomes the active revision", async () => {
+    h.llm.invalidOn = "corpus";
+    const { runId } = await executeJanus(params("quick"));
+    const [corpus] = stagesOf(runId).filter(s => s.stage_key === "corpus");
+    expect(corpus).toMatchObject({ status: "failed", error_class: "schema_failure" });
+    expect(corpus.error_message).toMatch(/^corpus: Output failed mandatory validation — corpus\.constraints: Expected array/);
+    expect(corpus.validation).toMatchObject({ valid: false, errors: ["corpus.constraints: Expected array, got string"] });
+    expect(corpus.output).toEqual({ constraints: "not an array" }); // kept on the failed revision for diagnosis only
+    expect(h.db.RunAttempt.find(a => a.stage_id === corpus.id)).toMatchObject({ outcome: "schema_failure" });
+
+    const view = viewOf(runId);
+    expect(view.stageInfo.corpus.active).toBeNull();
+    expect(view.artifacts.corpus).toBeUndefined();
+    expect(view.lineage.find(s => s.id === corpus.id).lineage_state).toBe("failed");
+    expect(deriveExecutionState(view).rows.find(r => r.key === "corpus").state).toBe("failed");
+    expect(deriveExecutionState(view).failures).toEqual([expect.objectContaining({ key: "corpus", evidence: "schema_failure" })]);
+  });
+
+  it("an intersection missing a mandatory field is a schema_failure too", async () => {
+    h.llm.invalidOn = PAIRS[0].id;
+    const { runId } = await executeJanus(params("full"));
+    expect(viewOf(runId).stageInfo[INTERSECTION_KEYS[0]].latest).toMatchObject({ status: "failed", error_class: "schema_failure" });
+    expect(viewOf(runId).artifacts.synthesis.intersection_matrix[PAIRS[0].id]).toBeUndefined();
+  });
+
+  it("resume does not treat the invalid revision as completed: the stage runs again", async () => {
+    const run = await stagedRun("quick", "running", ["corpus"]);
+    h.llm.invalidOn = "cogito";
+    await driveStages({ runId: run.id, keys: ["cogito"], origin: "execution" }); // the session ended here, before the run closed
+    h.llm.invalidOn = null; h.llm.stages.length = 0;
+    expect(viewOf(run.id).stageInfo.cogito.latest).toMatchObject({ revision: 1, status: "failed", error_class: "schema_failure" });
+    expect(deriveExecutionState(viewOf(run.id))).toMatchObject({ status: "interrupted", completed: 1, resumable: true });
+
+    await resumeJanus(run.id);
+    expect(h.llm.stages).toEqual(["cogito", "blueprint"]);
+    expect(viewOf(run.id).stageInfo.cogito.active).toMatchObject({ revision: 2, status: "succeeded" });
+    expect(viewOf(run.id).stageInfo.corpus.revisions).toBe(1);
+  });
+
+  it("a prior valid revision stays active when a newer revision is invalid", async () => {
+    const { runId } = await executeJanus(params("full"));
+    const valid = viewOf(runId).artifacts.blueprint;
+    h.llm.invalidOn = "blueprint";
+    const result = await rerunBlueprint(runId);
+    expect(result.success).toBe(false);
+    const view = viewOf(runId);
+    expect(view.stageInfo.blueprint.latest).toMatchObject({ revision: 2, status: "failed", error_class: "schema_failure" });
+    expect(view.stageInfo.blueprint.active).toMatchObject({ revision: 1, status: "succeeded" });
+    expect(view.artifacts.blueprint).toEqual(valid);
+    expect(deriveExecutionState(view).failures).toEqual([expect.objectContaining({ key: "blueprint", evidence: "schema_failure", superseded: true })]);
+  });
+});
+
+describe("terminal lifecycle boundary", () => {
+  it.each(TERMINAL_STATES)("a %s run is never resumed, even with stages missing or failed", async (status) => {
+    const run = await stagedRun("quick", status, ["corpus"]);
+    await addStage(run.id, "cogito", { status: "failed", error_class: "provider_error" });
+    expect(deriveExecutionState(viewOf(run.id))).toMatchObject({ status, resumable: false, endedIncomplete: true, cancellable: false });
+
+    await expect(resumeJanus(run.id)).rejects.toThrow(/has ended/);
+    expect(h.db.Run[0].status).toBe(status);
+    expect(h.llm.calls).toHaveLength(0);
+    expect(h.db.RunStage).toHaveLength(2);
+    expect(h.db.RunAttempt).toHaveLength(0);
+  });
+
+  it("a run that closed with a failed stage is finished: the missing stage comes only from an explicit re-run", async () => {
+    h.llm.failOn = "blueprint";
+    const { runId } = await executeJanus(params("standard"));
+    h.llm.failOn = null; h.llm.stages.length = 0;
+    const closed = h.db.Run[0].status;
+    expect(TERMINAL_STATES).toContain(closed);
+    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ resumable: false, endedIncomplete: true });
+    await expect(resumeJanus(runId)).rejects.toThrow(/has ended/);
+    expect(h.db.Run[0].status).toBe(closed);
+    expect(h.llm.stages).toEqual([]);
+
+    await rerunBlueprint(runId); // explicit, revision-producing
+    expect(h.llm.stages).toEqual(["blueprint"]);
+    expect(viewOf(runId).stageInfo.blueprint.active).toMatchObject({ revision: 2, provenance: expect.objectContaining({ origin: "rerun" }) });
+  });
+
+  it("an open run is the only kind the Resume action is offered for", async () => {
+    const open = await stagedRun("quick", "running", ["corpus"]);
+    expect(deriveExecutionState(viewOf(open.id))).toMatchObject({ resumable: true, endedIncomplete: false });
+    expect(deriveExecutionState(viewOf(open.id), { driving: true }).resumable).toBe(false);
+    const cancelling = await stagedRun("quick", "cancel_requested", ["corpus"]);
+    expect(deriveExecutionState(viewOf(cancelling.id)).resumable).toBe(false);
+  });
+});
+
+describe("interim containment: operators only until durable stage ownership (Phase 6)", () => {
+  const visitor = () => { h.session.user = { id: "user-2", role: "user" }; };
+
+  it("a signed-in non-operator cannot start, resume or re-run model work, and nothing is written", async () => {
+    const { runId } = await executeJanus(params("full"));
+    const open = await stagedRun("quick", "running", ["corpus"]);
+    const counts = () => [h.db.Run.length, h.db.RunStage.length, h.db.RunAttempt.length, h.llm.calls.length];
+    const before = counts();
+    visitor();
+    await expect(executeJanus(params("quick"))).rejects.toThrow(OPERATOR_ONLY_MESSAGE);
+    await expect(resumeJanus(open.id)).rejects.toThrow(OPERATOR_ONLY_MESSAGE);
+    await expect(rerunBlueprint(runId)).rejects.toThrow(OPERATOR_ONLY_MESSAGE);
+    expect(counts()).toEqual(before);
+    expect(h.db.Run.map(r => r.status)).toEqual(["completed", "running"]);
+  });
+
+  it("the model-call function refuses a non-operator even for a running stage they own", async () => {
+    const run = await stagedRun("quick", "running");
+    const stage = await addStage(run.id, "corpus", { status: "running" });
+    visitor();
+    await expect(callLLM(stage.id, "STAGE KEY: corpus")).rejects.toThrow(OPERATOR_ONLY_MESSAGE);
+    expect(h.llm.calls).toHaveLength(0);
   });
 });
 
@@ -274,7 +427,6 @@ describe("historical runs stay readable and untouched", () => {
     h.db.Run.push(JSON.parse(JSON.stringify(legacy)));
     await expect(resumeJanus("legacy-9")).rejects.toThrow(/read-only/);
     await requestCancel("legacy-9");
-    await abandonUnresolved("legacy-9");
     expect(h.db.Run[0]).toEqual(legacy);
     expect(h.db.RunStage).toHaveLength(0);
     expect(h.llm.calls).toHaveLength(0);
