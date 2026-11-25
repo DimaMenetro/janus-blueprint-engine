@@ -30,7 +30,7 @@ export const stageFailures = (view) => STAGE_KEY_ORDER
 
 const EXTRA_LABELS = {
   interrupted: "Interrupted — no session is running this",
-  unresolved: "Unresolved call — its outcome was never recorded",
+  unresolved: "Unresolved call — outcome unknown, nothing further can start",
   idle: "Idle",
 };
 
@@ -65,8 +65,10 @@ export function deriveExecutionState(view, { driving = false } = {}) {
     total: rows.length,
     next: live ? null : remaining[0] || null,
     failures: stageFailures(view),
-    resumable: staged && !driving && !live && remaining.length > 0 && run.status !== "cancel_requested",
-    cancellable: staged && run.status === "running",
+    // Ordinary resume exists only for an open (interrupted) run. Terminal runs recover through a re-run.
+    resumable: staged && !driving && !live && remaining.length > 0 && run.status === "running",
+    // Also offered for a cancellation a lost session left open, once nothing is in flight, so it can close.
+    cancellable: staged && (run.status === "running" || (run.status === "cancel_requested" && !driving && !live)),
     unresolved: !driving && !!live,
   };
 }

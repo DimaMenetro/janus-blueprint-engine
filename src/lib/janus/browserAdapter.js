@@ -5,13 +5,25 @@
  */
 import { PROTOCOL, MODEL_POLICY } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, INTERSECTION_KEYS } from "@/lib/janus/stageModel";
-import { createRun, updateRun, loadRunView, settleOrphanedStage } from "@/lib/janus/stageStore";
+import { base44 } from "@/api/base44Client";
+import { createRun, updateRun, loadRunView } from "@/lib/janus/stageStore";
 import { driveStages, finalizeRun } from "@/lib/janus/stageEngine";
 import { stagePlan } from "@/lib/janus/executionState";
 import { REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
 
 export { REFRESH_UNAVAILABLE_MESSAGE };
 const CORE_DOMAINS = ["corpus", "cogito", "animus", "actus"];
+const OPEN_STATES = ["running", "cancel_requested"];
+
+/**
+ * Interim containment, mirrored by the `invokeJanusStage` function: until Phase 6 gives every stage one
+ * durable owner and one attempt, only an operator (admin) may start model work. Checked before any record.
+ */
+export const OPERATOR_ONLY_MESSAGE = "Janus execution is limited to operators until durable stage ownership is in place";
+async function assertOperator() {
+  const user = await base44.auth.me();
+  if (user?.role !== "admin") throw new Error(OPERATOR_ONLY_MESSAGE);
+}
 
 // Runs this session is scheduling right now. One driver per run — never two.
 const driving = new Set();
@@ -37,6 +49,7 @@ async function advance(runId, { keys, origin, force = false }, hooks = {}) {
 export async function executeJanus(params, hooks) {
   const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = params;
   if (refreshEnabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE); // fail closed before any record or model call
+  await assertOperator();
   const run = await createRun({
     query_text: queryText, execution_mode: executionMode, output_mode: outputMode, blueprint_level: blueprintLevel,
     novelty_dial: noveltyDial, refresh_enabled: refreshEnabled, status: "running", validation_errors: [], raw_json: "{}",
@@ -47,13 +60,18 @@ export async function executeJanus(params, hooks) {
   return { ...result, success: result.status === "completed" };
 }
 
-/** Continue an open or incomplete staged run from its durable stages. Valid stages are never regenerated. */
+/**
+ * Continue an OPEN staged run (interrupted before it closed) from its durable stages. Valid stages are never
+ * regenerated. A terminal run (completed, failed, partial, cancelled) is never moved back to running here:
+ * recovery after a terminal state is an explicit revision-producing re-run (formalized in Phase 7).
+ */
 export async function resumeJanus(runId, hooks) {
   const view = await loadRunView(runId);
   if (!view) throw new Error("Run not found");
   if (view.storage !== STORAGE_MODEL.staged) throw new Error("Historical runs are read-only and cannot be resumed");
   if (view.run.refresh_enabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE);
-  if (!["running", "cancel_requested"].includes(view.run.status)) await updateRun(runId, { status: "running" });
+  if (view.run.status !== "running") throw new Error(`This run is ${view.run.status}, so it is not resumed: only an open, interrupted run is. A finished run recovers through a re-run, which produces a new revision.`);
+  await assertOperator();
   const result = await advance(runId, { keys: stagePlan(view.run.execution_mode), origin: "resume" }, hooks);
   return { ...result, success: result.status === "completed" };
 }
@@ -63,6 +81,7 @@ async function rerun(runId, target, keys, hooks) {
   if (!view) throw new Error("Run not found");
   const missing = CORE_DOMAINS.filter(d => !view.artifacts[d]);
   if (missing.length > 0) throw new Error(`Cannot re-run ${target} — missing prerequisite domains: ${missing.join(", ")}`);
+  await assertOperator();
   if (view.storage === STORAGE_MODEL.staged) await updateRun(runId, { status: "running" });
   const result = await advance(runId, { keys, origin: "rerun", force: true }, hooks);
   return { ...result, success: result.stageErrors.length === 0 && !result.unresolved && !result.cancelled, errors: result.stageErrors };
@@ -82,16 +101,10 @@ const liveStages = (view) => Object.values(view.stageInfo).map(i => i.latest).fi
  */
 export async function requestCancel(runId) {
   const view = await loadRunView(runId);
-  if (!view || view.storage !== STORAGE_MODEL.staged || view.run.status !== "running") return;
-  await updateRun(runId, { status: "cancel_requested" });
+  if (!view || view.storage !== STORAGE_MODEL.staged || !OPEN_STATES.includes(view.run.status)) return;
+  if (view.run.status === "running") await updateRun(runId, { status: "cancel_requested" });
+  // Never closed over a call that is still in flight or unresolved: the run stays cancel_requested until it settles.
   if (!driving.has(runId) && liveStages(view).length === 0) await updateRun(runId, { status: "cancelled" });
 }
-
-/** Operator confirms the session that owned an unresolved call is gone; settle it so the run can move again. */
-export async function abandonUnresolved(runId) {
-  if (driving.has(runId)) throw new Error("This session is still waiting on that call — it has not been abandoned");
-  const view = await loadRunView(runId);
-  if (!view || view.storage !== STORAGE_MODEL.staged) return;
-  for (const stage of liveStages(view)) await settleOrphanedStage(stage);
-  if (view.run.status === "cancel_requested") await updateRun(runId, { status: "cancelled" });
-}
+// An unresolved call (outcome never recorded) has no manual resolution: a session disappearing is not
+// evidence that the provider call ended, so nothing here may settle it or start a replacement (Phase 6).

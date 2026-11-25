@@ -98,8 +98,23 @@ describe("no second active roster in executable code", () => {
     expect(hits).toEqual([]);
   });
 
-  it("model policy: no per-call model overrides, no Gemini, no web-context path", () => {
-    const hits = files.filter(f => /\bmodel:\s*["']|gemini_|add_context_from_internet/.test(fs.readFileSync(f, "utf8")));
+  it("model policy: no per-call model overrides, no Gemini, no Sonnet, no web-context path", () => {
+    const hits = files.filter(f => /\bmodel:\s*["']|gemini_|sonnet|add_context_from_internet/i.test(fs.readFileSync(f, "utf8")));
     expect(hits.map(f => path.relative(root, f))).toEqual([]);
+  });
+
+  it("model policy holds in backend functions too: operational or diagnostic, none names a model", () => {
+    const serverRoot = path.resolve(process.cwd(), "base44");
+    const server = [];
+    const walkServer = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach(e => {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walkServer(p);
+      else if (/\.(jsx?|tsx?)$/.test(e.name)) server.push(p);
+    });
+    walkServer(serverRoot);
+    const rel = (f) => path.relative(serverRoot, f);
+    expect(server.map(rel).sort()).toEqual(["functions/invokeJanusStage/entry.ts", "shared/errorResponse.ts"]); // the retired diagnostics stay retired
+    const hits = server.filter(f => /\bmodel\s*:|gemini|sonnet|add_context_from_internet|file_urls/i.test(fs.readFileSync(f, "utf8")));
+    expect(hits.map(rel)).toEqual([]);
   });
 });

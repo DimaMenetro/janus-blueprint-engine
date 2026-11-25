@@ -5,7 +5,11 @@ import { internalError } from '../../shared/errorResponse.ts';
 // The prompt is compiled by the canonical stage compiler; this function only carries it to the integration.
 // Policy is enforced at this boundary: `prompt` is the only field forwarded, so no choice of engine, attached
 // file or web-context option can reach the integration. The call inherits the operator's app setting.
-// No deadline is added here: the call is awaited until it settles (the platform ends a request at 5 minutes).
+// No deadline is added here: the call is awaited until it settles.
+// INTERIM secure transport: the platform ends a function request at 5 minutes. That ceiling is a known
+// limitation of this transport, not a Janus inference deadline; the durable server path must replace it.
+// INTERIM containment: operators (admins) only. Nothing here claims a stage atomically, so until Phase 6
+// provides one durable owner and one attempt per stage, a wider audience could multiply paid calls.
 const MAX_PROMPT_CHARS = 600000;
 
 export default async function(req) {
@@ -13,6 +17,7 @@ export default async function(req) {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch((e) => (e.status === 401 ? null : Promise.reject(e)));
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (user.role !== 'admin') return Response.json({ error: 'Janus execution is limited to operators until durable stage ownership is in place' }, { status: 403 });
 
     const { stage_id, prompt } = (await req.json().catch(() => null)) || {};
     if (typeof stage_id !== 'string' || !stage_id) return Response.json({ error: 'stage_id is required' }, { status: 400 });

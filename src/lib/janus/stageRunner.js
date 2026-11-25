@@ -2,8 +2,10 @@
  * JANUS STAGE RUNNER — one durable LLM stage: begin → invoke → parse → validate → settle.
  * The only place Janus requests a model call. The call itself runs server-side, in the `invokeJanusStage`
  * backend function, which accepts a stage this user owns plus its compiled prompt and forwards the prompt only.
- * Completion-oriented: Janus adds no deadline and waits for the call to settle. The platform ends a function
- * request after 5 minutes; that arrives here as a settled failure. Elapsed time itself is telemetry only.
+ * Completion-oriented: Janus adds no deadline and waits for the call to settle. Elapsed time is telemetry only.
+ * `invokeJanusStage` is an INTERIM secure transport: the platform ends a function request at 5 minutes. A cut
+ * the platform actually reports is settled failure evidence, but that ceiling is a known limitation, not a
+ * Janus inference deadline — the production orchestration path must carry legitimately longer cognition.
  * Model policy: no per-call override — every call inherits the operator's Claude Opus setting.
  */
 import { base44 } from "@/api/base44Client";
@@ -62,9 +64,9 @@ export async function runStage({ prompt, parseKey, onBegan, ...stage }) {
   try {
     const handle = await beginStage({ ...stage, prompt });
     if (onBegan) await onBegan(handle.stage);
-    const fail = async (evidence, detail) => {
+    const fail = async (evidence, detail, rejected = {}) => {
       const message = `${stage.stageKey}: ${detail}`;
-      await settleStage(handle, { evidence, message });
+      await settleStage(handle, { evidence, message, ...rejected });
       return { failure: { evidence, message } };
     };
     let result, parsed;
@@ -72,6 +74,8 @@ export async function runStage({ prompt, parseKey, onBegan, ...stage }) {
     try { parsed = parseLLMResponse(result, parseKey); } catch (e) { return await fail("parse_failure", `Parse error — ${e.message}`); }
     if (parsed.error) return await fail(classifyParseError(parsed.error), parsed.error.replace(`${parseKey}: `, ""));
     const validation = validateStageOutput(stage.stageKey, parsed.data);
+    // Parsed but invalid is settled failure evidence (plan §12.2), never successful cognition.
+    if (!validation.valid) return await fail("schema_failure", `Output failed mandatory validation — ${validation.errors.join("; ")}`, { output: parsed.data, validation });
     return { record: await settleStage(handle, { output: parsed.data, validation }) };
   } finally {
     unresolved.delete(slot);

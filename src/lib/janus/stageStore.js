@@ -44,11 +44,15 @@ export async function beginStage({ runId, stageKey, revision, dependsOn, templat
   return { stage, attempt, startedAt };
 }
 
-/** Settle once. The artifact is persisted before the telemetry. Returns the settled stage record. */
+/**
+ * Settle once. The artifact is persisted before the telemetry. Returns the settled stage record.
+ * A parsed artifact that failed mandatory validation is kept on its FAILED revision, with the validation
+ * errors, for diagnosis only: a failed revision is never active, so it is never read as cognition.
+ */
 export async function settleStage({ stage, attempt, startedAt }, { output, validation, evidence, message }) {
   const endedAt = new Date().toISOString();
   const patch = evidence
-    ? { status: "failed", error_class: evidence, error_message: message, completed_at: endedAt }
+    ? { status: "failed", error_class: evidence, error_message: message, completed_at: endedAt, ...(validation ? { output, validation } : {}) }
     : { status: "succeeded", output, validation, completed_at: endedAt };
   await base44.entities.RunStage.update(stage.id, patch);
   await base44.entities.RunAttempt.update(attempt.id, {
@@ -59,17 +63,5 @@ export async function settleStage({ stage, attempt, startedAt }, { output, valid
   });
   return { ...stage, ...patch };
 }
-
-/**
- * Settle a stage whose owning session is gone, on the operator's explicit confirmation.
- * The evidence is the operator's statement that the session ended — never elapsed time.
- */
-export async function settleOrphanedStage(stage) {
-  const endedAt = new Date().toISOString();
-  const message = `${stage.stage_key}: the session that owned this call ended before its outcome was recorded (operator-confirmed)`;
-  await base44.entities.RunStage.update(stage.id, { status: "failed", error_class: "platform_termination", error_message: message, completed_at: endedAt });
-  const attempts = await base44.entities.RunAttempt.filter({ stage_id: stage.id });
-  for (const a of attempts.filter(x => x.outcome === "in_flight")) {
-    await base44.entities.RunAttempt.update(a.id, { outcome: "platform_termination", ended_at: endedAt, error_message: message });
-  }
-}
+// There is deliberately no way to settle a stage from outside the call that owns it. A revision whose
+// call outcome was never recorded stays `running` (unresolved) until real platform evidence exists (Phase 6).

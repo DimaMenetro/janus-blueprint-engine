@@ -15,8 +15,16 @@ const OUT = {
   blueprint: { goal: "Pilot", assumptions: [], steps: [{ step: 1, title: "Scope", instructions: "Define the district" }], success_criteria: ["s"], risk_register: [{ risk: "r", impact: "med", mitigation: "m" }] },
 };
 
+// Parsed but structurally invalid: what a model returns when it ignores the stage's output contract.
+const INVALID = {
+  corpus: { constraints: "not an array" },
+  blueprint: { goal: "Pilot", steps: [{ title: "a step with no number and no instructions" }] },
+};
+const OPERATOR = { id: "user-operator", role: "admin" };
+
 const db = { Run: [], RunStage: [], RunAttempt: [] };
-const llm = { failOn: null, calls: [], prompts: [], stages: [], gate: null };
+const llm = { failOn: null, invalidOn: null, calls: [], prompts: [], stages: [], gate: null };
+const session = { user: { ...OPERATOR } };
 let n = 0;
 
 const entity = (name) => ({
@@ -40,6 +48,8 @@ const entity = (name) => ({
 const httpError = (status, error) => Object.assign(new Error(`Request failed with status code ${status}`), { status, response: { status, data: { error } } });
 const invoke = async (name, payload) => {
   if (name !== "invokeJanusStage") throw httpError(404, `Function ${name} not found`);
+  if (!session.user) throw httpError(401, "Unauthorized");
+  if (session.user.role !== "admin") throw httpError(403, "Janus execution is limited to operators until durable stage ownership is in place");
   llm.calls.push(Object.keys(payload));
   const stage = db.RunStage.find(s => s.id === payload.stage_id);
   if (!stage) throw httpError(404, "Stage not found");
@@ -55,15 +65,21 @@ const model = async (prompt) => {
   llm.prompts.push(prompt); llm.stages.push(stageKey);
   if (llm.gate?.stageKey === stageKey) { llm.gate.arrive(); await llm.gate.released; }
   if (llm.failOn === key) throw new Error("provider returned 500");
+  if (llm.invalidOn === key) return { [key]: INVALID[key] || { insight: `${key} insight only` } };
   return { [key]: OUT[key] || { insight: `${key} insight`, tension: `${key} tension`, resolution: `${key} resolution` } };
 };
 
 export const platform = {
-  db, llm,
-  base44: { entities: { Run: entity("Run"), RunStage: entity("RunStage"), RunAttempt: entity("RunAttempt") }, functions: { invoke } },
+  db, llm, session, out: OUT,
+  base44: {
+    entities: { Run: entity("Run"), RunStage: entity("RunStage"), RunAttempt: entity("RunAttempt") },
+    functions: { invoke },
+    auth: { me: async () => { if (!session.user) throw httpError(401, "Unauthorized"); return clone(session.user); } },
+  },
   reset() {
     db.Run.length = 0; db.RunStage.length = 0; db.RunAttempt.length = 0;
-    llm.failOn = null; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
+    session.user = { ...OPERATOR };
+    llm.failOn = null; llm.invalidOn = null; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
   },
   /** Hold the model call for one stage open until release() — an unresolved, live call. */
   gateOn(stageKey) {
