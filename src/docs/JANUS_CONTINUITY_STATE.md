@@ -56,10 +56,25 @@ Proceed through phases automatically; stop only at genuine operator gates (credi
 - **Standing holds from DIMA: no paid model call yet; do not republish yet.**
 
 ## Phase 5 (2026-11-25) — record `JANUS_PHASE5_COMPLETION_QUALIFICATION_2026-11-25.md`
-- **Core implemented, not complete.** `qualification.js` (pure) + `finalizeRun`: lifecycle from the completion manifest (`completed` / `partial` / `failed`), one independent `qualification` stage, release only when JANUS-QUALIFIED. Screens: QualificationPanel in Results, BottomAccessory, Actus corrections.
+- **COMPLETE (closed on DIMA's review; record §6; baseline commit `239319f`, 104/104).** `qualification.js` (pure) + `finalizeRun`: lifecycle from the completion manifest (`completed` / `partial` / `failed`), one independent `qualification` stage, release only when JANUS-QUALIFIED. Screens: QualificationPanel in Results, BottomAccessory, Actus corrections.
 - Reviewable decisions: Blueprint steps carry `derived_from` + `confidence`; Blueprint reads Cogito claims and patterns; contracts request subdomains for all four domains and the mode's minimum alternatives. Template `stage-compiler/2026-11-25.2`.
 - Evidence: 102/102 tests, build passes, 69 historical Runs untouched (16/19/34), 0 stages.
-- Open: refinement cycle and `limitation_reported` (with Phase 9 refinement generation); Blueprint tab display of traces; live evidence.
+- Closeout: the §3 decisions are accepted and must not be reversed. Subdomain output is mode-aware (Full explicit 25/25; Standard/Quick integrated, same SME expertise). Blueprint tab shows `derived_from` and effective confidence per step. Template `stage-compiler/2026-11-25.3`.
+- `limitation_reported` is unreachable until the Phase 9 refinement machinery exists (recorded dependency). Blueprint context truncation (20,000 chars) is known debt for Phase 8/9: never compensate by removing inputs.
+- Vitest stays on 3.2.7 (deferred tooling debt, DIMA's decision).
+
+## STANDING DISCIPLINE (DIMA, 2026-11-25 — mandatory, non-negotiable)
+An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convoluted" and began rewriting it, edited inherited tests to fit the new code, and inferred a failure class from an HTTP error. That is the failure mode that forced the months-long rollback.
+- **Complexity is the system.** Never simplify because code feels verbose, awkward or repetitive. Refactor shape only with demonstrated behavioural equivalence. If a section is hard to read, document it.
+- **Inherited tests are the behavioural oracle.** Never weaken, delete, skip or rewrite one because new code breaks it. Check with `git diff 239319f -- <the six baseline test files>`: it must be empty.
+- **Never continue from red tests.** Before a structural change: state the invariant, say why existing behaviour cannot satisfy it, make the smallest architecture-preserving change, run focused tests, run the full suite.
+- **Unknown outcome = unresolved.** No failure class is ever inferred. Do not change scope.
+
+## Phase 6 (2026-11-25) — IN PROGRESS — record `JANUS_PHASE6_FAILURE_RETRY_OWNERSHIP_2026-11-25.md`
+- Re-anchored to `239319f`. The six inherited test files are byte-identical to it and pass (104) with 33 new Phase 6 tests (`resilience.test.js`): 137/137. Build passes. 69 historical Runs untouched.
+- In place: one RunAttempt per actual attempt; server-side slot (`Run.active_attempt_id`) and single attempt claim, both conditional writes; server-recorded outcomes (`RunAttempt.transport`, `response_text`); bounded retry only after settlement; recovery from recorded evidence (`recoverStage` truth table, `reconcileJanus`, "Check recorded outcome"); cancellation stops retries and scheduling.
+- **Operator-only containment is still in force.** Lifting it requires retiring two inherited containment tests, which needs DIMA's explicit authorization.
+- Not verified live: the deployed function's slot/claim/record path (only its refusal paths were called; no model call was made).
 
 ## Next action
-Await DIMA on: (1) the vitest upgrade path, (2) the Phase 5 decisions in record §3. Then Phase 6 (failure classifier, bounded retry, durable ownership/idempotency, safe orphan resolution), which also lifts the operator-only containment.
+Await DIMA on the three Phase 6 decisions in the record (§6). Do not publish. Do not make a paid call.

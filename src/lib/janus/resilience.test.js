@@ -351,7 +351,8 @@ describe("recovery from durable evidence: the truth table, case by case", () => 
       expect((await resumeJanus(runId)).unresolved).toBe("cogito");
     }
     expect(snapshot({ stages: h.db.RunStage, attempts: h.db.RunAttempt, run: h.db.Run[0] })).toEqual(before);
-    expect(before.run.active_attempt_id).toBe(before.attempts[0].id);
+    expect(before.attempts.filter(a => a.stage_key === "cogito")).toEqual([expect.objectContaining({ outcome: "in_flight", claim_state: "claimed" })]);
+    expect(before.run.active_attempt_id).toBe(before.attempts.find(a => a.stage_key === "cogito").id); // the slot is still held by that call
     expect(h.llm.stages).toEqual(["corpus"]);
   });
 

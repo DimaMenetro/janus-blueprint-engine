@@ -1,7 +1,7 @@
 # Janus Phase 5 — Completion + Quality Qualification Against the Stage Model
 - Document Type: Implementation Record · Date: 2026-11-25 · Author: Kytheion (Scribe-Particle-4)
 - Governs: plan §7.2–7.4, §7.7, §11, Phase 5 · Builds on: Phase 2 contract (`lifecycleContract.js`), Phase 3/4 stage model and engine
-- Status: CORE IMPLEMENTED, automated evidence only. Open items in §5. Not published. No model call made.
+- Status: COMPLETE (closed 2026-11-25 on DIMA's review, see §6). Automated evidence only. Not published. No model call made.
 
 ## 1. What changed
 | Piece | Where | Role |
@@ -36,8 +36,21 @@
 | Failure inspectable without corrupting artifacts | failed and invalid evaluations: nothing released, 13 succeeded stages intact, reasons on each criterion |
 | Also | Full happy path released; partial labels; stale Blueprint; code-corrected confidence; single derivation for engine and screens |
 
-## 5. Open before Phase 5 can be called complete
+## 5. Open items as first recorded (superseded by §6 where it says so)
 1. **Refinement cycle.** `refinement_required` is reached and shown, but nothing regenerates the Blueprint from the critique and `limitation_reported` is never reached. The cycle counter belongs with refinement generation (Phase 9). Until then a failing Blueprint stays unreleased under the candidate label.
 2. **Blueprint tab** does not yet show `derived_from` / `confidence` per step, and the new Cogito/Animus/Actus subdomain sets have no display (Phase 9/12 presentation).
 3. **No live evidence.** The evaluator's real behaviour, prompt sizes (the evaluation prompt is not truncated; the Blueprint context is still capped at 20,000 characters and now carries more) and the cost of the extra call per run are unmeasured.
 4. Historical Runs show no qualification panel; they are never evaluated or written.
+
+## 6. Closeout (2026-11-25, DIMA review) — baseline commit `239319f`
+DIMA accepted the direction and the §3 decisions. They are not to be reversed.
+
+1. **Kept by decision:** `derived_from` and per-step `confidence` on Blueprint steps; Blueprint access to Cogito claims and the four formal patterns (this also corrects the CP-002 context-threading gap); alternative minimums Quick 1 / Standard 2 / Full 3.
+2. **Subdomain output is mode-aware** (output density, not intelligence). The SME identity, with every subdomain in full, is identical in all modes. Full contracts require the explicit subdomain structures for Corpus, Cogito, Animus and Actus (25/25). Standard and Quick contracts do not ask for the inventory and carry a density instruction instead; Quick's says compact is not shallow. Template `stage-compiler/2026-11-25.3`.
+3. **Blueprint traceability is visible.** Each step in the Blueprint tab shows its `derived_from` handles (an unknown handle is struck through) and its effective confidence, which code caps at the weakest claim or recommendation the step cites (`stepTrace`). No BlueprintPrint or Phase 9 visual work was done.
+4. **Scope correction.** The refinement cycle (§5.1) is Phase 9 work: candidate generation, adversarial comparison, self-critique, refinement and the mature qualification loop. **`limitation_reported` is unreachable until that Phase 9 machinery exists. This is a recorded dependency, not a Phase 5 defect.**
+5. **Known debt, not to be "fixed" by removing inputs:** the Blueprint context is still truncated at 20,000 characters. Phase 8/9 must remove or redesign the cognitive-input truncation so the complete required context reaches Blueprint cognition.
+6. **Deferred:** display of the subdomain sets (frontend/Blueprint phases); live evidence (§5.3).
+7. **Vitest stays on 3.2.7** as deferred environment/tooling debt. Only the Node `vitest run` path is used. Revisit when the installer accepts the patched line, or before any Vitest browser/dev-server surface is used. Not a Janus blocker.
+
+Evidence at close: 104/104 tests, production build passes, 69 historical Runs untouched (16 failed / 19 running / 34 completed, newest update 2026-08-11), 0 RunStage, 0 RunAttempt.
