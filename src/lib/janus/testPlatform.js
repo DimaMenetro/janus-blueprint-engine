@@ -18,6 +18,7 @@ const OUT = {
 // Parsed but structurally invalid: what a model returns when it ignores the stage's output contract.
 const INVALID = {
   corpus: { constraints: "not an array" },
+  cogito: { claims: [{ id: "C1", tag: "Certain", text: "a claim tagged outside the confidence taxonomy" }] },
   blueprint: { goal: "Pilot", steps: [{ title: "a step with no number and no instructions" }] },
 };
 const OPERATOR = { id: "user-operator", role: "admin" };
