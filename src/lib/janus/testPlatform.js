@@ -2,29 +2,53 @@
  * Test-only platform double (imported by *.test.js): an in-memory entity store and a deterministic
  * stand-in for the model-call backend function. No network, no credits.
  */
+import { subdomainIds, PAIRS, PATTERNS } from "@/lib/janus/protocolRegistry";
+import { QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
+
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k]) : rec[k] === v));
 
+const subs = (d) => Object.fromEntries(subdomainIds(d).map(id => [id, { perspective: `${id} view`, key_findings: ["f"] }]));
+const step = (n, title, derived_from) => ({ step: n, title, instructions: "Do it", inputs: ["i"], outputs: ["o"], validation: "Check it",
+  depends_on_steps: n > 1 ? [1] : [], substeps: [{ substep: `${n}a`, details: "d" }], derived_from, confidence: "Contested" });
+// A Blueprint that cites only what its prompt actually showed it (so its traces resolve in every mode).
+const blueprintFor = (prompt = "") => ({
+  goal: "Pilot", assumptions: [],
+  alternative_approaches: ["A", "B", "C"].map(name => ({ name, pros: ["p"], cons: ["c"], why_not_chosen: "w" })),
+  steps: [
+    step(1, "Scope", ["C1", "corpus:1"]),
+    ...(prompt.includes("ACTUS: Key Recommendations") ? [step(2, "Pilot", ["R1", "animus:1"])] : []),
+    ...(prompt.includes("[pattern:") ? [step(3, "Scale", [PAIRS[0].id, `pattern:${PATTERNS[0].id}`])] : []),
+  ],
+  success_criteria: ["s"], risk_register: [{ risk: "r", impact: "med", mitigation: "m" }],
+});
 const OUT = {
   refresh: { mode: "tier0", attempted: false, limitations: "Training data only." },
-  corpus: { constraints: ["Grid latency under 200 ms"], feasibility_notes: ["Feasible with edge nodes"], subdomains: {} },
-  cogito: { claims: [{ id: "C1", tag: "Contested", text: "Edge inference cuts latency", depends_on: [], why_believed: "b", falsifiable_by: "f", verify_later: "v" }], reasoning_map: ["r1"] },
-  animus: { boundary_checks: ["No covert data capture"], disallowed_moves: [], safety_notes: [], ethical_stance: "Consent first" },
-  actus: { recommendations: [{ id: "R1", text: "Pilot one district", depends_on_claims: ["C1"], inherited_confidence: "Contested", probability: "medium" }] },
-  synthesis: { key_takeaways: ["k"], constraint_collisions: [], limitation_foreground: "l" },
-  blueprint: { goal: "Pilot", assumptions: [], steps: [{ step: 1, title: "Scope", instructions: "Define the district" }], success_criteria: ["s"], risk_register: [{ risk: "r", impact: "med", mitigation: "m" }] },
+  corpus: { constraints: ["Grid latency under 200 ms"], feasibility_notes: ["Feasible with edge nodes"], subdomains: subs("corpus") },
+  cogito: { claims: [{ id: "C1", tag: "Contested", text: "Edge inference cuts latency", depends_on: [], why_believed: "b", falsifiable_by: "f", verify_later: "v" }], reasoning_map: ["r1"], subdomains: subs("cogito") },
+  animus: { boundary_checks: ["No covert data capture"], disallowed_moves: [], safety_notes: [], ethical_stance: "Consent first", subdomains: subs("animus") },
+  actus: { recommendations: [{ id: "R1", text: "Pilot one district", depends_on_claims: ["C1"], inherited_confidence: "Contested", probability: "medium" }], subdomains: subs("actus") },
+  synthesis: { key_takeaways: ["k"], constraint_collisions: [], limitation_foreground: "l",
+    ...Object.fromEntries(PATTERNS.map(p => [p.id, Object.fromEntries(p.fields.map(f => [f, f === "probability_wave" ? ["w"] : "v"]))])) },
 };
+// The independent evaluator: passes every critique criterion unless a test seeds a verdict.
+const evaluation = () => ({
+  verdicts: Object.fromEntries(QUALITY_CRITERIA.filter(c => c.method === "critique" && c.hard)
+    .map(c => [c.id, { verdict: llm.verdicts[c.id] || "pass", reason: `${c.id} evidence` }])),
+  strongest_objection: "o",
+});
 
 // Parsed but structurally invalid: what a model returns when it ignores the stage's output contract.
 const INVALID = {
   corpus: { constraints: "not an array" },
   cogito: { claims: [{ id: "C1", tag: "Certain", text: "a claim tagged outside the confidence taxonomy" }] },
   blueprint: { goal: "Pilot", steps: [{ title: "a step with no number and no instructions" }] },
+  qualification: { verdicts: { elegance: { verdict: "pass", reason: "only one criterion answered" } } },
 };
 const OPERATOR = { id: "user-operator", role: "admin" };
 
 const db = { Run: [], RunStage: [], RunAttempt: [] };
-const llm = { failOn: null, invalidOn: null, calls: [], prompts: [], stages: [], gate: null };
+const llm = { failOn: null, invalidOn: null, override: {}, verdicts: {}, calls: [], prompts: [], stages: [], gate: null };
 const session = { user: { ...OPERATOR } };
 let n = 0;
 
@@ -67,11 +91,14 @@ const model = async (prompt) => {
   if (llm.gate?.stageKey === stageKey) { llm.gate.arrive(); await llm.gate.released; }
   if (llm.failOn === key) throw new Error("provider returned 500");
   if (llm.invalidOn === key) return { [key]: INVALID[key] || { insight: `${key} insight only` } };
+  if (llm.override[key]) return { [key]: clone(llm.override[key]) }; // structurally valid output a test wants to seed
+  if (key === "blueprint") return { blueprint: blueprintFor(prompt) };
+  if (key === "qualification") return { qualification: evaluation() };
   return { [key]: OUT[key] || { insight: `${key} insight`, tension: `${key} tension`, resolution: `${key} resolution` } };
 };
 
 export const platform = {
-  db, llm, session, out: OUT,
+  db, llm, session, out: OUT, blueprintFor,
   base44: {
     entities: { Run: entity("Run"), RunStage: entity("RunStage"), RunAttempt: entity("RunAttempt") },
     functions: { invoke },
@@ -80,7 +107,7 @@ export const platform = {
   reset() {
     db.Run.length = 0; db.RunStage.length = 0; db.RunAttempt.length = 0;
     session.user = { ...OPERATOR };
-    llm.failOn = null; llm.invalidOn = null; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
+    llm.failOn = null; llm.invalidOn = null; llm.override = {}; llm.verdicts = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
   },
   /** Hold the model call for one stage open until release() — an unresolved, live call. */
   gateOn(stageKey) {

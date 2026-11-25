@@ -12,8 +12,10 @@ const probabilityDot = {
   low: "bg-red-500 border-red-400",
 };
 
-export default function ActusTab({ data }) {
+export default function ActusTab({ data, corrections = [] }) {
   if (!data) return <div className="text-slate-500 p-6">No actus data available.</div>;
+  // Confidence propagation is decided by code: a recommendation shows the ceiling of its claims.
+  const ceilingOf = (rec) => corrections.find(c => c.id === rec.id);
 
   return (
     <div className="space-y-6 p-6">
@@ -113,8 +115,11 @@ export default function ActusTab({ data }) {
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-sm font-semibold text-slate-600 dark:text-slate-300">{rec.id}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${confidenceColors[rec.inherited_confidence] || "border border-slate-300 text-slate-600"}`}>
-                      {rec.inherited_confidence}
+                    <span
+                      title={ceilingOf(rec) ? `Set by code to the lowest confidence of its claims (the model wrote ${ceilingOf(rec).from || "nothing"})` : undefined}
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${confidenceColors[ceilingOf(rec)?.to || rec.inherited_confidence] || "border border-slate-300 text-slate-600"}`}
+                    >
+                      {ceilingOf(rec) ? `${ceilingOf(rec).to} · corrected from ${ceilingOf(rec).from || "none"}` : rec.inherited_confidence}
                     </span>
                     <div className="flex items-center gap-1.5">
                       <div className={`w-2 h-2 rounded-full border ${probabilityDot[rec.probability] || "bg-slate-400 border-slate-300"}`} />

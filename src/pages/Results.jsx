@@ -11,6 +11,7 @@ import GlassResultTabs from "@/components/janus/GlassResultTabs";
 import RerunControls from "@/components/janus/RerunControls";
 import StageLineagePanel from "@/components/janus/StageLineagePanel";
 import ExecutionStatePanel from "@/components/janus/ExecutionStatePanel";
+import QualificationPanel from "@/components/janus/QualificationPanel";
 import { useExecution } from "@/components/janus/ExecutionContext";
 import { loadRunView } from "@/lib/janus/stageStore";
 import { deriveExecutionState } from "@/lib/janus/executionState";
@@ -167,6 +168,9 @@ export default function Results() {
 
       {/* Durable execution state + operator controls */}
       <ExecutionStatePanel state={state} runId={run.id} t={t} onChanged={reload} />
+
+      {/* Completion + quality qualification (derived from the same stage records) */}
+      <QualificationPanel view={view} t={t} />
 
       {/* Domain re-run controls — show when synthesis or blueprint missing/errored */}
       <RerunControls view={view} t={t} isDark={isDark} onRerunComplete={reload} />

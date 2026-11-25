@@ -36,8 +36,8 @@ Read this first after any context reset.
 Proceed through phases automatically; stop only at genuine operator gates (credits, provider choice, destructive historical mutation, material contradiction, production cutover).
 
 ## Phase 4 (2026-11-25)
-- **Phase 4 COMPLETE:** one canonical engine in `src/lib/janus/`: `evidenceBoundary.js`, `stageCompiler.js` (only prompt builder), `stageRunner.js` (only requester of the model call), `stageEngine.js`, `executionState.js`, `browserAdapter.js` (scheduling only). `ExecutionEngine.jsx`, `rerunEngine.jsx`, `domainSME.jsx` and `buildPrompt` are deleted. Record: `JANUS_PHASE4_CANONICAL_STAGE_ENGINE_2026-11-25.md`.
-- Resume, cancel-after-current-stage and the unresolved-call rule are live. Results and BottomAccessory read derived durable state.
+- **Phase 4 COMPLETE (after the correction tranche below; the first "complete" was premature):** one canonical engine in `src/lib/janus/`: `evidenceBoundary.js`, `stageCompiler.js` (only prompt builder), `stageRunner.js` (only requester of the model call), `stageEngine.js`, `executionState.js`, `browserAdapter.js` (scheduling only). `ExecutionEngine.jsx`, `rerunEngine.jsx`, `domainSME.jsx` and `buildPrompt` are deleted. Record: `JANUS_PHASE4_CANONICAL_STAGE_ENGINE_2026-11-25.md`.
+- Resume (open runs only), cancel-after-current-stage and the unresolved-call rule (no manual settlement) are live. Results and BottomAccessory read derived durable state.
 - Evidence: 68/68 tests, build passes, 69 historical Runs untouched. No live model call has gone through the new engine yet.
 - Tests share `src/lib/janus/testPlatform.js` (in-memory store + deterministic model).
 
@@ -45,10 +45,21 @@ Proceed through phases automatically; stop only at genuine operator gates (credi
 - **Model call moved server-side** on DIMA's instruction (platform rule; scan finding "Core integration protection"): backend function `invokeJanusStage`. `stageRunner.callLLM` calls it; nothing else moved. Details and evidence: Phase 4 record §7. 69/69 tests, build passes.
 - **Platform ceiling: a function request ends at 5 minutes.** Every stage call must now finish inside that. Bears on Phase 8/9 (larger prompts) and Phase 10/11 (server execution).
 - No live model call has gone through the function yet. One minimal call needs DIMA's approval (credit gate).
-- Three diagnostic functions no longer return stack traces (`base44/shared/errorResponse.ts`).
-- **Correction to the model-redline line above:** its guard test covers `src/` only. Diagnostic functions `testSynthesis` and `testCompressedSynthesis` still pass a Sonnet model override (4 calls). All 5 diagnostic functions can be called by any signed-in user and read runs with the service role. Nothing in the app calls them. Not changed; DIMA to decide: lock to admins, remove the override, or delete.
-- Package upgrades recommended, not installed (awaiting DIMA): vite 6.4.6, vitest 4.1.12, zod 4.6.7 with `@hookform/resolvers` moved to a zod-4-compatible line.
-- The app must be republished for any of this to reach the live site.
+- The entries of this section about diagnostic functions and package recommendations are superseded by the tranche below.
+
+## Phase 4 correction tranche + closeout (2026-11-25, Daionae/DIMA review) — record §8
+- Invalid parsed output settles `schema_failure` (never active). No operator-made `platform_termination`; an unresolved call blocks resume AND reruns. Terminal runs are never resumed.
+- `invokeJanusStage` and the browser adapter are **operators (admins) only until Phase 6 ownership**. Do not widen before then.
+- `invokeJanusStage` is an **interim** transport; its 5-minute ceiling is a limitation, not a Janus deadline. Never add a timer. Phase 10/11 resolve it.
+- All five diagnostic functions deleted. Only `invokeJanusStage` + `base44/shared/errorResponse.ts` exist server-side; a guard test pins that and scans `base44/` for model names.
+- Packages: vite 6.4.6; zod and @hookform/resolvers removed. **vitest 4.1.12 blocked** by an installer failure (npm "edgesOut" error); restored to 3.2.7. Awaiting DIMA.
+- **Standing holds from DIMA: no paid model call yet; do not republish yet.**
+
+## Phase 5 (2026-11-25) — record `JANUS_PHASE5_COMPLETION_QUALIFICATION_2026-11-25.md`
+- **Core implemented, not complete.** `qualification.js` (pure) + `finalizeRun`: lifecycle from the completion manifest (`completed` / `partial` / `failed`), one independent `qualification` stage, release only when JANUS-QUALIFIED. Screens: QualificationPanel in Results, BottomAccessory, Actus corrections.
+- Reviewable decisions: Blueprint steps carry `derived_from` + `confidence`; Blueprint reads Cogito claims and patterns; contracts request subdomains for all four domains and the mode's minimum alternatives. Template `stage-compiler/2026-11-25.2`.
+- Evidence: 102/102 tests, build passes, 69 historical Runs untouched (16/19/34), 0 stages.
+- Open: refinement cycle and `limitation_reported` (with Phase 9 refinement generation); Blueprint tab display of traces; live evidence.
 
 ## Next action
-Phase 5: wire `completionManifest` and qualification into `finalizeRun` (replace the interim status rule), add the qualification stages through the canonical engine, show qualification state in Results/BottomAccessory. Not started.
+Await DIMA on: (1) the vitest upgrade path, (2) the Phase 5 decisions in record §3. Then Phase 6 (failure classifier, bounded retry, durable ownership/idempotency, safe orphan resolution), which also lifts the operator-only containment.

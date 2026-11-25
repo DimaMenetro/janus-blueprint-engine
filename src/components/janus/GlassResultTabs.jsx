@@ -22,6 +22,9 @@ const tabDefs = {
   blueprint: { label: "Blueprint", icon: Map },
 };
 
+import { STORAGE_MODEL } from "@/lib/janus/stageModel";
+import { completionOf } from "@/lib/janus/qualification";
+
 export default function GlassResultTabs({ view, mode, t, isDark, isAdmin }) {
   const { run, artifacts } = view; // artifacts: the durable view — same truth the engines write
   const availableTabs = [...mode.domains, "export"];
@@ -33,7 +36,7 @@ export default function GlassResultTabs({ view, mode, t, isDark, isAdmin }) {
       case "corpus":    return <CorpusTab data={artifacts.corpus} />;
       case "cogito":    return <CogitoTab data={artifacts.cogito} />;
       case "animus":    return <AnimusTab data={artifacts.animus} />;
-      case "actus":     return <ActusTab data={artifacts.actus} />;
+      case "actus":     return <ActusTab data={artifacts.actus} corrections={view.storage === STORAGE_MODEL.staged ? completionOf(view).confidence_corrections : []} />;
       case "synthesis": return <SynthesisTab data={artifacts.synthesis} />;
       case "blueprint": return <BlueprintTab data={artifacts.blueprint} blueprintLevel={run.blueprint_level} />;
       case "export":    return <ExportTab view={view} fullPrompt={run.full_prompt} isAdmin={isAdmin} />;

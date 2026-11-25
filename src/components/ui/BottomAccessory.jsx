@@ -19,11 +19,14 @@ const TONES = {
   cancelled:        { icon: Ban,         light: "#64748b", dark: "#94a3b8", chip: "Cancelled" },
   completed:        { icon: CheckCircle, light: "#16a34a", dark: "#4ade80", chip: "Completed" },
   failed:           { icon: XCircle,     light: "#dc2626", dark: "#f87171", chip: "Failed" },
+  partial:          { icon: PauseCircle, light: "#d97706", dark: "#fbbf24", chip: "Partial" },
 };
 
-function detailOf(state) {
+function detailOf(state, qualification) {
   const progress = `${state.completed}/${state.total} stages saved`;
   if (state.live) return `${state.live.label.toUpperCase()} in progress · ${progress}`;
+  if (state.status === "completed" && qualification) return qualification.release.label;
+  if (state.status === "partial" && qualification) return `${qualification.completion.blocking.length} required item${qualification.completion.blocking.length === 1 ? "" : "s"} missing · ${progress}`;
   if (state.status === "interrupted" && state.next) return `Stopped before ${state.next.label} · ${progress}`;
   if (state.failures.length && state.status !== "running") return `${state.failures.length} stage${state.failures.length === 1 ? "" : "s"} failed · ${progress}`;
   return progress;
@@ -56,7 +59,7 @@ export default function BottomAccessory() {
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div title={state.label} style={{ fontSize: 12, fontWeight: 500, color: t.subtitle, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {detailOf(state)}
+              {detailOf(state, execution.qualification)}
             </div>
             <div style={{ fontSize: 11, color: t.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {query.substring(0, 50)}{query.length > 50 ? "…" : ""}

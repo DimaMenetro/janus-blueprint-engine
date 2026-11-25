@@ -26,15 +26,15 @@ describe("execution — durable stages (Phase 3 exit tests, on the canonical eng
     STAGE_ORDER.forEach(k => expect(run[k]).toBeUndefined());
 
     const stages = stagesOf(run.id);
-    expect(stages).toHaveLength(13); // 7 stages + 6 intersections
+    expect(stages).toHaveLength(14); // 7 stages + 6 intersections + the independent quality evaluation
     expect(stages.every(s => s.status === "succeeded" && s.revision === 1 && /^sha256:[0-9a-f]{64}$/.test(s.input_fingerprint))).toBe(true);
     const id = (k) => byKey(run.id, k)[0].id;
     expect(byKey(run.id, "cogito")[0].depends_on).toEqual([id("refresh"), id("corpus")]);
     PAIRS.forEach(p => expect(byKey(run.id, intersectionKey(p.id))[0].depends_on).toEqual(p.domains.map(d => id(d))));
     expect([...byKey(run.id, "synthesis")[0].depends_on].sort()).toEqual(INTERSECTION_KEYS.map(id).sort());
-    expect([...byKey(run.id, "blueprint")[0].depends_on].sort()).toEqual(["refresh", "corpus", "animus", "actus", ...INTERSECTION_KEYS].map(id).sort());
+    expect([...byKey(run.id, "blueprint")[0].depends_on].sort()).toEqual(["refresh", "corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis"].map(id).sort());
 
-    expect(h.db.RunAttempt).toHaveLength(13);
+    expect(h.db.RunAttempt).toHaveLength(14);
     expect(h.db.RunAttempt.every(a => a.outcome === "succeeded" && stages.some(s => s.id === a.stage_id))).toBe(true);
     expect(h.llm.calls.every(keys => keys.join() === "stage_id,prompt")).toBe(true); // no per-call model override
   });

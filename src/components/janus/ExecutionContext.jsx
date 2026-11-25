@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { loadRunView, findOpenStagedRun } from "@/lib/janus/stageStore";
 import { deriveExecutionState } from "@/lib/janus/executionState";
+import { deriveQualification } from "@/lib/janus/qualification";
 
 const ExecutionContext = createContext(null);
 
@@ -48,7 +49,8 @@ export function ExecutionProvider({ children }) {
   const execution = useMemo(() => {
     if (!view) return null;
     const driving = drivingId === view.run.id;
-    return { view, runId: view.run.id, driving, state: deriveExecutionState(view, { driving }) };
+    const qualification = view.storage === "staged_v1" ? deriveQualification(view) : null;
+    return { view, runId: view.run.id, driving, state: deriveExecutionState(view, { driving }), qualification };
   }, [view, drivingId]);
 
   return (
