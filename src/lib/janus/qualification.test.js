@@ -8,7 +8,10 @@ vi.mock("@/api/base44Client", async () => ({ base44: (await import("@/lib/janus/
 import { platform as h } from "@/lib/janus/testPlatform";
 import { executeJanus, rerunSynthesis, rerunBlueprint } from "@/lib/janus/browserAdapter";
 import { composeRunView } from "@/lib/janus/runView";
-import { deriveQualification } from "@/lib/janus/qualification";
+import { deriveQualification, stepTrace, traceIndex } from "@/lib/janus/qualification";
+import { compileStage } from "@/lib/janus/stageCompiler";
+
+const src = (rel) => fs.readFileSync(path.resolve(process.cwd(), "src", rel), "utf8");
 import { deriveExecutionState } from "@/lib/janus/executionState";
 import { JANUS_QUALIFIED, QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
 import { PATTERNS, subdomainIds } from "@/lib/janus/protocolRegistry";
@@ -47,6 +50,33 @@ describe("completion is a validated contract, not a returned process", () => {
     expect(h.db.Run[0]).toMatchObject({ status: "completed", qualification_state: "qualified" });
     expect(h.db.Run[0].completion_manifest).toMatchObject({ partial: true, complete: true });
     expect(h.db.Run[0].completion_manifest.completion_label).toMatch(/partial/i);
+  });
+
+  it("output density scales with the mode, the expertise does not: only Full demands the explicit subdomain sets", () => {
+    const config = { queryText: "q", outputMode: "Blueprint", blueprintLevel: "L2", noveltyDial: "medium", refreshEnabled: false };
+    const prompt = (mode, stageKey) => compileStage({ stageKey, config: { ...config, executionMode: mode } }).prompt;
+    const identity = (p) => p.slice(p.indexOf("═══ DOMAIN ACTIVATION"), p.indexOf("CRITICAL INSTRUCTION"));
+    ["corpus", "cogito", "animus", "actus"].forEach(d => {
+      const [quick, standard, full] = ["quick", "standard", "full"].map(m => prompt(m, d));
+      subdomainIds(d).forEach(id => expect(full).toContain(`"${id}": {"perspective"`));
+      [quick, standard].forEach(p => {
+        expect(p).not.toContain('"subdomains"');
+        expect(p).toMatch(/reason from every subdomain of this expertise/);
+        expect(identity(p)).toBe(identity(full)); // the same complete SME expertise in every mode
+      });
+      expect(quick).toMatch(/Compact is not shallow/);
+    });
+  });
+
+  it("a Blueprint step shows what it is derived from and its effective confidence", () => {
+    const idx = traceIndex({ cogito: h.out.cogito, actus: h.out.actus, corpus: h.out.corpus });
+    expect(stepTrace({ derived_from: ["C1", "corpus:1", "C99"], confidence: "Established" }, idx)).toEqual({
+      refs: [{ id: "C1", found: true }, { id: "corpus:1", found: true }, { id: "C99", found: false }],
+      declared: "Established", effective: "Contested", corrected: true,
+    });
+    expect(stepTrace({ derived_from: ["corpus:1"], confidence: "Speculative" }, idx)).toMatchObject({ effective: "Speculative", corrected: false });
+    expect(stepTrace({ title: "historical step" }, idx)).toEqual({ refs: [], declared: null, effective: null, corrected: false });
+    expect(src("components/janus/tabs/BlueprintTab.jsx")).toMatch(/<BlueprintStepTrace step=\{step\}/);
   });
 
   it.each([
@@ -163,7 +193,6 @@ describe("structurally valid mediocrity is not released", () => {
 });
 
 describe("one qualification truth", () => {
-  const src = (rel) => fs.readFileSync(path.resolve(process.cwd(), "src", rel), "utf8");
 
   it("the engine and every screen derive qualification from the same function; the badge text lives only in the contract", () => {
     ["lib/janus/stageEngine.js", "components/janus/QualificationPanel.jsx", "components/janus/ExecutionContext.jsx"]

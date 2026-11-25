@@ -1,5 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { traceIndex } from "@/lib/janus/qualification";
+import BlueprintStepTrace from "@/components/janus/tabs/BlueprintStepTrace";
 import { CheckCircle2, Target, Lightbulb, AlertTriangle, Clock, Zap, CheckSquare, TestTube } from "lucide-react";
 
 const impactColors = {
@@ -14,8 +16,9 @@ const effortColors = {
   high: "backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] text-red-700 dark:text-red-400 border border-red-300/60 dark:border-red-500/35",
 };
 
-export default function BlueprintTab({ data, blueprintLevel }) {
+export default function BlueprintTab({ data, blueprintLevel, artifacts = {} }) {
   if (!data) return <div className="text-slate-500 p-6">No blueprint data available.</div>;
+  const traceIdx = traceIndex(artifacts);
 
   const level = blueprintLevel || "L2";
 
@@ -125,6 +128,7 @@ export default function BlueprintTab({ data, blueprintLevel }) {
                     </span>
                   )}
                 </div>
+                <BlueprintStepTrace step={step} index={traceIdx} />
 
                 <p className="text-slate-700 dark:text-slate-200 text-sm mb-3 pl-11">{step.instructions}</p>
 

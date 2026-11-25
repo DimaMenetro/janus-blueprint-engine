@@ -37,6 +37,18 @@ export function traceIndex(a) {
   return idx;
 }
 
+/**
+ * What one Blueprint step rests on: the handles it cites (resolved or not) and its effective confidence —
+ * never stronger than the weakest claim or recommendation it cites. Code is the authority, as for recommendations.
+ */
+export function stepTrace(step, idx) {
+  const refs = (Array.isArray(step.derived_from) ? step.derived_from : []).map(id => ({ id, found: idx.has(id) }));
+  const ceiling = lowestConfidence(refs.filter(r => idx.get(r.id)?.tag).map(r => idx.get(r.id).tag));
+  const declared = step.confidence ? normalizeTag(step.confidence) : null;
+  const effective = ceiling && (rank(declared) < 0 || rank(declared) < rank(ceiling)) ? ceiling : declared;
+  return { refs, declared, effective, corrected: !!effective && effective !== declared };
+}
+
 /** The five criteria decided by code: two deterministic, three by traceability over recorded links. */
 export function codeVerdicts({ mode, blueprintLevel = "L2" }, a) {
   const idx = traceIndex(a);

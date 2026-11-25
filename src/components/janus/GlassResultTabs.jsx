@@ -38,7 +38,7 @@ export default function GlassResultTabs({ view, mode, t, isDark, isAdmin }) {
       case "animus":    return <AnimusTab data={artifacts.animus} />;
       case "actus":     return <ActusTab data={artifacts.actus} corrections={view.storage === STORAGE_MODEL.staged ? completionOf(view).confidence_corrections : []} />;
       case "synthesis": return <SynthesisTab data={artifacts.synthesis} />;
-      case "blueprint": return <BlueprintTab data={artifacts.blueprint} blueprintLevel={run.blueprint_level} />;
+      case "blueprint": return <BlueprintTab data={artifacts.blueprint} blueprintLevel={run.blueprint_level} artifacts={artifacts} />;
       case "export":    return <ExportTab view={view} fullPrompt={run.full_prompt} isAdmin={isAdmin} />;
       default:          return null;
     }

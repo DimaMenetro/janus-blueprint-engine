@@ -4,13 +4,13 @@
  * Protocol identity comes from the registry; data enters only through the evidence boundary.
  * Layout of every prompt: control header → stage instructions → data-plane law → data blocks → output contract.
  */
-import { DOMAINS, DOMAIN_ORDER, PAIRS, PATTERNS, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText,
+import { DOMAINS, DOMAIN_ORDER, PAIRS, PATTERNS, MODE_PROFILES, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText,
   patternJsonTemplate, pairLabel, protocolLabel } from "@/lib/janus/protocolRegistry";
 import { intersectionKey, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
 import { QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS } from "@/lib/janus/lifecycleContract";
 import { DATA_PLANE_LAW, PLANES, sealEvidence, renderEvidenceBlock, renderDataBlock, assertBoundaryIntegrity } from "@/lib/janus/evidenceBoundary";
 
-export const PROMPT_TEMPLATE_VERSION = "stage-compiler/2026-11-25.2";
+export const PROMPT_TEMPLATE_VERSION = "stage-compiler/2026-11-25.3";
 export const REFRESH_UNAVAILABLE_MESSAGE =
   "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
 
@@ -144,19 +144,29 @@ function domainContext(target, inp) {
 }
 
 // ── Output contracts ──
-// Every domain reports all of its subdomains: Full completion requires the complete set (25 across the four).
+// Output density scales with the mode; the expertise does not. The SME identity (all subdomains, in full) is
+// the same in every mode. Full reports every subdomain explicitly — 25 across the four domains, as its
+// completion contract requires. Quick and Standard are partial profiles: they reason from the same expertise
+// but fold it into the integrated fields instead of emitting a per-subdomain inventory.
+const isFull = (mode) => MODE_PROFILES[mode]?.partial === false;
+const DENSITY_NOTE = {
+  standard: "OUTPUT DENSITY (Standard profile): reason from every subdomain of this expertise, but do not emit a per-subdomain inventory. Integrate what each contributes into the fields below; every field must carry substantive expert findings.",
+  quick: "OUTPUT DENSITY (Quick profile): reason from every subdomain of this expertise, but keep the output compact — no per-subdomain inventory, and only findings that change what the operator should do. Compact is not shallow: every finding must still be one only this expertise would produce.",
+};
 const subdomainsJson = (domain) => subdomainIds(domain).map((id, i) =>
   i === 0 ? `"${id}": {"perspective": "your expert perspective as one coherent voice", "key_findings": ["specific findings only this expertise would produce"]}`
           : `"${id}": {"perspective": "...", "key_findings": ["..."]}`).join(", ");
-const CORPUS_SUBDOMAINS_JSON = subdomainsJson("corpus");
-
-const DOMAIN_CONTRACTS = {
-  corpus: `Output ONLY valid JSON with the "corpus" key: { "corpus": { "constraints": ["hard reality constraints from your expert assessment"], "feasibility_notes": ["practical viability notes"], "subdomains": { ${CORPUS_SUBDOMAINS_JSON} } } }`,
-  cogito: `Output ONLY valid JSON with the "cogito" key: { "cogito": { "claims": [{"id":"C1","tag":"Established","text":"your epistemic finding","depends_on":[],"why_believed":"justified basis","falsifiable_by":"what would disprove this","verify_later":"what to check"}], "reasoning_map": ["logical chain step 1", "step 2", "..."], "graphrag_connections": ["concept A ↔ concept B: relationship"], "causal_chains": [{"cause":"...","effect":"...","confidence":"Established"}], "neuro_symbolic_insights": ["insights from bridging symbolic and connectionist reasoning"], "subdomains": { ${subdomainsJson("cogito")} } } }`,
-  animus: `Output ONLY valid JSON with the "animus" key: { "animus": { "boundary_checks": ["what the user should/should not do"], "disallowed_moves": ["explicitly forbidden approaches"], "safety_notes": ["safety considerations"], "consciousness_boundary": "where agency and autonomy limits lie", "attractor_states": ["natural equilibrium points the system tends toward"], "ethical_stance": "your integrated moral assessment", "risk_analysis": {"cognitive_sync_assessment": "how well-aligned are the goals", "self_determination_factors": ["factors affecting autonomy"], "misalignment_risks": ["where intent and outcome may diverge"]}, "subdomains": { ${subdomainsJson("animus")} } } }`,
+const domainContract = (domain, mode) => {
+  const subs = (d) => (isFull(mode) ? `, "subdomains": { ${subdomainsJson(d)} }` : "");
+  const contracts = {
+  corpus: `Output ONLY valid JSON with the "corpus" key: { "corpus": { "constraints": ["hard reality constraints from your expert assessment"], "feasibility_notes": ["practical viability notes"]${subs("corpus")} } }`,
+  cogito: `Output ONLY valid JSON with the "cogito" key: { "cogito": { "claims": [{"id":"C1","tag":"Established","text":"your epistemic finding","depends_on":[],"why_believed":"justified basis","falsifiable_by":"what would disprove this","verify_later":"what to check"}], "reasoning_map": ["logical chain step 1", "step 2", "..."], "graphrag_connections": ["concept A ↔ concept B: relationship"], "causal_chains": [{"cause":"...","effect":"...","confidence":"Established"}], "neuro_symbolic_insights": ["insights from bridging symbolic and connectionist reasoning"]${subs("cogito")} } }`,
+  animus: `Output ONLY valid JSON with the "animus" key: { "animus": { "boundary_checks": ["what the user should/should not do"], "disallowed_moves": ["explicitly forbidden approaches"], "safety_notes": ["safety considerations"], "consciousness_boundary": "where agency and autonomy limits lie", "attractor_states": ["natural equilibrium points the system tends toward"], "ethical_stance": "your integrated moral assessment", "risk_analysis": {"cognitive_sync_assessment": "how well-aligned are the goals", "self_determination_factors": ["factors affecting autonomy"], "misalignment_risks": ["where intent and outcome may diverge"]}${subs("animus")} } }`,
   actus: `CONFIDENCE PROPAGATION LAW (NON-NEGOTIABLE): Every recommendation MUST inherit the LOWEST confidence tag of the Cogito claims it depends on. A recommendation depending on a "Speculative" claim CANNOT be marked "Established".
 
-Output ONLY valid JSON with the "actus" key: { "actus": { "recommendations": [{"id":"R1","text":"actionable recommendation","depends_on_claims":["C1"],"inherited_confidence":"Established","probability":"high","failure_modes":["what could go wrong"],"next_actions":["immediate next step"]}], "strategic_plan": {"immediate_horizon":"next 1-4 weeks","long_term_horizon":"3-12 months","key_decision_points":["decisions that must be made"]}, "game_theory_analysis": {"game_board":"who are the players and what are the stakes","nash_equilibrium":"stable outcome if all act rationally","zero_sum_assessment":"is this zero-sum or positive-sum","coalition_dynamics":["potential alliances and conflicts"]}, "technical_summary": "lossless compression of the entire analysis into one paragraph", "behavioral_factors": {"irrational_actors":["who might act irrationally and why"],"identity_economics":"how identity shapes economic decisions here","bias_mitigations":["specific debiasing strategies"]}, "integration_contracts": ["API/interface agreements needed"], "iteration_model": {"value_stream":"how value flows through the system","adaptation_triggers":["signals that should trigger strategy change"]}, "subdomains": { ${subdomainsJson("actus")} } } }`,
+Output ONLY valid JSON with the "actus" key: { "actus": { "recommendations": [{"id":"R1","text":"actionable recommendation","depends_on_claims":["C1"],"inherited_confidence":"Established","probability":"high","failure_modes":["what could go wrong"],"next_actions":["immediate next step"]}], "strategic_plan": {"immediate_horizon":"next 1-4 weeks","long_term_horizon":"3-12 months","key_decision_points":["decisions that must be made"]}, "game_theory_analysis": {"game_board":"who are the players and what are the stakes","nash_equilibrium":"stable outcome if all act rationally","zero_sum_assessment":"is this zero-sum or positive-sum","coalition_dynamics":["potential alliances and conflicts"]}, "technical_summary": "lossless compression of the entire analysis into one paragraph", "behavioral_factors": {"irrational_actors":["who might act irrationally and why"],"identity_economics":"how identity shapes economic decisions here","bias_mitigations":["specific debiasing strategies"]}, "integration_contracts": ["API/interface agreements needed"], "iteration_model": {"value_stream":"how value flows through the system","adaptation_triggers":["signals that should trigger strategy change"]}${subs("actus")} } }`,
+  };
+  return isFull(mode) ? contracts[domain] : `${DENSITY_NOTE[mode] || DENSITY_NOTE.standard}\n\n${contracts[domain]}`;
 };
 
 const REFRESH_ROSTER = () => {
@@ -174,7 +184,7 @@ const domainSpec = (domain) => (config, inp) => ({
 Analyze the operator's query (data block "query") through your unified expert perspective. Think FROM INSIDE your expertise — do not summarize textbook knowledge, produce findings that reflect genuine mastery. Push beyond conventional wisdom. If the physics and math support a novel approach, precedent is irrelevant.`,
   context: domainContext(domain, inp),
   untrusted: refreshEvidence(inp.refresh, domain),
-  contract: DOMAIN_CONTRACTS[domain],
+  contract: domainContract(domain, config.executionMode),
 });
 
 const SPECS = {
