@@ -2,7 +2,7 @@
 - Document Type: Implementation Record · Date: 2026-11-25 · Author: Kytheion (Scribe-Particle-4)
 - Governs: plan §12, §18.1, Phase 6 · Builds on: Phase 3 stage/attempt model, Phase 4 engine, Phase 5 qualification
 - Behavioural baseline: commit `239319f` (104/104)
-- Status: IN PROGRESS. Mechanisms implemented and green (137/137). NOT complete: three decisions are open (§6) and the deployed ownership path is unverified live (§7). Not published. No model call made.
+- Status: COMPLETE (closed 2026-11-25 on DIMA's review and directive, see §8). 156/156 tests, build passes. Automated evidence only: the live model path is pending evidence (§7). Not published. No model call made.
 
 ## 1. Correction record (why this pass was stopped and restarted)
 The first Phase 6 pass (commits `8c6fa39`, `07e05fa`, `f42832c`) was stopped by DIMA. What was wrong, stated plainly:
@@ -54,6 +54,8 @@ Store behaviour was measured against the real store before relying on it: of fou
 
 Case 6 (cancellation): no new attempt after `cancel_requested`; an active attempt keeps its real outcome.
 
+**Superseded in part by §8:** in cases 3 and 5, and in case 2 when the recorded response fails parsing or validation, the *attempt* is settled as shown, but the *revision* is settled only when the bounded policy says so. With budget left on an open run it stays running and waits for attempt n+1.
+
 ## 5. Exit tests (`resilience.test.js`, 33 tests; inherited 104 unmodified)
 | Exit criterion | Evidence |
 |---|---|
@@ -71,7 +73,7 @@ Case 6 (cancellation): no new attempt after `cancel_requested`; an active attemp
 | Prior artifacts intact | snapshots of the saved stage before and after recovery |
 | 69 historical Runs untouched | live count 69 (16 / 19 / 34), newest update 2026-08-11, none carries the slot field |
 
-## 6. Decisions for DIMA (not taken by Kytheion)
+## 6. Decisions put to DIMA (all three decided 2026-11-25, see §8)
 1. **Lifting the operator-only containment.** The ownership mechanism is in place underneath it. Lifting it means retiring the two inherited tests under "interim containment: operators only until durable stage ownership (Phase 6)" and the admin assertions in "the model call runs in one narrow backend function". That is an edit to the oracle and needs explicit authorization. Until then non-admin users cannot run Janus.
 2. **Recovered retryable failure.** Recovery settles the revision as that failure and buys nothing. The stage runs again only on the operator's Resume, as a new revision with its own bound of 3. Alternative: Resume continues the same revision at attempt n+1 (strict bound of 3 across the orphaning), which needs the revision's prompt recompiled and proven identical by fingerprint. Not built; needs a decision.
 3. **Quota failure and later stages.** Now: not retried, later stages still scheduled (unchanged behaviour). The stopped pass halted the run on quota; that was removed as unauthorized. Say if a halt is wanted.
@@ -83,3 +85,50 @@ Case 6 (cancellation): no new attempt after `cancel_requested`; an active attemp
 - `transport_settled_failure` and `platform_termination` remain valid evidence classes that nothing currently assigns.
 - Two sessions reconciling the same never-claimed attempt can both close the stage as not started (same value written twice).
 - No manual browser pass. Lint: the 6 historical unused-import errors in untouched files remain.
+
+## 8. Closeout (2026-11-25, DIMA review and directive)
+DIMA accepted the correction pass and decided the three items in §6.
+
+### 8.1 Decisions
+1. **Operator-only containment is retained** as an intentional operator policy (Janus is private; DIMA is the admin). It is not a Phase 6 gate. The two inherited containment tests stay. The ownership machinery stays underneath it.
+2. **A recovered retryable failure continues the SAME revision** (§8.2). The behaviour in §6.2 ("new revision with its own bound of 3") was wrong and is removed.
+3. **Live verification of the function is pending evidence**, to be gathered in a later approved integration test. No probe Run was created. Not a reason to alter the implementation.
+4. **Five-minute transport ceiling:** unchanged fail-safe. No outcome recorded means unresolved. No termination evidence is manufactured. The limitation belongs to the durable server/workflow work.
+5. Quota: unchanged (settled, not retried, no halt).
+
+### 8.2 Same-revision retry continuation
+A RunStage revision is one logical operation, fixed by its dependency revision IDs, protocol version, prompt-template version and input fingerprint. A RunAttempt is one execution of it. Losing the session is not a new operation.
+
+| Last actual call of the revision | Attempt records | Revision |
+|---|---|---|
+| succeeded | `none` | settled succeeded |
+| non-retryable failure | `none` | settled failed |
+| retryable, budget exhausted | `exhausted` | settled failed |
+| retryable, budget left, run cancelling / cancelled / ended / historical | `none`, real outcome kept | settled failed (cancellation boundary, or no resume can follow) |
+| retryable, budget left, run open | `retry_scheduled` | **not settled**: stays running, waiting for attempt n+1 |
+
+- **The record of "next valid operation is attempt n+1"** is `retry_scheduled` on the last attempt that made a call, on a revision that is still running with nothing in flight. It is read by `executionState.continuationOf`, never stored separately. The policy is recomputed from the recorded outcome and the number of calls made, so the record alone cannot extend the budget.
+- **The budget is counted in calls of the revision.** An attempt that never made a call (`not_started`) uses none. The next attempt number is calls made plus one, so no attempt number above 3 can exist and an interruption cannot reset the count.
+- **Recovery** (`recoverStage`) settles the attempt and stops. It starts no call.
+- **Resume** (`driveStages`) continues a waiting revision before anything else, through `stageEngine.verifyContinuation`: the stage is rebuilt from the exact dependency revisions recorded on it, compiled, and fingerprinted. It is continued (`stageRunner.continueStage`, same RunStage id, normal slot/claim path) only if protocol version, template version, dependency revisions and fingerprint all match.
+- **Mismatch fails closed.** The drive ends `blocked`: nothing is opened, settled or regenerated. The operator's explicit action (`closeBlockedRevision`, "Close this version to start a new one") closes the revision from the real outcome of its last call; Resume then produces a new revision. That action is refused while the revision can still be continued, so it cannot reset a budget.
+- **Cancellation:** a waiting revision is closed from its last real outcome and no attempt is opened, whichever session persisted the cancellation.
+- **Re-runs** refuse to start beside a waiting revision.
+- **Screens:** the stage shows "retry pending (attempt n of 3)"; a blocked continuation shows its reasons.
+
+### 8.3 Consequences Kytheion wants DIMA to see (implemented, flagged for review)
+1. **A retry that could not start in a live session also leaves the revision waiting.** If attempt 1 settles as retryable and the request for attempt 2 never reaches the function, the revision used to be settled failed after one call, and a later Resume would make revision 2 with three fresh attempts. That is the same budget reset by an interruption, so it now waits for attempt 2 like the recovered case. This changed one Phase 6 test that DIMA had reviewed ("a retry that never started changes nothing").
+2. **Phase 6 tests changed for this directive (4):** that one, and truth-table cases 2 (invalid recorded response), 3 and 5, which asserted the superseded "revision settled failed". Each still asserts the same attempt outcome. No inherited test was touched.
+3. **An exhausted or non-retryable revision on a still-open run** is settled failed, and Resume then generates a new revision of that stage. That is inherited baseline behaviour ("resume does not treat the invalid revision as completed: the stage runs again") and was not changed.
+4. **A retry left pending on an ended run** (in practice the quality evaluation, which runs after the run is `completed`) is closed from its real outcome, because an ended run is never resumed.
+
+### 8.4 Evidence at close
+- 156/156: the 104 inherited tests with all six files byte-identical to `239319f`, plus 52 Phase 6 tests (19 new in "same-revision retry continuation").
+- Production build passes. Lint clean on changed files.
+- `invokeJanusStage` unchanged in this pass.
+- 69 historical Runs untouched (16 failed / 19 running / 34 completed, newest update 2026-08-11), none staged, none with a slot; 0 RunStage, 0 RunAttempt.
+
+### 8.5 Known limits carried forward
+- Live slot → claim → InvokeLLM → record path: pending evidence.
+- Two tabs resuming the same waiting revision in the same instant each open an attempt; the function then refuses both (it requires exactly one open attempt), no call is made, and the revision keeps waiting.
+- A revision that read external evidence cannot be continued (its text is not stored) and blocks. Refresh is fail-closed today, so this cannot occur yet; it must be revisited with the retrieval work.

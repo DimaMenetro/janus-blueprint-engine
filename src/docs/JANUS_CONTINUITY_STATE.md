@@ -70,11 +70,13 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 - **Never continue from red tests.** Before a structural change: state the invariant, say why existing behaviour cannot satisfy it, make the smallest architecture-preserving change, run focused tests, run the full suite.
 - **Unknown outcome = unresolved.** No failure class is ever inferred. Do not change scope.
 
-## Phase 6 (2026-11-25) — IN PROGRESS — record `JANUS_PHASE6_FAILURE_RETRY_OWNERSHIP_2026-11-25.md`
-- Re-anchored to `239319f`. The six inherited test files are byte-identical to it and pass (104) with 33 new Phase 6 tests (`resilience.test.js`): 137/137. Build passes. 69 historical Runs untouched.
+## Phase 6 (2026-11-25) — COMPLETE — record `JANUS_PHASE6_FAILURE_RETRY_OWNERSHIP_2026-11-25.md` (§8 closeout)
+- Re-anchored to `239319f`. The six inherited test files are byte-identical to it and pass (104) with 52 Phase 6 tests (`resilience.test.js`): 156/156. Build passes. 69 historical Runs untouched.
+- **Same-revision retry continuation (DIMA directive):** a retryable failure with budget left never closes the revision on an open run. It stays running and waits; Resume continues the SAME RunStage at attempt n+1 after `verifyContinuation` proves protocol, template, dependency revisions and fingerprint. Mismatch fails closed (`blocked`); only the operator's explicit `closeBlockedRevision` allows a new revision. The budget is counted in calls of the revision and is never reset by an interruption. Recovery buys nothing.
 - In place: one RunAttempt per actual attempt; server-side slot (`Run.active_attempt_id`) and single attempt claim, both conditional writes; server-recorded outcomes (`RunAttempt.transport`, `response_text`); bounded retry only after settlement; recovery from recorded evidence (`recoverStage` truth table, `reconcileJanus`, "Check recorded outcome"); cancellation stops retries and scheduling.
-- **Operator-only containment is still in force.** Lifting it requires retiring two inherited containment tests, which needs DIMA's explicit authorization.
-- Not verified live: the deployed function's slot/claim/record path (only its refusal paths were called; no model call was made).
+- **Operator-only containment is retained by DIMA's decision** (intentional policy, not a gate). Do not lift it; do not retire the two inherited containment tests.
+- Pending evidence, not a defect: the deployed function's slot/claim/record path (to be verified in a later approved integration test; no probe Run). The five-minute transport ceiling stays fail-safe (unresolved) until the durable server/workflow work.
+- Flagged for DIMA in record §8.3: a retry that could not start in a live session also leaves the revision waiting; four Phase 6 tests were changed for the directive.
 
 ## Next action
-Await DIMA on the three Phase 6 decisions in the record (§6). Do not publish. Do not make a paid call.
+Phase 7 (Versioned Rerun & Dependency Invalidation, plan "Phase 7"), starting from the 156/156 baseline. Not started. Do not publish. Do not make a paid call.

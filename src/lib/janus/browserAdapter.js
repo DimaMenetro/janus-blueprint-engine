@@ -8,9 +8,9 @@ import { TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
 import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, INTERSECTION_KEYS } from "@/lib/janus/stageModel";
 import { base44 } from "@/api/base44Client";
 import { createRun, updateRun, loadRunView } from "@/lib/janus/stageStore";
-import { driveStages, finalizeRun, reclose } from "@/lib/janus/stageEngine";
-import { recoverStage } from "@/lib/janus/stageRunner";
-import { stagePlan } from "@/lib/janus/executionState";
+import { driveStages, finalizeRun, reclose, verifyContinuation } from "@/lib/janus/stageEngine";
+import { recoverStage, closeFromLastCall } from "@/lib/janus/stageRunner";
+import { stagePlan, continuationOf } from "@/lib/janus/executionState";
 import { REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
 
 export { REFRESH_UNAVAILABLE_MESSAGE };
@@ -44,6 +44,8 @@ async function advance(runId, { keys, origin, force = false }, hooks = {}) {
       runId, status: view.run.status, qualification: view.run.qualification_state || null, stageErrors: outcome.errors, errors: view.run.validation_errors || [],
       cancelled: !!outcome.cancelled || view.run.status === "cancelled", unresolved: outcome.unresolved || null,
       refused: outcome.refused || null,
+      // A revision waiting for its retry could not be continued because it is no longer provably the same operation.
+      blocked: outcome.blocked || null,
     };
   } finally {
     driving.delete(runId);
@@ -88,6 +90,9 @@ async function rerun(runId, target, keys, hooks) {
   const missing = CORE_DOMAINS.filter(d => !view.artifacts[d]);
   if (missing.length > 0) throw new Error(`Cannot re-run ${target} — missing prerequisite domains: ${missing.join(", ")}`);
   const [live] = liveStages(view);
+  const waiting = live && view.storage === STORAGE_MODEL.staged ? continuationOf(live, view.attempts[live.id]) : null;
+  // A revision waiting for its retry is continued by Resume, on the same revision. A re-run never starts beside it.
+  if (waiting) throw new Error(`Cannot re-run ${target} — ${live.stage_key} is waiting for its retry (attempt ${waiting.nextAttempt}). Resume the run to continue it first.`);
   if (live) throw new Error(`Cannot re-run ${target} — a call for ${live.stage_key} has not settled and its outcome is unknown`);
   await assertOperator();
   if (view.storage === STORAGE_MODEL.staged) await updateRun(runId, { status: "running" });
@@ -109,7 +114,33 @@ export async function requestCancel(runId) {
   const view = await loadRunView(runId);
   if (!view || view.storage !== STORAGE_MODEL.staged || view.run.status !== "running") return;
   await updateRun(runId, { status: "cancel_requested" });
-  if (!driving.has(runId) && liveStages(view).length === 0) await updateRun(runId, { status: "cancelled" });
+  if (driving.has(runId)) return;
+  const running = liveStages(view);
+  // A revision waiting for its retry has no call in flight, so the boundary is here too: no further attempt
+  // is scheduled, and the revision is closed from the real outcome of its last call.
+  const waiting = running.length === 1 && continuationOf(running[0], view.attempts[running[0].id]);
+  if (waiting) await closeFromLastCall(running[0], view.attempts[running[0].id]);
+  if (running.length === 0 || waiting) await updateRun(runId, { status: "cancelled" });
+}
+
+/**
+ * The operator's explicit decision to give up a revision that is waiting for its retry but can no longer be
+ * continued (its dependencies, template, protocol or prompt no longer match what it recorded). The revision is
+ * closed from the real outcome of its last call; a later Resume then produces a new revision. Starts no model
+ * call. Refused while the revision can still be continued, so it cannot be used to reset a retry budget.
+ */
+export async function closeBlockedRevision(runId, hooks = {}) {
+  const view = await loadRunView(runId);
+  if (!view) throw new Error("Run not found");
+  if (view.storage !== STORAGE_MODEL.staged) throw new Error("Historical runs are read-only");
+  if (driving.has(runId)) throw new Error("This run is already being executed in this session");
+  const [stage] = liveStages(view);
+  const attempts = stage ? view.attempts[stage.id] || [] : [];
+  if (!stage || view.run.status !== "running" || !continuationOf(stage, attempts)) throw new Error("No version of this run is waiting for a retry");
+  if ((await verifyContinuation(view, stage)).ok) throw new Error("This version can still be continued: resume the run. A new version is started only when it can no longer be continued.");
+  await closeFromLastCall(stage, attempts);
+  if (hooks.onDurableChange) await hooks.onDurableChange(runId);
+  return { closed: stage.stage_key, revision: stage.revision };
 }
 
 /**
@@ -117,6 +148,8 @@ export async function requestCancel(runId) {
  * A session disappearing is not evidence of anything, and nothing here is decided by elapsed time: if the server
  * claimed the call and recorded no outcome, it stays unresolved. Starts no model call. Afterwards an open run
  * can be resumed; a run whose lifecycle had ended only has its recorded state re-derived.
+ * `awaiting` reports a revision whose recorded call was a retryable failure with attempts left: its attempt is
+ * settled, the revision is not, and Resume continues that same revision at the next attempt.
  */
 export async function reconcileJanus(runId, hooks = {}) {
   const view = await loadRunView(runId);
@@ -129,5 +162,5 @@ export async function reconcileJanus(runId, hooks = {}) {
     else if (TERMINAL_STATES.includes(view.run.status)) await reclose(runId);
   }
   if (hooks.onDurableChange) await hooks.onDurableChange(runId);
-  return { settled: !res.unresolved, unresolved: res.unresolved || null };
+  return { settled: !res.unresolved, unresolved: res.unresolved || null, ...(res.awaiting ? { awaiting: res.awaiting } : {}) };
 }

@@ -2,15 +2,17 @@ import { useState } from "react";
 import { Play, Ban, AlertTriangle, SearchCheck } from "lucide-react";
 import { glassSurface, glassBtn } from "@/components/ui/LiquidGlass";
 import { useExecution } from "@/components/janus/ExecutionContext";
-import { resumeJanus, requestCancel, reconcileJanus } from "@/lib/janus/browserAdapter";
+import { resumeJanus, requestCancel, reconcileJanus, closeBlockedRevision } from "@/lib/janus/browserAdapter";
+import ContinuationNotice from "@/components/janus/ContinuationNotice";
 
-const DOT = { completed: "#22c55e", live: "#3b82f6", failed: "#ef4444", pending: "rgba(148,163,184,0.45)" };
+const DOT = { completed: "#22c55e", live: "#3b82f6", awaiting: "#f59e0b", failed: "#ef4444", pending: "rgba(148,163,184,0.45)" };
 const btn = (t) => ({ ...glassBtn(t), minHeight: 40, padding: "0 16px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" });
 
 // Durable execution state for one run: what is saved, what is in flight, what failed, and the operator's controls.
 export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
   const { drive, observe, busy } = useExecution();
   const [error, setError] = useState(null);
+  const [blocked, setBlocked] = useState(null);
   if (!state.staged) return null;
 
   const act = (fn) => async () => {
@@ -18,7 +20,11 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
     try { await fn(); } catch (e) { setError(e.message); }
     await onChanged();
   };
-  const resume = act(() => drive(hooks => resumeJanus(runId, hooks)));
+  const resume = act(async () => {
+    const result = await drive(hooks => resumeJanus(runId, hooks));
+    setBlocked(result.blocked);
+  });
+  const startNew = act(async () => { await closeBlockedRevision(runId); setBlocked(null); await observe(runId); });
   const reconcile = act(async () => {
     const { settled } = await reconcileJanus(runId);
     await observe(runId);
@@ -39,6 +45,7 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
             <span style={{ width: 8, height: 8, borderRadius: 999, background: DOT[r.state], flexShrink: 0 }} />
             {r.label}{r.state === "live" ? " · in progress" : r.state === "failed" ? " · failed" : ""}
             {r.state === "live" && r.attempts > 1 ? ` (attempt ${r.attempts} of ${state.maxAttempts})` : ""}
+            {r.state === "awaiting" ? ` · retry pending (attempt ${r.nextAttempt} of ${state.maxAttempts})` : ""}
           </span>
         ))}
       </div>
@@ -60,6 +67,8 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
           A call for {state.live.label} was started in a session that is no longer reporting, so nothing further is started for this run. Checking reads what the server recorded: a finished call is saved with its real result, a call that never started is closed, and anything else stays unresolved. It cannot be marked as ended by hand.
         </p>
       )}
+
+      <ContinuationNotice state={state} blocked={blocked} onStartNew={startNew} busy={busy} t={t} />
 
       {state.endedIncomplete && (
         <p style={{ margin: "10px 0 0", fontSize: 12, color: t.subtitle }}>

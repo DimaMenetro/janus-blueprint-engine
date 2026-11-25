@@ -74,11 +74,15 @@ export function deriveExecutionState(view, { driving = false } = {}) {
   const staged = storage === STORAGE_MODEL.staged;
   const plan = stagePlan(run.execution_mode);
   const keys = [...plan, ...STAGE_KEY_ORDER.filter(k => !plan.includes(k) && stageInfo[k])];
+  // Only an open staged run can be resumed, so only there can a revision be waiting for its next attempt.
+  // On a cancelling, ended or historical run the same records read as an unsettled revision, which
+  // "Check recorded outcome" closes from its last actual call.
+  const open = staged && run.status === "running";
   const rows = keys.map(key => {
     const info = stageInfo[key];
     const running = info?.latest?.status === "running";
     // A running revision whose last call settled as a retryable failure is waiting for its next attempt, not live.
-    const waiting = running ? continuationOf(info.latest, view.attempts?.[info.latest.id]) : null;
+    const waiting = running && open ? continuationOf(info.latest, view.attempts?.[info.latest.id]) : null;
     const state = waiting ? "awaiting" : running ? "live" : info?.active ? "completed" : info?.latest?.status === "failed" ? "failed" : "pending";
     return { key, label: stageLabel(key), state, revision: info?.active?.revision ?? null, attempts: attemptsMade(view, info?.latest),
       ...(waiting ? { nextAttempt: waiting.nextAttempt, lastEvidence: waiting.after.outcome } : {}) };

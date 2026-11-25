@@ -27,6 +27,7 @@ function detailOf(state, qualification) {
   if (state.live) return `${state.live.label.toUpperCase()} in progress · ${progress}`;
   if (state.status === "completed" && qualification) return qualification.release.label;
   if (state.status === "partial" && qualification) return `${qualification.completion.blocking.length} required item${qualification.completion.blocking.length === 1 ? "" : "s"} missing · ${progress}`;
+  if (state.awaiting) return `Retry of ${state.awaiting.label} pending (attempt ${state.awaiting.nextAttempt} of ${state.maxAttempts}) · ${progress}`;
   if (state.status === "interrupted" && state.next) return `Stopped before ${state.next.label} · ${progress}`;
   if (state.failures.length && state.status !== "running") return `${state.failures.length} stage${state.failures.length === 1 ? "" : "s"} failed · ${progress}`;
   return progress;

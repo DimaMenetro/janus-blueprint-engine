@@ -8,8 +8,8 @@ import process from "node:process";
 vi.mock("@/api/base44Client", async () => ({ base44: (await import("@/lib/janus/testPlatform")).platform.base44 }));
 
 import { platform as h } from "@/lib/janus/testPlatform";
-import { executeJanus, resumeJanus, requestCancel, reconcileJanus } from "@/lib/janus/browserAdapter";
-import { callLLM } from "@/lib/janus/stageRunner";
+import { executeJanus, resumeJanus, requestCancel, reconcileJanus, rerunBlueprint, closeBlockedRevision } from "@/lib/janus/browserAdapter";
+import { callLLM, continueStage } from "@/lib/janus/stageRunner";
 import { beginStage, openAttempt, settleAttempt } from "@/lib/janus/stageStore";
 import { composeRunView } from "@/lib/janus/runView";
 import { deriveExecutionState } from "@/lib/janus/executionState";
@@ -161,14 +161,23 @@ describe("bounded retry, only after settlement", () => {
     expect(viewOf(h.db.Run[0].id).artifacts.corpus).toEqual(h.out.corpus); // the earlier artifact is intact
   });
 
-  it("a retry that never started changes nothing: the earlier attempt's actual outcome stands", async () => {
+  it("a retry that never started changes nothing: the earlier outcome stands, no budget is used, and the same revision waits for it", async () => {
     h.llm.failTimes.cogito = 1;
     h.llm.transport.cogito = [null, "unreached"]; // attempt 1 fails for real; the request for attempt 2 never arrives
-    await executeJanus(params("quick"));
+    const result = await executeJanus(params("quick"));
     expect(attemptsOf("cogito").map(a => [a.attempt_number, a.outcome, a.claim_state])).toEqual([[1, "provider_error", "claimed"], [2, "not_started", "void"]]);
-    expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "provider_error" });
-    expect(stageOf("cogito").error_message).toBe("cogito: LLM call failed — provider returned 500");
     expect(modelCalls("cogito")).toBe(1);
+    // No outcome is invented for the retry that never ran, and the revision is not closed with budget left.
+    expect(result).toMatchObject({ status: "running", refused: { stageKey: "cogito", reason: "never_claimed" } });
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "running" });
+    expect(stageOf("cogito").error_class).toBeUndefined();
+    expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "interrupted", resumable: true, failures: [], awaiting: { key: "cogito", nextAttempt: 2 } });
+
+    const stageId = stageOf("cogito").id;
+    expect((await resumeJanus(result.runId)).status).toBe("completed");
+    expect(h.db.RunStage.filter(s => s.stage_key === "cogito")).toEqual([expect.objectContaining({ id: stageId, revision: 1, status: "succeeded" })]);
+    expect(attemptsOf("cogito").map(a => [a.attempt_number, a.outcome])).toEqual([[1, "provider_error"], [2, "not_started"], [2, "succeeded"]]);
+    expect(modelCalls("cogito")).toBe(2);
   });
 });
 
@@ -314,33 +323,36 @@ describe("recovery from durable evidence: the truth table, case by case", () => 
     expect(modelCalls("cogito")).toBe(1); // and the resume did not regenerate it
   });
 
-  it("case 2 — a recorded response that fails validation is settled as the invalid output it is", async () => {
+  it("case 2 — a recorded response that fails validation settles the attempt as the invalid output it is; it never becomes an artifact", async () => {
     h.llm.invalidTimes.cogito = 1;
     const { runId } = await during("cogito", "late");
     await h.finishPending();
-    await reconcileJanus(runId);
-    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "schema_failure", settled_by: "recovery" })]);
-    expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "schema_failure", validation: expect.objectContaining({ valid: false }) });
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "cogito", nextAttempt: 2 } });
+    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "schema_failure", retry_decision: "retry_scheduled", settled_by: "recovery" })]);
+    expect(attemptsOf("cogito")[0].error_message).toMatch(/^Output failed mandatory validation/);
+    // Retryable with budget left: the revision is not settled as failed, and the invalid output is not an artifact.
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "running" });
+    expect(stageOf("cogito").output).toBeUndefined();
+    expect(viewOf(runId).stageInfo.cogito.active).toBeNull();
     expect(viewOf(runId).artifacts.cogito).toBeUndefined();
+    expect(modelCalls("cogito")).toBe(1);
   });
 
-  it("case 3 — claimed, and the function recorded a provider failure: settled as that class; recovery itself buys nothing", async () => {
+  it("case 3 — claimed, and the function recorded a provider failure: the attempt is settled as that class; recovery itself buys nothing", async () => {
     h.llm.failOn = "cogito";
     const { runId } = await during("cogito", "late");
     await h.finishPending();
     h.llm.failOn = null;
     const corpus = snapshot(stageOf("corpus"));
 
-    await reconcileJanus(runId);
-    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "none", settled_by: "recovery" })]);
-    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "failed", error_class: "provider_error" });
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "cogito", nextAttempt: 2 } });
+    expect(attemptsOf("cogito")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "retry_scheduled", settled_by: "recovery" })]);
     expect(modelCalls("cogito")).toBe(1);
+    expect(slot()).toBe("");
     expect(stageOf("corpus")).toEqual(corpus);
-
-    // The failure actually settled, so the stage may run again — by the operator's explicit resume, as a new revision.
-    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ status: "interrupted", resumable: true });
-    await resumeJanus(runId);
-    expect(stageOf("cogito")).toMatchObject({ revision: 2, status: "succeeded" });
+    // Retryable with budget left: the revision is not settled. Its next valid operation is attempt 2 (see "same-revision retry continuation").
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "running" });
+    expect(stageOf("cogito").error_class).toBeUndefined();
   });
 
   it("case 4 — claimed, nothing recorded: unresolved. Asking again, resuming and waiting change nothing", async () => {
@@ -365,10 +377,13 @@ describe("recovery from durable evidence: the truth table, case by case", () => 
     await settleAttempt(first, { outcome: "provider_error", message: "LLM call failed — provider returned 500", retryDecision: "retry_scheduled" });
     await openAttempt(stage, 2); // the session vanished before sending the retry
 
-    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null });
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "cogito", nextAttempt: 2 } });
     expect(h.db.RunAttempt.map(a => [a.attempt_number, a.outcome, a.claim_state])).toEqual([[1, "provider_error", "claimed"], [2, "not_started", "void"]]);
-    expect(stageOf("cogito")).toMatchObject({ status: "failed", error_class: "provider_error", error_message: "cogito: LLM call failed — provider returned 500" });
     expect(modelCalls("cogito")).toBe(1); // no new call, and no new outcome
+    // The unclaimed retry used none of the budget; the revision still waits for attempt 2 and is not closed.
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "running" });
+    expect(stageOf("cogito").error_class).toBeUndefined();
+    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ resumable: true, failures: [], awaiting: { key: "cogito", nextAttempt: 2 } });
   });
 
   it("a call that succeeded but whose result was recorded nowhere is neither a success nor a provider failure", async () => {
@@ -395,6 +410,234 @@ describe("recovery from durable evidence: the truth table, case by case", () => 
     expect(await reconcileJanus(result.runId)).toEqual({ settled: true, unresolved: null });
     expect(h.db.Run[0]).toMatchObject({ status: "completed", qualification_state: "qualified", released_blueprint_stage_id: stageOf("blueprint").id });
     expect(modelCalls("qualification")).toBe(1);
+  });
+});
+
+describe("same-revision retry continuation", () => {
+  const cogitoStages = () => h.db.RunStage.filter(s => s.stage_key === "cogito");
+  const ledger = () => attemptsOf("cogito").map(a => [a.attempt_number, a.outcome, a.retry_decision, a.settled_by]);
+  const everything = () => snapshot({ stages: h.db.RunStage, attempts: h.db.RunAttempt, run: h.db.Run[0] });
+  /** The session vanishes while a call for cogito is live; the call then ends on the server as a failure. */
+  const interruptedFailure = async (start) => {
+    h.llm.failOn = "cogito";
+    h.llm.transport.cogito = "late";
+    const result = await start();
+    h.llm.transport = {};
+    expect(result.unresolved).toBe("cogito");
+    await h.finishPending();
+    h.llm.failOn = null;
+    return result;
+  };
+  /** Recovery of that call, with proof that recovery itself bought nothing. */
+  const recover = async (runId) => {
+    const calls = h.llm.stages.length;
+    const result = await reconcileJanus(runId);
+    expect(h.llm.stages.length).toBe(calls);
+    return result;
+  };
+  /** A run whose cogito revision 1 is waiting for attempt 2 after a recovered provider failure. */
+  const waitingForAttempt2 = async () => {
+    const { runId } = await interruptedFailure(() => executeJanus(params("quick")));
+    expect(await recover(runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "cogito", nextAttempt: 2 } });
+    return { runId, stageId: stageOf("cogito").id };
+  };
+
+  it("recovered attempt 1 retryable → the revision waits; Resume opens attempt 2 on the same RunStage, with the identical prompt", async () => {
+    const { runId, stageId } = await waitingForAttempt2();
+    expect(ledger()).toEqual([[1, "provider_error", "retry_scheduled", "recovery"]]);
+    expect(stageOf("cogito")).toMatchObject({ id: stageId, revision: 1, status: "running" });
+    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ status: "interrupted", resumable: true, unresolved: false, live: null, failures: [],
+      awaiting: { key: "cogito", state: "awaiting", nextAttempt: 2, lastEvidence: "provider_error" }, next: { key: "cogito" } });
+    const fingerprint = stageOf("cogito").input_fingerprint;
+
+    expect((await resumeJanus(runId)).status).toBe("completed");
+    expect(cogitoStages()).toEqual([expect.objectContaining({ id: stageId, revision: 1, status: "succeeded", output: h.out.cogito, input_fingerprint: fingerprint })]);
+    expect(ledger()).toEqual([[1, "provider_error", "retry_scheduled", "recovery"], [2, "succeeded", "none", "session"]]);
+    expect(new Set(attemptsOf("cogito").map(a => a.stage_id))).toEqual(new Set([stageId]));
+    const prompts = h.llm.prompts.filter((_, i) => h.llm.stages[i] === "cogito");
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toBe(prompts[0]);
+    expect(slot()).toBe("");
+  });
+
+  it("recovered attempt 2 retryable → Resume opens attempt 3 on the same RunStage; interruptions never reset the limit, and there is no fourth attempt", async () => {
+    const { runId, stageId } = await waitingForAttempt2();
+    await interruptedFailure(() => resumeJanus(runId)); // attempt 2: the session vanishes again
+    expect(await recover(runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "cogito", nextAttempt: 3 } });
+    expect(ledger()).toEqual([[1, "provider_error", "retry_scheduled", "recovery"], [2, "provider_error", "retry_scheduled", "recovery"]]);
+    expect(stageOf("cogito")).toMatchObject({ id: stageId, revision: 1, status: "running" });
+    expect(deriveExecutionState(viewOf(runId)).awaiting).toMatchObject({ key: "cogito", nextAttempt: 3 });
+
+    await interruptedFailure(() => resumeJanus(runId)); // attempt 3: and again
+    expect(await recover(runId)).toEqual({ settled: true, unresolved: null });
+    expect(ledger()).toEqual([[1, "provider_error", "retry_scheduled", "recovery"], [2, "provider_error", "retry_scheduled", "recovery"], [3, "provider_error", "exhausted", "recovery"]]);
+    expect(cogitoStages()).toEqual([expect.objectContaining({ id: stageId, revision: 1, status: "failed", error_class: "provider_error" })]);
+    expect(stageOf("cogito").error_message).toMatch(/\(after 3 attempts\)$/);
+    expect(new Set(attemptsOf("cogito").map(a => a.stage_id))).toEqual(new Set([stageId]));
+    expect(modelCalls("cogito")).toBe(MAX); // three calls across three sessions, never more
+
+    // The exhausted revision cannot be given a fourth attempt by any path.
+    const view = viewOf(runId);
+    expect(deriveExecutionState(view).awaiting).toBeNull();
+    await expect(continueStage({ stage: stageOf("cogito"), attempts: view.attempts[stageId], prompt: "STAGE KEY: cogito" })).rejects.toThrow(/not waiting for a retry/);
+    expect(await refusedWith(send(stageOf("cogito")))).toEqual({ evidence: "not_started", reason: "stage_settled" });
+    expect(attemptsOf("cogito")).toHaveLength(MAX);
+    expect(modelCalls("cogito")).toBe(MAX);
+  });
+
+  it("the limit is counted in calls of the revision, whoever made them: two live, one interrupted, then exhausted", async () => {
+    h.llm.failOn = "cogito";
+    h.llm.transport.cogito = [null, null, "late"];
+    const { runId } = await executeJanus(params("quick"));
+    h.llm.transport = {};
+    await h.finishPending();
+    h.llm.failOn = null;
+    expect(await recover(runId)).toEqual({ settled: true, unresolved: null });
+    expect(ledger()).toEqual([[1, "provider_error", "retry_scheduled", "session"], [2, "provider_error", "retry_scheduled", "session"], [3, "provider_error", "exhausted", "recovery"]]);
+    expect(cogitoStages()).toEqual([expect.objectContaining({ revision: 1, status: "failed", error_class: "provider_error" })]);
+  });
+
+  it("a session that ended right after settling a retryable attempt left the revision waiting; Resume continues it without any recovery step", async () => {
+    const { runId, stageId } = await waitingForAttempt2();
+    h.db.RunAttempt.find(a => a.stage_id === stageId).settled_by = "session"; // exactly what a live session writes before its next attempt
+    expect(deriveExecutionState(viewOf(runId))).toMatchObject({ unresolved: false, resumable: true, awaiting: { nextAttempt: 2 } });
+    expect((await resumeJanus(runId)).status).toBe("completed");
+    expect(cogitoStages()).toEqual([expect.objectContaining({ id: stageId, revision: 1, status: "succeeded" })]);
+  });
+
+  it.each([
+    ["a dependency's recorded output no longer compiles to the fingerprinted prompt", () => { stageOf("corpus").output = { ...h.out.corpus, constraints: ["a different constraint"] }; }, /input fingerprint/],
+    ["the dependency revisions are no longer the active ones", async () => { await h.base44.entities.RunStage.create({ run_id: h.db.Run[0].id, stage_key: "corpus", revision: 2, status: "succeeded", depends_on: [], output: h.out.corpus }); }, /dependency revisions are no longer the active ones/],
+    ["a recorded dependency revision is no longer available", () => { stageOf("corpus").status = "failed"; }, /no longer available/],
+    ["the prompt template changed", () => { stageOf("cogito").prompt_template_version = "stage-compiler/earlier"; }, /prompt template changed/],
+    ["the protocol version changed", () => { stageOf("cogito").protocol_version = "1.0"; }, /protocol version changed/],
+    ["the stored fingerprint is not this operation's", () => { stageOf("cogito").input_fingerprint = "sha256:" + "0".repeat(64); }, /input fingerprint/],
+  ])("identity mismatch blocks continuation (%s): fail closed, nothing started, nothing settled", async (_name, change, reason) => {
+    const { runId, stageId } = await waitingForAttempt2();
+    await change();
+    const before = everything();
+
+    const result = await resumeJanus(runId);
+    expect(result).toMatchObject({ status: "running", unresolved: null, blocked: { stageKey: "cogito", revision: 1, nextAttempt: 2 } });
+    expect(result.blocked.reasons.join("; ")).toMatch(reason);
+    expect(result.stageErrors.join("\n")).toMatch(/^cogito: r1 is not continued/);
+    expect(everything()).toEqual(before); // no attempt opened, no new revision, the old one not silently continued or closed
+    expect(modelCalls("cogito")).toBe(1);
+    expect(h.db.RunStage.find(s => s.id === stageId).status).toBe("running");
+  });
+
+  it("a blocked revision needs the operator's explicit decision: only then is it closed, and only then does Resume produce a new revision", async () => {
+    const { runId, stageId } = await waitingForAttempt2();
+    // While the revision can still be continued, it cannot be closed to reset its budget.
+    await expect(closeBlockedRevision(runId)).rejects.toThrow(/can still be continued/);
+    expect(stageOf("cogito")).toMatchObject({ id: stageId, status: "running" });
+
+    stageOf("cogito").prompt_template_version = "stage-compiler/earlier";
+    expect((await resumeJanus(runId)).blocked).toBeTruthy();
+    const calls = h.llm.stages.length;
+    expect(await closeBlockedRevision(runId)).toEqual({ closed: "cogito", revision: 1 });
+    expect(h.llm.stages.length).toBe(calls);
+    expect(h.db.RunStage.find(s => s.id === stageId)).toMatchObject({ status: "failed", error_class: "provider_error", error_message: "cogito: LLM call failed — provider returned 500" });
+    await expect(closeBlockedRevision(runId)).rejects.toThrow(/No version of this run is waiting/);
+
+    expect((await resumeJanus(runId)).status).toBe("completed");
+    expect(cogitoStages().map(s => [s.revision, s.status])).toEqual([[1, "failed"], [2, "succeeded"]]);
+  });
+
+  it("a re-run never starts beside a revision that is waiting for its retry", async () => {
+    h.llm.failOn = "blueprint";
+    h.llm.transport.blueprint = "late";
+    const { runId } = await executeJanus(params("full"));
+    h.llm.transport = {};
+    await h.finishPending();
+    h.llm.failOn = null;
+    expect(await recover(runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "blueprint", nextAttempt: 2 } });
+    const before = everything();
+    await expect(rerunBlueprint(runId)).rejects.toThrow(/blueprint is waiting for its retry \(attempt 2\)/);
+    expect(everything()).toEqual(before);
+
+    const stageId = stageOf("blueprint").id;
+    expect((await resumeJanus(runId)).status).toBe("completed");
+    expect(h.db.RunStage.filter(s => s.stage_key === "blueprint")).toEqual([expect.objectContaining({ id: stageId, revision: 1, status: "succeeded" })]);
+    expect(modelCalls("blueprint")).toBe(2);
+  });
+
+  it("cancellation blocks continuation: a waiting revision is closed from its real outcome and no further attempt is opened", async () => {
+    const { runId, stageId } = await waitingForAttempt2();
+    await requestCancel(runId);
+    expect(h.db.Run[0].status).toBe("cancelled");
+    expect(ledger()).toEqual([[1, "provider_error", "retry_scheduled", "recovery"]]); // the real attempt outcome is preserved
+    expect(cogitoStages()).toEqual([expect.objectContaining({ id: stageId, status: "failed", error_class: "provider_error" })]);
+    await expect(resumeJanus(runId)).rejects.toThrow(/has ended/);
+    expect(modelCalls("cogito")).toBe(1);
+    expect(attemptsOf("cogito")).toHaveLength(1);
+  });
+
+  it("cancellation requested before recovery: the recovered attempt keeps its real outcome, schedules no retry, and the run reaches the boundary", async () => {
+    h.llm.failOn = "cogito";
+    const { runId } = await during("cogito", "late");
+    await requestCancel(runId);
+    expect(h.db.Run[0].status).toBe("cancel_requested"); // a call may be alive
+    await h.finishPending();
+    expect(await recover(runId)).toEqual({ settled: true, unresolved: null });
+    expect(ledger()).toEqual([[1, "provider_error", "none", "recovery"]]);
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "failed", error_class: "provider_error" });
+    expect(h.db.Run[0].status).toBe("cancelled");
+    expect(modelCalls("blueprint")).toBe(0);
+  });
+
+  it("cancellation persisted elsewhere while a revision waits: the resuming session opens no attempt and closes at the boundary", async () => {
+    const { runId, stageId } = await waitingForAttempt2();
+    h.db.Run[0].status = "cancel_requested"; // written from another session
+    expect(await resumeJanus(runId)).toMatchObject({ cancelled: true, status: "cancelled" });
+    expect(attemptsOf("cogito")).toHaveLength(1);
+    expect(h.db.RunStage.find(s => s.id === stageId)).toMatchObject({ status: "failed", error_class: "provider_error" });
+    expect(modelCalls("cogito")).toBe(1);
+  });
+
+  it("a non-retryable recovered failure settles the revision", async () => {
+    h.llm.failMessage = "Integration credits quota exceeded";
+    const { runId } = await interruptedFailure(() => executeJanus(params("quick")));
+    expect(await recover(runId)).toEqual({ settled: true, unresolved: null });
+    expect(ledger()).toEqual([[1, "quota_failure", "none", "recovery"]]);
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "failed", error_class: "quota_failure" });
+    expect(deriveExecutionState(viewOf(runId)).awaiting).toBeNull();
+  });
+
+  it("an exhausted recovered failure settles the revision", async () => {
+    h.llm.failOn = "cogito";
+    h.llm.transport.cogito = [null, null, "late"];
+    const { runId } = await executeJanus(params("quick"));
+    h.llm.transport = {};
+    await h.finishPending();
+    expect(await recover(runId)).toEqual({ settled: true, unresolved: null });
+    expect(attemptsOf("cogito")[2]).toMatchObject({ attempt_number: 3, outcome: "provider_error", retry_decision: "exhausted", settled_by: "recovery" });
+    expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "failed", error_class: "provider_error" });
+    expect(stageOf("cogito").error_message).toMatch(/\(after 3 attempts\)$/);
+  });
+
+  it("recovery purchases zero calls and is idempotent: asking again changes nothing", async () => {
+    const { runId } = await waitingForAttempt2();
+    const before = everything();
+    const calls = h.llm.stages.length;
+    for (const _again of [1, 2, 3]) expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "cogito", nextAttempt: 2 } });
+    expect(everything()).toEqual(before);
+    expect(h.llm.stages.length).toBe(calls);
+    expect(h.llm.calls).toHaveLength(2); // corpus, and cogito attempt 1: the only requests ever sent
+  });
+
+  it("a run that has ended is never resumed, so a retry left pending there is closed from its real outcome, not left waiting", async () => {
+    h.llm.failOn = "qualification";
+    h.llm.transport.qualification = "late";
+    const result = await executeJanus(params("quick"));
+    h.llm.transport = {};
+    await h.finishPending();
+    h.llm.failOn = null;
+    expect(result.status).toBe("completed");
+    expect(await recover(result.runId)).toEqual({ settled: true, unresolved: null });
+    expect(attemptsOf("qualification")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "none", settled_by: "recovery" })]);
+    expect(stageOf("qualification")).toMatchObject({ status: "failed", error_class: "provider_error" });
+    expect(h.db.Run[0]).toMatchObject({ status: "completed", released_blueprint_stage_id: "" });
   });
 });
 
