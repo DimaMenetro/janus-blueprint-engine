@@ -5,7 +5,32 @@
  */
 import { MODE_PROFILES, PAIRS, DOMAINS, DOMAIN_ORDER } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, STAGE_KEY_ORDER, QUALIFICATION_KEY, intersectionKey } from "@/lib/janus/stageModel";
-import { UI_STATES, TERMINAL_STATES, RETRY_POLICY } from "@/lib/janus/lifecycleContract";
+import { UI_STATES, TERMINAL_STATES, RETRY_POLICY, retryDecision } from "@/lib/janus/lifecycleContract";
+
+/**
+ * SAME-REVISION RETRY CONTINUATION (Phase 6) — read from the durable attempt ledger of ONE revision, never stored.
+ * A revision is one logical artifact-generation operation (fixed dependencies, protocol, template, fingerprint);
+ * its attempts are executions of that operation. Losing the session is not a new operation, so a revision whose
+ * last call settled as a retryable failure with budget left is CONTINUED at its next attempt — it is not closed
+ * and regenerated with a fresh budget.
+ *
+ * A running revision is waiting for its next attempt only when ALL of this holds:
+ *   - none of its attempts is in flight (an in-flight attempt may be a live call: that is unresolved, not waiting);
+ *   - its last attempt that made a call recorded `retry_scheduled` — the durable record that the revision's next
+ *     valid operation is another attempt (written by the session that awaited the call, or by recovery);
+ *   - the bounded policy, recomputed from the recorded outcome and the number of calls made, still allows it.
+ * Attempts that never made a call (`not_started`) bought nothing and use none of the budget: the next attempt
+ * number is the number of calls made plus one, so the ceiling is counted in calls and can never be reset.
+ * Anything else — including a running revision with no attempt records at all — is not waiting.
+ */
+export function continuationOf(stage, attempts = []) {
+  if (stage?.status !== "running" || attempts.some(a => a.outcome === "in_flight")) return null;
+  const called = attempts.filter(a => a.outcome !== "not_started");
+  const last = called[called.length - 1];
+  if (!last || last.retry_decision !== "retry_scheduled") return null;
+  if (retryDecision(last.outcome, called.length) !== "retry_scheduled") return null;
+  return { stageId: stage.id, stageKey: stage.stage_key, revision: stage.revision, callsMade: called.length, nextAttempt: called.length + 1, after: last };
+}
 
 const laterDomain = (pair) => pair.domains.reduce((a, b) => (DOMAIN_ORDER.indexOf(a) > DOMAIN_ORDER.indexOf(b) ? a : b));
 
@@ -51,11 +76,17 @@ export function deriveExecutionState(view, { driving = false } = {}) {
   const keys = [...plan, ...STAGE_KEY_ORDER.filter(k => !plan.includes(k) && stageInfo[k])];
   const rows = keys.map(key => {
     const info = stageInfo[key];
-    const state = info?.latest?.status === "running" ? "live" : info?.active ? "completed" : info?.latest?.status === "failed" ? "failed" : "pending";
-    return { key, label: stageLabel(key), state, revision: info?.active?.revision ?? null, attempts: attemptsMade(view, info?.latest) };
+    const running = info?.latest?.status === "running";
+    // A running revision whose last call settled as a retryable failure is waiting for its next attempt, not live.
+    const waiting = running ? continuationOf(info.latest, view.attempts?.[info.latest.id]) : null;
+    const state = waiting ? "awaiting" : running ? "live" : info?.active ? "completed" : info?.latest?.status === "failed" ? "failed" : "pending";
+    return { key, label: stageLabel(key), state, revision: info?.active?.revision ?? null, attempts: attemptsMade(view, info?.latest),
+      ...(waiting ? { nextAttempt: waiting.nextAttempt, lastEvidence: waiting.after.outcome } : {}) };
   });
   const live = rows.find(r => r.state === "live") || null;
-  const remaining = rows.filter(r => r.state === "pending" || r.state === "failed");
+  const awaiting = rows.find(r => r.state === "awaiting") || null;
+  // The revision waiting for its retry is continued before anything else is started.
+  const remaining = [...rows.filter(r => r.state === "awaiting"), ...rows.filter(r => r.state === "pending" || r.state === "failed")];
 
   let status = run.status || "idle";
   if (status !== "cancel_requested" && status !== "cancelled") {
@@ -67,7 +98,7 @@ export function deriveExecutionState(view, { driving = false } = {}) {
   const ended = staged && TERMINAL_STATES.includes(run.status);
 
   return {
-    staged, status, label, rows, live,
+    staged, status, label, rows, live, awaiting,
     completed: rows.filter(r => r.state === "completed").length,
     total: rows.length,
     next: live ? null : remaining[0] || null,

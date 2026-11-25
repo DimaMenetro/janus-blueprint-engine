@@ -25,7 +25,8 @@ export async function loadRunView(runId) {
 
 export const createRun = (data) => base44.entities.Run.create(data);
 export const updateRun = (runId, patch) => base44.entities.Run.update(runId, patch);
-export const runStatus = async (runId) => (await base44.entities.Run.filter({ id: runId }))[0]?.status;
+export const readRun = async (runId) => (await base44.entities.Run.filter({ id: runId }))[0] || null;
+export const runStatus = async (runId) => (await readRun(runId))?.status;
 export const readAttempt = async (attemptId) => (await base44.entities.RunAttempt.filter({ id: attemptId }))[0];
 
 /** The newest staged run that is still open — how a reloaded session finds work in progress. */

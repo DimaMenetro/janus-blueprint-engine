@@ -21,13 +21,20 @@
  */
 import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
-import { beginStage, openAttempt, settleAttempt, settleStage, readAttempt, voidAttempt, releaseSlot, runStatus } from "@/lib/janus/stageStore";
-import { classifyParseError, parseKeyOf, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
+import { beginStage, openAttempt, settleAttempt, settleStage, readAttempt, voidAttempt, releaseSlot, runStatus, readRun } from "@/lib/janus/stageStore";
+import { classifyParseError, parseKeyOf, QUALIFICATION_KEY, STORAGE_MODEL } from "@/lib/janus/stageModel";
 import { QUALITY_CRITERIA, criterionApplies, retryDecision } from "@/lib/janus/lifecycleContract";
+import { continuationOf } from "@/lib/janus/executionState";
 
 const STAGE_FUNCTION = "invokeJanusStage";
 const NOT_STARTED = "not_started";
 const CANCEL_STATES = ["cancel_requested", "cancelled"];
+/**
+ * A revision can be left waiting for its next attempt only on a run that an ordinary resume can still reach:
+ * an open staged run. A cancelled or cancelling run schedules nothing further; a run whose lifecycle has ended
+ * is never resumed; a historical Run is read-only. On those the revision is settled from its last actual call.
+ */
+const continuable = (run) => run?.storage_model === STORAGE_MODEL.staged && run.status === "running";
 
 /**
  * Ask the function to make the call for a stage's open attempt. Resolves with the model's result.
@@ -136,12 +143,34 @@ async function settleRevision(stage, res, attempts) {
 }
 
 /**
+ * Settle ONE attempt whose call has settled, with its real outcome and the bounded policy's decision — the
+ * single path for a call this session awaited and for a call read back from the function's record, so both
+ * are recorded identically. `n` is this call's number among the revision's calls.
+ * `retryAllowed` answers whether another attempt may still be scheduled on this run; when it may not
+ * (cancellation, or a run no resume can reach), a retryable failure records `none` and keeps its real outcome.
+ */
+async function settleCalled(stage, attempt, transport, n, { slot, retryAllowed, settledBy = "session", endedAt } = {}) {
+  const res = resolveTransport(stage.stage_key, transport);
+  let decision = retryDecision(res.outcome, n);
+  if (decision === "retry_scheduled" && !(await retryAllowed())) decision = "none";
+  await settleAttempt(attempt, { outcome: res.outcome, message: res.message, retryDecision: decision, settledBy, ...(endedAt ? { endedAt } : {}) });
+  // The function frees the slot once it has recorded the outcome. If its record failed, this settlement is
+  // what frees it. Conditional on this attempt holding the slot, so it can free nothing else.
+  if (slot) await releaseSlot(stage.run_id, attempt.id);
+  return { res, decision };
+}
+// Cancellation stops retries as well as later stages (the rule a live session has always applied).
+const notCancelled = (runId) => async () => !CANCEL_STATES.includes(await runStatus(runId));
+
+/**
  * The attempts of one revision, strictly in sequence. Attempt n+1 is opened only after attempt n has settled
  * with a retryable outcome and the bound allows it — never beside a live or unknown attempt.
+ * A new revision starts at attempt 1. A CONTINUED revision (same RunStage, after an interruption) starts at
+ * `from` — its calls already made plus one — with `previous` holding its last actual call, so the ceiling of
+ * the policy is the revision's, counted across every session that ever worked it.
  */
-async function work(stage, prompt, onChange, slot) {
-  let previous = null; // the last attempt of this revision whose call actually settled: { res, n }
-  for (let n = 1; ; n += 1) {
+async function work(stage, prompt, onChange, slot, from = 1, previous = null) {
+  for (let n = from; ; n += 1) {
     const attempt = await openAttempt(stage, n);
     const t = await attemptCall(stage, attempt, prompt);
 
@@ -150,22 +179,21 @@ async function work(stage, prompt, onChange, slot) {
     if (t.state === "unknown") return { unresolved: stage.stage_key };
 
     if (t.state === NOT_STARTED) {
-      // No call was made for this attempt (it is already closed). If an earlier attempt of this revision
-      // settled, its actual outcome stands — no new provider outcome is invented for the retry that never ran.
-      if (previous) return settleRevision(stage, previous.res, previous.n);
       const message = `${stage.stage_key}: ${t.message}`;
+      if (previous) {
+        // The retry was scheduled but no call was made for it (this attempt is already closed, and it used
+        // none of the budget). The earlier attempt's actual outcome stands and nothing is invented for the
+        // retry that never ran. The revision is NOT closed for that: on an open run it stays waiting for the
+        // same attempt number, which a resume continues. Only where no resume can follow (cancellation, an
+        // ended or historical run) is it settled, from that earlier actual outcome.
+        if (!continuable(await readRun(stage.run_id))) return settleRevision(stage, previous.res, previous.n);
+        return { refused: { reason: t.reason, message }, awaiting: { stageKey: stage.stage_key, nextAttempt: n } };
+      }
       await settleStage(stage, { notStarted: message });
       return { refused: { reason: t.reason, message } };
     }
 
-    const res = resolveTransport(stage.stage_key, t);
-    let decision = retryDecision(res.outcome, n);
-    // Cancellation stops retries as well as later stages. This attempt still keeps its real outcome.
-    if (decision === "retry_scheduled" && CANCEL_STATES.includes(await runStatus(stage.run_id))) decision = "none";
-    await settleAttempt(attempt, { outcome: res.outcome, message: res.message, retryDecision: decision });
-    // The function frees the slot once it has recorded the outcome. If its record failed, this settlement is
-    // what frees it. Conditional on this attempt holding the slot, so it can free nothing else.
-    if (slot) await releaseSlot(stage.run_id, attempt.id);
+    const { res, decision } = await settleCalled(stage, attempt, t, n, { slot, retryAllowed: notCancelled(stage.run_id) });
     if (decision !== "retry_scheduled") return settleRevision(stage, res, n);
     previous = { res, n };
     if (onChange) await onChange(stage);
@@ -198,6 +226,46 @@ export async function runStage({ prompt, parseKey: _parseKey, onBegan, staged, .
   }
 }
 
+/**
+ * The actual result of an attempt whose call settled, rebuilt from durable records: the function's record of
+ * the call when it exists (resolved exactly as a live session would have), otherwise what the session that
+ * held the response settled the attempt with.
+ */
+const lastCallResult = (stage, attempt) => (attempt.transport
+  ? resolveTransport(stage.stage_key, recordedTransport(attempt))
+  : { outcome: attempt.outcome, message: attempt.error_message });
+
+/**
+ * CONTINUE a revision that is waiting for its next attempt (executionState.continuationOf) — the same RunStage,
+ * the same prompt, the next attempt number, the revision's original ceiling. The caller (the canonical engine)
+ * has already proven that `prompt` is this revision's own prompt by its input fingerprint. Ends exactly like
+ * runStage. Starts no call for a revision that is not waiting: that is refused here, before any record.
+ */
+export async function continueStage({ stage, attempts = [], prompt, onBegan, staged }) {
+  const waiting = continuationOf(stage, attempts);
+  if (!waiting) throw new Error(`${stage.stage_key}: this revision is not waiting for a retry and is not continued`);
+  const slotKey = `${stage.run_id}|${stage.stage_key}`;
+  if (unresolved.has(slotKey)) throw new Error(`${stage.stage_key}: ${UNRESOLVED_ATTEMPT}`);
+  unresolved.add(slotKey);
+  try {
+    if (onBegan) await onBegan(stage);
+    return await work(stage, prompt, onBegan, staged !== false, waiting.nextAttempt,
+      { res: lastCallResult(stage, waiting.after), n: waiting.callsMade });
+  } finally {
+    unresolved.delete(slotKey);
+  }
+}
+
+/**
+ * Close a revision that has no call in flight from its last actual call. Used where a waiting revision can no
+ * longer be continued: the cancellation boundary, a run no resume can reach, and the operator's explicit
+ * decision to start a new revision. Never used on a revision with an in-flight attempt.
+ */
+export async function closeFromLastCall(stage, attempts = []) {
+  if (attempts.some(a => a.outcome === "in_flight")) throw new Error(`${stage.stage_key}: ${UNRESOLVED_ATTEMPT}`);
+  return settleFromLastCall(stage, attempts.filter(a => a.outcome !== NOT_STARTED));
+}
+
 /** The revision can be closed without a live call: settle it from the last attempt whose call actually settled. */
 async function settleFromLastCall(stage, called) {
   const prior = called[called.length - 1];
@@ -225,30 +293,52 @@ async function settleFromLastCall(stage, called) {
  *   5 (1) with an earlier settled attempt| that earlier outcome           | the revision keeps the earlier actual outcome
  *   – no attempt open                    | the last settled call          | the revision is settled from it
  *
- * Recovery reads and settles. It never starts a call and never retries: a stage whose recovered outcome is a
- * retryable failure is run again only by an explicit resume or re-run, as a new revision.
+ * WHAT A RECOVERED FAILURE DOES TO THE REVISION (same-revision retry continuation). Once the last actual call of
+ * the revision is known, the existing bounded policy decides, exactly as it does for a live session:
+ *
+ *   last actual call                               | attempt records        | revision
+ *   -----------------------------------------------+------------------------+------------------------------------------
+ *   succeeded                                      | none                   | settled succeeded
+ *   non-retryable failure                          | none                   | settled failed
+ *   retryable failure, budget exhausted            | exhausted              | settled failed
+ *   retryable failure, budget left, run cancelled  | none (real outcome kept)| settled failed — the cancellation boundary
+ *   or ended or historical (no resume can follow)  |                        |
+ *   retryable failure, budget left, run open       | retry_scheduled        | NOT settled: it stays running, waiting for
+ *                                                  |                        | attempt n+1 of the SAME revision
+ *
+ * `retry_scheduled` on the attempt is the durable record that the revision's next valid operation is attempt
+ * n+1. Recovery reads and settles; it never starts a call and never retries. Only a resume continues the
+ * revision, after the engine has proven its identity (stageEngine.verifyContinuation). An interruption therefore
+ * never resets the budget, and never turns an unchanged stage operation into a new revision.
+ * Ends as { record } | { failure } | { unresolved } | { awaiting: { stageKey, nextAttempt } }.
  * Nothing here looks at how old anything is.
  */
 export async function recoverStage(stage, attempts = [], { slot = true } = {}) {
   const called = attempts.filter(a => a.outcome !== "in_flight" && a.outcome !== NOT_STARTED); // attempts whose call settled
   const last = attempts[attempts.length - 1] || null;
+  const open = continuable(await readRun(stage.run_id));
 
   if (last?.outcome === "in_flight" && last.transport) {
-    // Cases 2 and 3: the function recorded the outcome.
-    const res = resolveTransport(stage.stage_key, recordedTransport(last));
-    await settleAttempt(last, { outcome: res.outcome, message: res.message, retryDecision: "none", settledBy: "recovery", endedAt: last.transport.recorded_at });
-    if (slot) await releaseSlot(stage.run_id, last.id);
-    return settleRevision(stage, res, called.length + 1);
+    // Cases 2 and 3: the function recorded the outcome. The attempt gets its real outcome and the policy's decision.
+    const n = called.length + 1;
+    const { res, decision } = await settleCalled(stage, last, recordedTransport(last), n,
+      { slot, retryAllowed: async () => open, settledBy: "recovery", endedAt: last.transport.recorded_at });
+    if (decision === "retry_scheduled") return { awaiting: { stageKey: stage.stage_key, nextAttempt: n + 1 } };
+    return settleRevision(stage, res, n);
   }
 
+  let ledger = attempts;
   if (last?.outcome === "in_flight") {
     // No record. Case 1 if the attempt can still be closed unclaimed; otherwise case 4.
     const neverClaimed = await voidAttempt(last.id, { settledBy: "recovery" });
     if (!neverClaimed) return { unresolved: stage.stage_key };
-    return settleFromLastCall(stage, called); // case 5 when an earlier attempt settled; else no call was ever made
+    ledger = attempts.map(a => (a.id === last.id ? { ...a, outcome: NOT_STARTED, claim_state: "void" } : a));
   }
 
-  // No attempt is open: the session ended between settling its last attempt and settling the revision
-  // (or before opening its first attempt).
+  // No call is open: the last attempt was just closed unclaimed (case 5 when an earlier attempt settled), or the
+  // session ended between settling an attempt and its next step. If that last actual call scheduled a retry and
+  // a resume can still reach the run, the revision keeps waiting for it; otherwise it is settled from that call.
+  const waiting = continuationOf(stage, ledger);
+  if (waiting && open) return { awaiting: { stageKey: stage.stage_key, nextAttempt: waiting.nextAttempt } };
   return settleFromLastCall(stage, called);
 }
