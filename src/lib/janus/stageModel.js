@@ -6,7 +6,7 @@
 import { PAIRS, PROTOCOL, STAGE_ORDER } from "@/lib/janus/protocolRegistry";
 
 export const STORAGE_MODEL = { legacy: "legacy_monolithic", staged: "staged_v1" };
-export const ENGINE_VERSION = `janus-engine/${PROTOCOL.version}-phase6`;
+export const ENGINE_VERSION = `janus-engine/${PROTOCOL.version}-phase7`;
 export const ORCHESTRATOR = "browser"; // transitional owner (plan §18.1); production target is server-owned
 
 export const intersectionKey = (pairId) => `intersection:${pairId}`;

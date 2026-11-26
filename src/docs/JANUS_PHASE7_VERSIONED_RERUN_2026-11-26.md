@@ -85,7 +85,7 @@ expect(viewOf(run.id).stageInfo.cogito.active).toMatchObject({ revision: 2, stat
   - Historical Run.
   - The evaluation pathway: never-started retry, three interruptions to exhaustion, no hidden retry, identity mismatch and explicit close, unresolved call, gate refusals, concurrent continuation, lifecycle untouched.
 - Production build passes. Lint is clean on changed files; the 4 historical unused-import errors are in untouched files.
-- `invokeJanusStage` is unchanged. No timers, heartbeats or deadlines were added.
+- `invokeJanusStage` is unchanged. No timers, heartbeats or deadlines were added. `ENGINE_VERSION` is now `janus-engine/2.0-phase7`. It is a provenance label only; no identity check reads it.
 - Diff: 15 files changed (+294 / −153), plus 7 new files (`rerunImpact.js`, `phase7.test.js`, 5 components). Entity change: `Run.graph_epoch` (number).
 - Not verified: the screens with real data. The preview browser session cannot read DIMA's run; it showed "Run not found" under row-level security. No manual pass. No live model call.
 
