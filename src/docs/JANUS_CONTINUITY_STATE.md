@@ -99,7 +99,7 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 ## Phase 8 — CLOSED 2026-11-26 (DIMA)
 - Final Synthesis validated at its stage; stage-scoped template identity authorized by DIMA, including the one `stageEngine.test.js` assertion replacement. 232/232 at close.
 
-## Phase 9 (2026-11-26) — CORRECTION TRANCHE DONE, PIPELINE NOT STARTED — record `JANUS_PHASE9_BLUEPRINT_COGNITION_2026-11-26.md`
+## Phase 9 (2026-11-26) — correction tranche (first of two; the pipeline follows below) — record `JANUS_PHASE9_BLUEPRINT_COGNITION_2026-11-26.md`
 - 245/245, build passes. No paid call. Live run `6b07cabc…` (now `partial`, Actus r2 succeeded) and reference run `6b0780…` untouched.
 - `lifecycleContract.stageIntegrity`: one integrity definition used at settlement, before an input is read, and at completion (`qualification.completionOf`). Cogito `depends_on` = claim ids only; `sources` = provenance.
 - Contracts list field types from the schema (`typeLegend`); schema/parse retries carry the rejections (`withCorrection`); the prompt fingerprint is unchanged.
@@ -107,5 +107,18 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 - 20,000-character context cut removed everywhere.
 - Templates: four domains and Blueprint `2026-11-26.2`; pairs/patterns `2026-11-26.1`; Refresh/evaluation `2026-11-25.3`.
 
+## Phase 9 (2026-11-26) — PIPELINE AND PRESENTATION IMPLEMENTED, NOT YET RUN LIVE — record §6–§9
+- 268/268 in 14 files, production build passes. No paid call. No live or historical record written.
+- DIMA authorized replacing the inherited one-stage/one-call Blueprint assertions (record §4, now closed); each replacement is marked in place in the test files.
+- Blueprint = durable pipeline (`blueprintPipeline.js`, `blueprintSpecs.js`): brief → candidates → selection → skeleton → expansion → criteria → assembly (code, no attempt) → critique (Standard, Full) → `blueprint` (final refinement). `executionState.blueprintPlan(mode)` is the one list of its stages.
+- Templates: every stage except Refresh `stage-compiler/2026-11-26.3`; Refresh `2026-11-25.3`.
+- Evaluator records surplus, restatement, objective preservation and errors of substance; code holds its verdicts to them (`qualification.evaluatorConsistency`).
+- Presentation: Blueprint tab shows strategy, architecture and scope, requirement and recommendation dispositions, per-step plan, acceptance and outcome interpretation, self-critique with the refinement's answer to each finding (`components/janus/blueprint/*`); Quality panel shows the evaluator's findings; Markdown and JSON exports carry the whole reasoning record (`pipelineMarkdown`, `_blueprint_reasoning`).
+- Operator "Re-run Blueprint" regenerates the whole pipeline of the run's mode; one pipeline stage alone is re-run from Stage lineage. A failed pipeline stage counts as a Blueprint need.
+- Open: three unused-import lint errors in files not touched by Phase 9 (`GlassRunCard.jsx`, `RunCard.jsx`, `RefreshTab.jsx`); the new screens are not visually checked on a device; no live run has exercised the pipeline.
+
 ## Next action
+DIMA: review Phase 9, then decide on publishing and on one approved live run through the pipeline (the only way to judge its cognitive quality). Do not start Phase 10. Do not make a paid call without approval.
+
+## Superseded — the decision that preceded the pipeline (kept for the record)
 **DIMA decision needed (Phase 9 record §4):** the Blueprint sub-stage pipeline cannot coexist with inherited assertions that pin the Blueprint as one stage and one call (stage counts of 14/13/12, exact call sequences, exact Blueprint `depends_on`). Authorize replacing those specific assertions with the stronger invariants, then build the pipeline (candidates → comparison/selection → skeleton → expansion → criteria → deterministic assembly → critique → refinement → qualification) and the presentation. Do not start Phase 10. Publishing is DIMA's. Do not make a paid call.

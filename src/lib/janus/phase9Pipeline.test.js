@@ -10,8 +10,11 @@ import { executeJanus, resumeJanus, previewRerun, rerunStages, rerunBlueprint } 
 import { BP, pipelineIntegrity, refinementErrors, assembleBlueprint } from "@/lib/janus/blueprintPipeline";
 import { normalizeStageOutput } from "@/lib/janus/stageRunner";
 import { deriveQualification, evaluatorConsistency, inheritanceFindings } from "@/lib/janus/qualification";
-import { composeRunView } from "@/lib/janus/runView";
-import { deriveExecutionState } from "@/lib/janus/executionState";
+import { composeRunView, rerunNeeds } from "@/lib/janus/runView";
+import { deriveExecutionState, blueprintPlan } from "@/lib/janus/executionState";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import process from "node:process";
 import { INTERSECTION_KEYS } from "@/lib/janus/stageModel";
 
 const PIPELINE = ["blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria",
@@ -250,6 +253,29 @@ describe("failure, continuity and regeneration inside the pipeline", () => {
     expect(result.errors).toEqual(expect.arrayContaining([expect.stringMatching(/^blueprint:selection: not started — blueprint:candidates, which it builds on, produced no valid new version in this operation$/)]));
     PIPELINE.slice(2).forEach(k => expect(stagesOf(k)).toHaveLength(1)); // no revision, no call, for anything after it
     expect(viewOf(runId).stageInfo.blueprint.active.id).toBe(current); // the Blueprint the operator has is the one they had
+  });
+
+  it("the operator's Blueprint re-run is the whole pipeline, and a failed pipeline stage is a Blueprint need", async () => {
+    const { runId } = await executeJanus(params("full"));
+    expect(rerunNeeds(viewOf(runId)).blueprint).toBe(false);
+    // The final stage alone would refine the old draft again: it is not a new Blueprint.
+    expect((await previewRerun(runId, { targets: ["blueprint"] })).plan).toEqual(["blueprint"]);
+    expect(blueprintPlan("full")).toEqual(PIPELINE);
+    expect(blueprintPlan("quick")).toEqual(PIPELINE.filter(k => k !== "blueprint:critique"));
+    const impact = await previewRerun(runId, { targets: blueprintPlan("full") });
+    expect(impact.refusals).toEqual([]);
+    expect(impact.plan).toEqual(PIPELINE);
+    expect(impact.unaffected.map(u => u.key).sort()).toEqual([...UPSTREAM].sort());
+    const control = readFileSync(resolve(process.cwd(), "src/components/janus/RerunControls.jsx"), "utf8");
+    expect(control).toMatch(/blueprintPlan\(mode\)/);
+    expect(control).not.toMatch(/blueprint: \["blueprint"\]/);
+
+    h.llm.failOn = "blueprint:brief";
+    await rerunBlueprint(runId); // fails at the first stage: nothing became stale, the earlier Blueprint is still active
+    h.llm.failOn = null;
+    const view = viewOf(runId);
+    expect(view.stageInfo.blueprint).toMatchObject({ active: expect.objectContaining({ revision: 1 }), stale: null });
+    expect(rerunNeeds(view)).toMatchObject({ blueprint: true, blueprintStale: null });
   });
 });
 

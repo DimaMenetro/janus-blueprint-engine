@@ -264,11 +264,18 @@ export default function BlueprintTab({ data, blueprintLevel, artifacts = {}, pip
                 <p className="text-sm text-slate-600 dark:text-slate-300">
                   <span className="font-medium">Mitigation:</span> {risk.mitigation}
                 </p>
+                {risk.trigger && (
+                  <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                    <span className="font-medium">Trigger:</span> {risk.trigger}
+                  </p>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
+
+      <BlueprintCritique critique={pipeline["blueprint:critique"]} refinement={data.refinement} />
     </div>
   );
 }

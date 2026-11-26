@@ -137,6 +137,7 @@ export function rerunNeeds(view) {
     && (run.validation_errors || []).some(e => re.test(e));
   const blueprintStale = stageInfo.blueprint?.stale || null;
   const synthesis = !artifacts.synthesis || ["synthesis", ...INTERSECTION_KEYS].some(troubled) || legacyFlag("synthesis", /synthesis|intersection/);
-  const blueprint = !artifacts.blueprint || troubled("blueprint") || !!blueprintStale || legacyFlag("blueprint", /blueprint/);
+  // The Blueprint is its whole pipeline (Phase 9): a failed or invalid stage anywhere in it is a Blueprint need.
+  const blueprint = !artifacts.blueprint || ["blueprint", ...BLUEPRINT_SUBSTAGE_KEYS].some(troubled) || !!blueprintStale || legacyFlag("blueprint", /blueprint/);
   return { core, synthesis: core && synthesis, blueprint: core && blueprint, blueprintStale };
 }

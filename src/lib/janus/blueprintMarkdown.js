@@ -3,6 +3,8 @@
  * the known contract in a readable layout, and anything else the artifact carries (later pipeline fields, fields a
  * historical run has) under its own label. Nothing is dropped because this file does not know a key.
  */
+import { BP, BLUEPRINT_STAGE_LABELS } from "@/lib/janus/blueprintPipeline";
+
 const label = (k) => String(k).replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase());
 const text = (v) => {
   if (v === null || v === undefined) return "";
@@ -36,6 +38,20 @@ function stepMarkdown(s) {
   md += rest(s, ["step", "title", "purpose", "depends_on_steps", "confidence", "derived_from", "time_estimate", "effort_level", "instructions",
     "inputs", "outputs", "substeps", "checklist", "validation", "acceptance_tests"]);
   return md;
+}
+
+/**
+ * The reasoning behind the Blueprint (Phase 9): the objective brief, the candidates, the comparison and decision,
+ * the plan stages and the self-critique, each written out in full under its own heading. The assembled draft is
+ * a pure merge of the stages listed before it, so only its code audit is written here.
+ */
+export function pipelineMarkdown(pipeline) {
+  const keys = Object.keys(pipeline || {});
+  if (!keys.length) return "";
+  return `## Blueprint reasoning record\n\n${keys.map(k => {
+    const body = k === BP.assembly ? { audit_findings: pipeline[k]?.audit?.findings?.length ? pipeline[k].audit.findings : "none" } : pipeline[k];
+    return `### ${BLUEPRINT_STAGE_LABELS[k] || label(k)}\n\n${body && typeof body === "object" ? rest(body, []) : `${text(body)}\n\n`}`;
+  }).join("")}`;
 }
 
 export function blueprintMarkdown(bp) {

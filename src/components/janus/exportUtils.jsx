@@ -4,6 +4,7 @@
 
 import { PROTOCOL } from "@/lib/janus/protocolRegistry";
 import { generateMarkdown } from "./promptUtils";
+import { pipelineMarkdown } from "@/lib/janus/blueprintMarkdown";
 
 /** Provenance travels with the artifact: every revision, its exact dependencies and fingerprint. */
 const lineageExport = (lineage) => lineage.map(s => ({
@@ -37,6 +38,8 @@ export function reconstructFullJson(view) {
       updated_date: run.updated_date,
     },
     ...artifacts,
+    // The reasoning behind the Blueprint (Phase 9): brief, candidates, decision, plan stages, assembled draft, self-critique.
+    ...(Object.keys(view.pipeline || {}).length ? { _blueprint_reasoning: view.pipeline } : {}),
     _lineage: lineageExport(lineage),
   };
 
@@ -51,6 +54,7 @@ export function reconstructFullMarkdown(view) {
   let md = `---\nprotocol: ${PROTOCOL.id} v${PROTOCOL.version} (${PROTOCOL.edition})\nrun_id: ${run.id}\nstorage: ${storage}\nquery: ${run.query_text}\nmode: ${executionMode}\noutput: ${run.output_mode}\nblueprint_level: ${run.blueprint_level}\nnovelty: ${run.novelty_dial}\nrefresh: ${run.refresh_enabled}\ndate: ${run.created_date}\n---\n\n`;
 
   md += generateMarkdown(artifacts, executionMode);
+  md += pipelineMarkdown(view.pipeline);
 
   return md;
 }

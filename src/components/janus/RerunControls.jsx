@@ -2,12 +2,14 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, Layers, Map } from "lucide-react";
 import { rerunNeeds } from "@/lib/janus/runView";
-import { stagePlan } from "@/lib/janus/executionState";
+import { stagePlan, blueprintPlan } from "@/lib/janus/executionState";
 import { INTERSECTION_KEYS, STORAGE_MODEL } from "@/lib/janus/stageModel";
 import { useExecution } from "@/components/janus/ExecutionContext";
 import RerunImpactPreview from "@/components/janus/RerunImpactPreview";
 
-const TARGETS = { synthesis: [...INTERSECTION_KEYS, "synthesis"], blueprint: ["blueprint"] };
+// "Blueprint" is the whole Blueprint pipeline of the run's mode (brief → … → the final Blueprint), the same stages
+// the engine's rerunBlueprint regenerates. One pipeline stage alone is re-run from Stage lineage.
+const targetsOf = (kind, mode) => (kind === "synthesis" ? [...INTERSECTION_KEYS, "synthesis"] : blueprintPlan(mode));
 
 export default function RerunControls({ view, t, isDark, onRerunComplete, isAdmin = false }) {
   const [preview, setPreview] = useState(null); // "synthesis" | "blueprint" | null — its impact is shown before anything runs
@@ -70,7 +72,7 @@ export default function RerunControls({ view, t, isDark, onRerunComplete, isAdmi
       )}
 
       {preview && (
-        <RerunImpactPreview runId={view.run.id} targets={TARGETS[preview]} title={preview === "synthesis" ? "Synthesis (six intersections and the patterns)" : "Blueprint"}
+        <RerunImpactPreview runId={view.run.id} targets={targetsOf(preview, view.run.execution_mode)} title={preview === "synthesis" ? "Synthesis (six intersections and the patterns)" : "Blueprint (the whole pipeline, brief to final)"}
           t={t} onDone={onRerunComplete} onClose={() => setPreview(null)} />
       )}
     </motion.div>

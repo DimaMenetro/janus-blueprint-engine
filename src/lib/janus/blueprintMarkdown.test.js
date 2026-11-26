@@ -1,6 +1,7 @@
 // Phase 9: the Markdown export of a Blueprint loses nothing the artifact holds.
 import { describe, it, expect } from "vitest";
-import { blueprintMarkdown } from "@/lib/janus/blueprintMarkdown";
+import { blueprintMarkdown, pipelineMarkdown } from "@/lib/janus/blueprintMarkdown";
+import { platform } from "@/lib/janus/testPlatform";
 
 const leaves = (x, out = []) => {
   if (typeof x === "string" || typeof x === "number") out.push(String(x));
@@ -30,6 +31,18 @@ describe("Blueprint Markdown export", () => {
   it("writes every value the Blueprint holds, including fields this layout does not name", () => {
     const md = blueprintMarkdown(blueprint);
     expect(leaves(blueprint).filter(l => !md.includes(l))).toEqual([]);
+  });
+
+  it("writes the reasoning behind the Blueprint in full, stage by stage", () => {
+    const record = Object.fromEntries(Object.entries(platform.pipeline).map(([k, make]) => [k, make("ACTUS: Key Recommendations [pattern:")]));
+    record["blueprint:assembly"] = { blueprint: { goal: "a merge of the stages above" }, audit: { findings: [{ criterion: "implementation_depth", detail: "step 2 has no validation" }] } };
+    const md = pipelineMarkdown(record);
+    const { "blueprint:assembly": assembly, ...stages } = record;
+    expect(leaves(stages).filter(l => !md.includes(l))).toEqual([]);
+    expect(leaves(assembly.audit).filter(l => !md.includes(l))).toEqual([]); // the draft itself is a pure merge; its audit is not
+    expect(md).toContain("### Blueprint · Comparison and selection");
+    expect(pipelineMarkdown({})).toBe("");
+    expect(pipelineMarkdown(undefined)).toBe("");
   });
 
   it("produces nothing for an absent Blueprint", () => {

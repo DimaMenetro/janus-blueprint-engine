@@ -42,7 +42,7 @@ The 20,000-character cut on derived context is removed for every stage (`MAX_CON
 - Changed: one Phase 8 test in `phase8Closeout.test.js` (it pinned "only the Synthesis stages changed", no longer true; rewritten to the invariant, marked in place). The authorization note in `stageEngine.test.js` was corrected: that replacement was made before it was authorized.
 - Inherited six files: no assertion changed in this tranche; the only edit is that corrected note.
 
-## 4. OPEN DECISION — blocks the Blueprint pipeline
+## 4. DECISION — CLOSED: DIMA authorized the replacement (see §6)
 Plan §15.4 and the directive require durable Blueprint sub-stages (candidates, comparison/selection, skeleton, expansion, criteria, deterministic assembly, critique, refinement). Inherited tests pin the Blueprint as exactly one model call and one stage:
 - `engines.test.js`: 14 stages and 14 attempts for a Full run; the Blueprint's `depends_on` equals exactly the 12 upstream artifacts; 12 succeeded after a Blueprint failure.
 - `stageEngine.test.js`: 14 execution-origin stages; resume of a Quick run calls exactly `["blueprint", "qualification"]` (twice) and `["blueprint"]`.
@@ -52,3 +52,32 @@ No design gives the Blueprint durable sub-stages and keeps these numbers. The in
 ## 5. Not verified
 - Live behaviour of the new contracts and retry notice (needs an approved paid call).
 - `CompletionControls` on a device: not visually checked.
+
+## 6. Blueprint pipeline (second tranche)
+State after this tranche: 268/268 tests in 14 files, production build passes. No model call was made. No live or historical record was written.
+
+DIMA authorized replacing the inherited assertions listed in §4. Each replacement is marked in place where it was made (`engines.test.js`, `stageEngine.test.js`, `qualification.test.js`, `phase7.test.js`, `phase8.test.jsx`, `phase8Closeout.test.js`); the invariants behind them are asserted in `phase9Pipeline.test.js` (22 tests) against expectations written out in the test, not read from the engine.
+
+The Blueprint is a chain of durable stages (`blueprintPipeline.js`, prompts in `blueprintSpecs.js`):
+`blueprint:brief` → `blueprint:candidates` → `blueprint:selection` → `blueprint:skeleton` → `blueprint:expansion` → `blueprint:criteria` → `blueprint:assembly` → `blueprint:critique` → `blueprint`.
+- Each is a RunStage revision with exact dependencies, validated before the next reads it.
+- `blueprint:assembly` is computed by code from the validated sub-artifacts and audited in code. It is recorded as a settled revision with no attempt.
+- `blueprint:critique` belongs to Standard and Full. Quick refines the assembled draft against the code audit alone.
+- `blueprint` is the final refinement. Code refuses it if it drops a step of its draft, weakens a requirement without recording it, or leaves a critique finding unanswered.
+- `executionState.blueprintPlan(mode)` is the single list of these stages; the engine, the re-run and the operator control all read it.
+- Template identity: every stage except Refresh is `stage-compiler/2026-11-26.3`.
+
+## 7. Qualification
+The evaluator records what the Blueprint adds beyond the operator's material, what only restates it, whether the objective was preserved, and errors of substance. Its verdicts are held to those findings by code (`qualification.evaluatorConsistency`). Dispositions are checked against the plan (`inheritanceFindings`): a recommendation marked implemented that no step cites, or a carried "must" requirement no acceptance entry verifies, fails by code.
+
+## 8. Presentation and export
+- Blueprint tab (`components/janus/blueprint/*`): objective and selected strategy with the strongest attack on it; architecture, phases, scope, invariants, decision points; a disposition for every operator requirement and Actus recommendation; per-step purpose, phase, components and requirements fulfilled; acceptance and what each kind of outcome would mean; the self-critique with what the refinement did about each finding.
+- Quality panel: the evaluator's findings under the criteria (`EvaluatorFindings.jsx`).
+- Export: Markdown appends the whole reasoning record stage by stage (`pipelineMarkdown`; the assembled draft is a pure merge, so only its audit is written); JSON carries it as `_blueprint_reasoning`.
+- Operator "Re-run Blueprint" previews and regenerates the whole pipeline of the run's mode. It previously named only the final stage, which would have refined the old draft again. A failed stage anywhere in the pipeline now counts as a Blueprint need (`runView.rerunNeeds`).
+
+## 9. Not verified, and open
+- No live run has gone through the pipeline. Its cognitive quality is unjudged until DIMA approves one.
+- The new screens were not checked on a device or in the installed app.
+- Lint reports three unused imports in files this phase did not touch (`GlassRunCard.jsx`, `RunCard.jsx`, `tabs/RefreshTab.jsx`). Left as found.
+- Actus recommendations do not yet cite Blueprint substeps (the Blueprint cites Actus; the reverse is not built).
