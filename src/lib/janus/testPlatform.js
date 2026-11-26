@@ -14,11 +14,14 @@ const clone = (x) => JSON.parse(JSON.stringify(x));
 const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k] ?? null) : rec[k] === v));
 
 const subs = (d) => Object.fromEntries(subdomainIds(d).map(id => [id, { perspective: `${id} view`, key_findings: ["f"] }]));
-const step = (n, title, derived_from) => ({ step: n, title, instructions: "Do it", inputs: ["i"], outputs: ["o"], validation: "Check it",
-  depends_on_steps: n > 1 ? [1] : [], substeps: [{ substep: `${n}a`, details: "d" }], derived_from, confidence: "Contested" });
+const step = (n, title, derived_from) => ({ step: n, title, purpose: `Purpose of ${title}`, phase: "P1", fulfils: n === 1 ? ["Q1"] : [], instructions: "Do it", inputs: ["i"], outputs: ["o"], validation: "Check it",
+  depends_on_steps: n > 1 ? [1] : [], substeps: [{ substep: `${n}a`, details: "d" }], acceptance_tests: ["t"], derived_from, confidence: "Contested" });
 // A Blueprint that cites only what its prompt actually showed it (so its traces resolve in every mode).
 const blueprintFor = (prompt = "") => ({
-  goal: "Pilot", assumptions: [],
+  // The refiner carries the draft's parts forward (the pipeline fixtures below produce the same ones).
+  goal: "Pilot", assumptions: ["a"], phases: [{ id: "P1", name: "Pilot" }],
+  selected_strategy: { name: "Approach 1", mode: "selected", built_from: ["K1"] },
+  acceptance: PIPELINE["blueprint:criteria"]().acceptance, outcome_interpretation: PIPELINE["blueprint:criteria"]().outcome_interpretation,
   alternative_approaches: ["A", "B", "C"].map(name => ({ name, pros: ["p"], cons: ["c"], why_not_chosen: "w" })),
   steps: [
     step(1, "Scope", ["C1", "corpus:1"]),

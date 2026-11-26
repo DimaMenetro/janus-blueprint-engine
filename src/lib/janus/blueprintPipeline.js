@@ -72,6 +72,7 @@ export const BLUEPRINT_SCHEMA = obj({
   refinement: obj({
     dispositions: list({ finding: str, action: { type: "string", enum: ["resolved", "declined"] }, change: str, reason: str }, ["finding", "action"]),
     scope_changes: list({ requirement: str, what: str, reason: str }, ["what", "reason"]),
+    removals: list({ path: str, reason: str }, ["path", "reason"]),
     summary: str,
   }),
 });
@@ -109,7 +110,8 @@ export const PIPELINE_SCHEMAS = {
   [BP.expansion]: obj({ steps: list({ step: { type: "number" }, ...STEP_DETAIL }, ["step", "instructions", "validation"]) }, ["steps"]),
   [BP.criteria]: obj({ success_criteria: strs, acceptance: ACCEPTANCE, outcome_interpretation: OUTCOMES, risk_register: RISKS },
     ["success_criteria", "acceptance", "outcome_interpretation", "risk_register"]),
-  [BP.assembly]: obj({ blueprint: BLUEPRINT_SCHEMA, audit: obj({ findings: list({ criterion: str, detail: str }, ["criterion", "detail"]) }, ["findings"]) }, ["blueprint", "audit"]),
+  [BP.assembly]: obj({ blueprint: BLUEPRINT_SCHEMA, audit: obj({ findings: list({ criterion: str, detail: str }, ["criterion", "detail"]),
+    confidence_corrections: list({ step: { type: "number" }, from: str, to: str }, ["step", "to"]) }, ["findings"]) }, ["blueprint", "audit"]),
   [BP.critique]: obj({
     findings: list({ id: str, severity: { type: "string", enum: ["blocking", "major", "minor"] },
       category: { type: "string", enum: ["objective_preservation", "domestication", "unsupported_mechanism", "epistemic_error", "omission", "contradiction",
@@ -261,10 +263,41 @@ const RULES = {
  * What the FINAL Blueprint owes the draft and the critique it was refined from (plan §15.4 step 6: "repair
  * deficiencies without silently weakening novelty or scope"). Checked only against the exact revisions it read.
  */
+// REFINEMENT PRESERVES SUBSTANCE (Phase 9 corrective tranche). The live CCT run's final Blueprint returned fewer
+// substeps, checklist items, inputs, outputs and acceptance entries than its assembled draft, with no finding asking
+// for any of it. The rule is structural, not a length target: a list of the draft may grow or be rewritten, but it
+// may not come back with fewer entries, and a part the draft holds may not come back absent — unless
+// refinement.removals names that path and gives the reason. Step traces (derived_from) and the alternatives are
+// judged where they always were (qualification, completion).
+const KEPT_LISTS = ["assumptions", "invariants", "decision_points", "success_criteria", "risk_register", "acceptance", "phases"];
+const KEPT_PARTS = ["selected_strategy", "architecture", "scope", "outcome_interpretation"];
+const KEPT_STEP_LISTS = ["inputs", "outputs", "substeps", "checklist", "acceptance_tests", "interfaces", "components", "fulfils"];
+const KEPT_STEP_TEXTS = ["purpose", "instructions", "validation"];
+export function preservationErrors(final, draft) {
+  const e = [];
+  const declared = new Set(arr(final?.refinement?.removals).filter(r => said(r?.reason)).map(r => r.path));
+  const shrink = (path, before, after) => {
+    const b = arr(before).length, a = arr(after).length;
+    if (a < b && !declared.has(path)) e.push(`${path}: the assembled draft holds ${b} entr${b === 1 ? "y" : "ies"} and the refinement returned ${a}. Carry every entry forward; to remove one, name "${path}" in refinement.removals with the reason`);
+  };
+  KEPT_LISTS.forEach(k => shrink(k, draft[k], final?.[k]));
+  KEPT_PARTS.filter(k => draft[k] && !final?.[k] && !declared.has(k)).forEach(k => e.push(`${k}: present in the assembled draft, absent from the refinement`));
+  if (final?.architecture) shrink("architecture.components", draft.architecture?.components, final.architecture.components);
+  if (final?.outcome_interpretation) Object.keys(draft.outcome_interpretation || {}).filter(k => said(draft.outcome_interpretation[k]) && !said(final.outcome_interpretation[k]))
+    .forEach(k => e.push(`outcome_interpretation.${k}: present in the assembled draft, empty in the refinement`));
+  const now = Object.fromEntries(arr(final?.steps).map(s => [s.step, s]));
+  arr(draft.steps).filter(d => now[d.step]).forEach(d => {
+    KEPT_STEP_LISTS.forEach(k => shrink(`steps[${d.step}].${k}`, d[k], now[d.step][k]));
+    KEPT_STEP_TEXTS.filter(k => said(d[k]) && !said(now[d.step][k])).forEach(k => e.push(`steps[${d.step}].${k}: present in the assembled draft, empty in the refinement`));
+  });
+  return e;
+}
+
 export function refinementErrors(final, inputs = {}) {
   const e = [];
   const draft = inputs[BP.assembly]?.blueprint;
   if (draft) {
+    e.push(...preservationErrors(final, draft));
     const kept = stepNumbers(final?.steps);
     arr(draft.steps).filter(s => !kept.has(s.step)).forEach(s => e.push(`step ${s.step} ("${s.title}") of the assembled draft was dropped: refinement adds and repairs, it does not remove`));
     const declared = new Set(arr(final?.refinement?.scope_changes).filter(c => said(c?.reason)).map(c => c.requirement));

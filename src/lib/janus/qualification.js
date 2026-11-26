@@ -76,6 +76,23 @@ export function stepTrace(step, idx) {
 }
 
 /**
+ * CONFIDENCE OF THE ASSEMBLED DRAFT IS SET BY CODE (Confidence Propagation Law, as for Actus recommendations).
+ * In the live CCT run the skeleton labelled a step Contested although it rested on Speculative material; the critic
+ * then argued about the label and the refinement "resolved" it by raising it to Established. The draft now leaves
+ * assembly with every step at the weakest confidence of what it cites, and each correction is recorded.
+ */
+export function enforceStepConfidence(blueprint, artifacts) {
+  const idx = traceIndex(artifacts), corrections = [];
+  const steps = (blueprint.steps || []).map(s => {
+    const t = stepTrace(s, idx);
+    if (!t.corrected) return s;
+    corrections.push({ step: s.step, from: s.confidence ?? null, to: t.effective });
+    return { ...s, confidence: t.effective };
+  });
+  return { blueprint: { ...blueprint, steps }, corrections };
+}
+
+/**
  * INHERITANCE, decided by code (Phase 9). A Blueprint that records dispositions is held to them:
  *  - requirements (the objective brief): every one has a disposition; one the plan carries names real steps; a
  *    "must" requirement the plan carries is verified by an acceptance entry;

@@ -33,7 +33,11 @@ import { JANUS_SCHEMA } from "@/components/janus/janusSchema";
  */
 const UNCHANGED_SINCE_PHASE5 = "stage-compiler/2026-11-25.3";
 const PHASE9_PIPELINE = "stage-compiler/2026-11-26.3";
-export const templateVersionOf = (stageKey) => (stageKey === "refresh" ? UNCHANGED_SINCE_PHASE5 : PHASE9_PIPELINE);
+// 2026-11-26.4: the final Blueprint (refinement must preserve the draft's substance; confidence is code-set) and the
+// assembly (its draft leaves with code-set step confidence and records the corrections). No other stage changed.
+const PHASE9_PRESERVATION = "stage-compiler/2026-11-26.4";
+export const templateVersionOf = (stageKey) => (stageKey === "refresh" ? UNCHANGED_SINCE_PHASE5
+  : stageKey === BP.final || stageKey === BP.assembly ? PHASE9_PRESERVATION : PHASE9_PIPELINE);
 export const REFRESH_UNAVAILABLE_MESSAGE =
   "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
 

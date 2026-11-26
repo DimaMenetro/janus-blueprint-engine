@@ -7,7 +7,7 @@
 import { STAGE_ORDER, PROTOCOL } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, QUALIFICATION_KEY, CONFIG_INPUT, configOf, fingerprintInputs, revisionLabel } from "@/lib/janus/stageModel";
 import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
-import { completionOf, deriveQualification, recordedInputs, inputIntegrity, blueprintAudit } from "@/lib/janus/qualification";
+import { completionOf, deriveQualification, recordedInputs, inputIntegrity, blueprintAudit, enforceStepConfidence } from "@/lib/janus/qualification";
 import { loadRunView, updateRun, recordDeterministicStage } from "@/lib/janus/stageStore";
 import { runStage, continueStage, closeFromLastCall, validateStageOutput } from "@/lib/janus/stageRunner";
 import { BP, BLUEPRINT_PIPELINE_KEYS, isDeterministicStage, assembleBlueprint } from "@/lib/janus/blueprintPipeline";
@@ -30,9 +30,10 @@ export { configOf };
  */
 const DETERMINISTIC = {
   [BP.assembly]: (inputs, config) => {
-    const blueprint = assembleBlueprint(inputs);
     const artifacts = composeArtifacts(Object.fromEntries(Object.entries(inputs).map(([k, output]) => [k, { output }])));
-    return { blueprint, audit: blueprintAudit(config, { ...artifacts, blueprint }, inputs[BP.brief]) };
+    // Invariants code can establish are established here, before the critic and the refiner read the draft.
+    const { blueprint, corrections } = enforceStepConfidence(assembleBlueprint(inputs), artifacts);
+    return { blueprint, audit: { ...blueprintAudit(config, { ...artifacts, blueprint }, inputs[BP.brief]), ...(corrections.length ? { confidence_corrections: corrections } : {}) } };
   },
 };
 

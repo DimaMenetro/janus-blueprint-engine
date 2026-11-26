@@ -163,9 +163,13 @@ describe("continuation identity is the stage's own", () => {
     // cognitive-discipline clause, the Blueprint became a pipeline, and the evaluation returns new findings. So each
     // of them moved, as II.4 requires, and Refresh, whose contract did not change, did not.
     expect(id("refresh")).toBe("stage-compiler/2026-11-25.3"); // unchanged since Phase 5
-    const changed = ["corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis", "qualification", "blueprint",
-      "blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria", "blueprint:assembly", "blueprint:critique"];
+    // UPDATED 2026-11-26 (Phase 9 corrective tranche, same rule II.4): the final Blueprint's contract gained the
+    // substance-preservation rules and the assembly's output gained code-set step confidence, so exactly those two
+    // moved to .4. Every other stage's contract is untouched and keeps .3.
+    const changed = ["corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis", "qualification",
+      "blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria", "blueprint:critique"];
     expect(new Set(changed.map(id))).toEqual(new Set(["stage-compiler/2026-11-26.3"]));
+    expect(["blueprint", "blueprint:assembly"].map(id)).toEqual(["stage-compiler/2026-11-26.4", "stage-compiler/2026-11-26.4"]);
   });
 
   it.each([
