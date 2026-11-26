@@ -126,6 +126,10 @@
       "type": "string",
       "description": "Execution slot of a staged run: the one RunAttempt whose model call may be live; empty when none is. The server takes it atomically before a call and frees it only once that call's outcome is recorded, never because time passed."
     },
+    "graph_epoch": {
+      "type": "number",
+      "description": "Initiation epoch of a staged run (Phase 7): every explicit revision-producing operation (re-run, evaluation) takes it from n to n+1 in one conditional write, so of two initiations from the same state exactly one proceeds. A re-run preview is bound to the epoch it was computed at. Absent means 0; historical runs never carry it."
+    },
     "qualification_state": {
       "type": "string",
       "enum": [

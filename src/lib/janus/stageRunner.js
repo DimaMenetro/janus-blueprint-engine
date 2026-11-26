@@ -24,17 +24,15 @@ import { validateJanusOutput } from "@/components/janus/janusSchema";
 import { beginStage, openAttempt, settleAttempt, settleStage, readAttempt, voidAttempt, releaseSlot, runStatus, readRun } from "@/lib/janus/stageStore";
 import { classifyParseError, parseKeyOf, QUALIFICATION_KEY, STORAGE_MODEL } from "@/lib/janus/stageModel";
 import { QUALITY_CRITERIA, criterionApplies, retryDecision } from "@/lib/janus/lifecycleContract";
-import { continuationOf } from "@/lib/janus/executionState";
+import { continuationOf, continuableFor } from "@/lib/janus/executionState";
 
 const STAGE_FUNCTION = "invokeJanusStage";
 const NOT_STARTED = "not_started";
 const CANCEL_STATES = ["cancel_requested", "cancelled"];
-/**
- * A revision can be left waiting for its next attempt only on a run that an ordinary resume can still reach:
- * an open staged run. A cancelled or cancelling run schedules nothing further; a run whose lifecycle has ended
- * is never resumed; a historical Run is read-only. On those the revision is settled from its last actual call.
- */
-const continuable = (run) => run?.storage_model === STORAGE_MODEL.staged && run.status === "running";
+// A revision can be left waiting for its next attempt only where an operator action can still continue it
+// (executionState.continuableFor): a run stage on an open staged run; the quality evaluation on a completed one.
+// A cancelled or cancelling run schedules nothing further, and a historical Run is read-only: on those, and on a
+// run that no action can reach, the revision is settled from its last actual call.
 
 /**
  * Ask the function to make the call for a stage's open attempt. Resolves with the model's result.
@@ -186,7 +184,7 @@ async function work(stage, prompt, onChange, slot, from = 1, previous = null) {
         // retry that never ran. The revision is NOT closed for that: on an open run it stays waiting for the
         // same attempt number, which a resume continues. Only where no resume can follow (cancellation, an
         // ended or historical run) is it settled, from that earlier actual outcome.
-        if (!continuable(await readRun(stage.run_id))) return settleRevision(stage, previous.res, previous.n);
+        if (!continuableFor(await readRun(stage.run_id), stage.stage_key)) return settleRevision(stage, previous.res, previous.n);
         return { refused: { reason: t.reason, message }, awaiting: { stageKey: stage.stage_key, nextAttempt: n } };
       }
       await settleStage(stage, { notStarted: message });
@@ -316,7 +314,7 @@ async function settleFromLastCall(stage, called) {
 export async function recoverStage(stage, attempts = [], { slot = true } = {}) {
   const called = attempts.filter(a => a.outcome !== "in_flight" && a.outcome !== NOT_STARTED); // attempts whose call settled
   const last = attempts[attempts.length - 1] || null;
-  const open = continuable(await readRun(stage.run_id));
+  const open = continuableFor(await readRun(stage.run_id), stage.stage_key);
 
   if (last?.outcome === "in_flight" && last.transport) {
     // Cases 2 and 3: the function recorded the outcome. The attempt gets its real outcome and the policy's decision.

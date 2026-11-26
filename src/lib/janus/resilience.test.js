@@ -626,7 +626,10 @@ describe("same-revision retry continuation", () => {
     expect(h.llm.calls).toHaveLength(2); // corpus, and cogito attempt 1: the only requests ever sent
   });
 
-  it("a run that has ended is never resumed, so a retry left pending there is closed from its real outcome, not left waiting", async () => {
+  // Superseded by DIMA's Phase 7 directive (tranche 1, item 2): this test used to assert that a retry left pending on
+  // the evaluation of a completed run is closed from its real outcome. The evaluation now keeps its logical revision
+  // and budget there, and its own pathway continues it (phase7.test.js "the evaluation pathway of a completed run").
+  it("a retry left pending on the evaluation of a completed run keeps its revision and budget; the run is not reopened", async () => {
     h.llm.failOn = "qualification";
     h.llm.transport.qualification = "late";
     const result = await executeJanus(params("quick"));
@@ -634,10 +637,12 @@ describe("same-revision retry continuation", () => {
     await h.finishPending();
     h.llm.failOn = null;
     expect(result.status).toBe("completed");
-    expect(await recover(result.runId)).toEqual({ settled: true, unresolved: null });
-    expect(attemptsOf("qualification")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "none", settled_by: "recovery" })]);
-    expect(stageOf("qualification")).toMatchObject({ status: "failed", error_class: "provider_error" });
+    expect(await recover(result.runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "qualification", nextAttempt: 2 } });
+    expect(attemptsOf("qualification")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "retry_scheduled", settled_by: "recovery" })]);
+    expect(stageOf("qualification")).toMatchObject({ revision: 1, status: "running" });
+    expect(stageOf("qualification").error_class).toBeUndefined();
     expect(h.db.Run[0]).toMatchObject({ status: "completed", released_blueprint_stage_id: "" });
+    expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "completed", resumable: false, awaiting: null, qualificationAwaiting: { key: "qualification", nextAttempt: 2 } });
   });
 });
 

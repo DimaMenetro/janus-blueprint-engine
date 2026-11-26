@@ -6,7 +6,16 @@ const note = (t, strong) => ({ margin: "10px 0 0", fontSize: 12, color: strong ?
 // A stage version whose last call failed with attempts left: what Resume will do, or why it could not.
 export default function ContinuationNotice({ state, blocked, onStartNew, busy, t }) {
   const row = state.awaiting;
-  if (!row) return null;
+  // Shown before Resume is clicked: what Resume does today with a stage whose last version settled as failed.
+  const regenerated = state.resumable ? state.failures.filter(f => !f.superseded && f.key !== "qualification") : [];
+  if (!row) {
+    if (!regenerated.length) return null;
+    return (
+      <p style={note(t)}>
+        Resuming starts a new version of {regenerated.map(f => f.key).join(", ")}, because the last version settled as failed ({regenerated.map(f => `${f.evidence}${f.attempts > 1 ? `, ${f.attempts} attempts` : ""}`).join("; ")}). A new version has its own attempt limit.
+      </p>
+    );
+  }
   if (!blocked) {
     return (
       <p style={note(t)}>

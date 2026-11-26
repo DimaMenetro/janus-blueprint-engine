@@ -5,13 +5,15 @@
  */
 import { PROTOCOL, MODEL_POLICY } from "@/lib/janus/protocolRegistry";
 import { TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
-import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, INTERSECTION_KEYS } from "@/lib/janus/stageModel";
+import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
 import { base44 } from "@/api/base44Client";
-import { createRun, updateRun, loadRunView } from "@/lib/janus/stageStore";
-import { driveStages, finalizeRun, reclose, verifyContinuation } from "@/lib/janus/stageEngine";
+import { createRun, updateRun, loadRunView, claimInitiation } from "@/lib/janus/stageStore";
+import { driveStages, finalizeRun, reclose, verifyContinuation, evaluateStage } from "@/lib/janus/stageEngine";
 import { recoverStage, closeFromLastCall } from "@/lib/janus/stageRunner";
-import { stagePlan, continuationOf } from "@/lib/janus/executionState";
+import { stagePlan, continuationOf, continuableFor, stageLabel } from "@/lib/janus/executionState";
 import { REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
+import { rerunImpact } from "@/lib/janus/rerunImpact";
+import { deriveQualification } from "@/lib/janus/qualification";
 
 export { REFRESH_UNAVAILABLE_MESSAGE };
 const CORE_DOMAINS = ["corpus", "cogito", "animus", "actus"];
@@ -84,26 +86,100 @@ export async function resumeJanus(runId, hooks) {
   return { ...result, success: result.status === "completed" };
 }
 
+export const STALE_PREVIEW_MESSAGE = "This run changed after the impact preview was computed (a stage version or the run's state is different now). Nothing was started. Review the impact again.";
+export const INITIATION_LOST_MESSAGE = "Another operation on this run was started first, from the same state. Nothing was started here.";
+
+/**
+ * Take the run's initiation epoch for an explicit operation (stageStore.claimInitiation). A historical Run is never
+ * written; it has no slot either, and its revisions are guarded by the attempt claim alone.
+ */
+async function claim(view, patch = {}) {
+  if (view.storage !== STORAGE_MODEL.staged) return;
+  if (!(await claimInitiation(view.run.id, { epoch: view.run.graph_epoch || 0, status: view.run.status, patch }))) throw new Error(INITIATION_LOST_MESSAGE);
+}
+
+/** The impact of an explicit re-run, from the current durable state (rerunImpact). Starts nothing, writes nothing. */
+export async function previewRerun(runId, request) {
+  const view = await loadRunView(runId);
+  if (!view) throw new Error("Run not found");
+  return rerunImpact(view, request);
+}
+
+/**
+ * EXPLICIT RE-RUN (Phase 7): new revisions of `targets` — and, with `cascade`, of every stage they make stale —
+ * through the canonical engine. Never overwrites: earlier revisions stay, superseded and inspectable; unaffected
+ * revisions stay active. `expected` is the token of the preview the operator approved: if the durable state has
+ * changed since, nothing is started (fail closed). Refused beside an unresolved or waiting revision, after a
+ * cancellation request, and when another initiation from the same state won the run's epoch.
+ */
+async function rerunCore(runId, { targets = [], cascade = false, expected } = {}, hooks, label) {
+  const view = await loadRunView(runId);
+  if (!view) throw new Error("Run not found");
+  const impact = rerunImpact(view, { targets, cascade });
+  const what = label || impact.targets.map(stageLabel).join(", ") || "stages";
+  if (impact.refusals.length) throw new Error(`Cannot re-run ${what} — ${impact.refusals[0]}`);
+  if (expected !== undefined && expected !== impact.token) throw new Error(STALE_PREVIEW_MESSAGE);
+  if (driving.has(runId)) throw new Error("This run is already being executed in this session");
+  await assertOperator();
+  await claim(view, { status: "running" });
+  const result = await advance(runId, { keys: impact.plan, origin: "rerun", force: cascade ? { dependents: impact.cascadeKeys } : true }, hooks);
+  return { ...result, impact, success: result.stageErrors.length === 0 && !result.unresolved && !result.refused && !result.cancelled, errors: result.stageErrors };
+}
+export const rerunStages = (runId, request, hooks) => rerunCore(runId, request, hooks);
+
 async function rerun(runId, target, keys, hooks) {
   const view = await loadRunView(runId);
   if (!view) throw new Error("Run not found");
   const missing = CORE_DOMAINS.filter(d => !view.artifacts[d]);
   if (missing.length > 0) throw new Error(`Cannot re-run ${target} — missing prerequisite domains: ${missing.join(", ")}`);
-  const [live] = liveStages(view);
-  const waiting = live && view.storage === STORAGE_MODEL.staged ? continuationOf(live, view.attempts[live.id]) : null;
-  // A revision waiting for its retry is continued by Resume, on the same revision. A re-run never starts beside it.
-  if (waiting) throw new Error(`Cannot re-run ${target} — ${live.stage_key} is waiting for its retry (attempt ${waiting.nextAttempt}). Resume the run to continue it first.`);
-  if (live) throw new Error(`Cannot re-run ${target} — a call for ${live.stage_key} has not settled and its outcome is unknown`);
-  await assertOperator();
-  if (view.storage === STORAGE_MODEL.staged) await updateRun(runId, { status: "running" });
-  const result = await advance(runId, { keys, origin: "rerun", force: true }, hooks);
-  return { ...result, success: result.stageErrors.length === 0 && !result.unresolved && !result.refused && !result.cancelled, errors: result.stageErrors };
+  return rerunCore(runId, { targets: keys }, hooks, target);
 }
 
 /** New revisions of the six intersections and the four patterns. The dependent Blueprint becomes stale (derived). */
 export const rerunSynthesis = (runId, hooks) => rerun(runId, "synthesis", [...INTERSECTION_KEYS, "synthesis"], hooks);
 /** A new Blueprint revision from the currently active stages. */
 export const rerunBlueprint = (runId, hooks) => rerun(runId, "blueprint", ["blueprint"], hooks);
+
+/**
+ * THE EVALUATION PATHWAY OF A COMPLETED RUN (Phase 7, first tranche). Ordinary Resume never reaches a completed
+ * run, so the evaluation has its own: it continues an evaluation waiting for its retry (same revision, same attempt
+ * limit), makes the first evaluation of the current Blueprint version, or — only with `newVersion`, the operator's
+ * explicit decision — a new evaluation after the last one settled without verdicts. Never beside an unresolved
+ * call, never for a stale or incomplete run, and never a hidden retry of a settled or exhausted evaluation.
+ */
+export async function evaluateJanus(runId, { newVersion = false } = {}, hooks = {}) {
+  const view = await loadRunView(runId);
+  if (!view) throw new Error("Run not found");
+  if (view.storage !== STORAGE_MODEL.staged) throw new Error("Historical runs are read-only");
+  const q = deriveQualification(view);
+  if (q.blocked) throw new Error(q.blocked);
+  const action = q.evaluationAction;
+  if (!action) throw new Error(q.pending === "in_progress" ? "The evaluation call for this Blueprint version has not settled and its outcome is unknown: nothing is started beside it" : "This Blueprint version already has its evaluation");
+  if (action === "new_version" && !newVersion) throw new Error(`The last evaluation of this Blueprint version settled without verdicts (${q.lastEvaluationError}). Another evaluation is a new version and needs your explicit decision.`);
+  if (action === "continue" && newVersion) throw new Error("The evaluation is waiting for its retry, so it is continued, not replaced: its attempt limit is not reset.");
+  if (driving.has(runId)) throw new Error("This run is already being executed in this session");
+  await assertOperator();
+  if (action === "continue") {
+    // Identity first, so a revision that is no longer the same operation is reported without any write.
+    // The engine proves it again after the claim, against the state it actually continues.
+    const stage = view.stageInfo[QUALIFICATION_KEY].latest;
+    const identity = await verifyContinuation(view, stage);
+    if (!identity.ok) return { runId, action, status: view.run.status, qualification: view.run.qualification_state || null, unresolved: null, refused: null, failure: null,
+      blocked: { stageKey: QUALIFICATION_KEY, revision: stage.revision, nextAttempt: q.evaluationRetry.nextAttempt, reasons: identity.reasons } };
+  }
+  await claim(view);
+  driving.add(runId);
+  try {
+    if (hooks.onDurableChange) await hooks.onDurableChange(runId);
+    const origin = action === "continue" ? "resume" : action === "new_version" ? "rerun" : "execution";
+    const res = await evaluateStage({ runId, action, origin, onDurableChange: hooks.onDurableChange });
+    const after = await loadRunView(runId);
+    return { runId, action, status: after.run.status, qualification: after.run.qualification_state || null,
+      unresolved: res.unresolved || null, refused: res.refused || null, blocked: res.blocked || null, failure: res.failure || null };
+  } finally {
+    driving.delete(runId);
+  }
+}
 
 /**
  * Cancel after the current stage (plan §12.4). The request is persisted; an active call is left to settle
@@ -136,8 +212,8 @@ export async function closeBlockedRevision(runId, hooks = {}) {
   if (driving.has(runId)) throw new Error("This run is already being executed in this session");
   const [stage] = liveStages(view);
   const attempts = stage ? view.attempts[stage.id] || [] : [];
-  if (!stage || view.run.status !== "running" || !continuationOf(stage, attempts)) throw new Error("No version of this run is waiting for a retry");
-  if ((await verifyContinuation(view, stage)).ok) throw new Error("This version can still be continued: resume the run. A new version is started only when it can no longer be continued.");
+  if (!stage || !continuableFor(view.run, stage.stage_key) || !continuationOf(stage, attempts)) throw new Error("No version of this run is waiting for a retry");
+  if ((await verifyContinuation(view, stage)).ok) throw new Error(`This version can still be continued: ${stage.stage_key === QUALIFICATION_KEY ? "continue the evaluation" : "resume the run"}. A new version is started only when it can no longer be continued.`);
   await closeFromLastCall(stage, attempts);
   if (hooks.onDurableChange) await hooks.onDurableChange(runId);
   return { closed: stage.stage_key, revision: stage.revision };

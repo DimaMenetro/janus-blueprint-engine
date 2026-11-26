@@ -9,6 +9,10 @@ import {
   STORAGE_MODEL, STAGE_KEY_ORDER, INTERSECTION_KEYS, DOMAIN_ARTIFACT_KEYS,
   LEGACY_ID_PREFIX, intersectionKey, revisionLabel,
 } from "@/lib/janus/stageModel";
+import { stageInputs } from "@/lib/janus/stageCompiler";
+
+/** The inputs the canonical compiler declares for a stage key (a key it does not know declares none). */
+export const declaredInputs = (key) => (STAGE_KEY_ORDER.includes(key) ? stageInputs(key) : []);
 
 const present = (v) => !!v && typeof v === "object" && Object.keys(v).length > 0;
 const orderOf = (key) => { const i = STAGE_KEY_ORDER.indexOf(key); return i < 0 ? STAGE_KEY_ORDER.length : i; };
@@ -36,7 +40,14 @@ export function legacyStages(run) {
   }));
 }
 
-/** Active = latest succeeded revision per key. Stale = reads a superseded revision, directly or transitively. */
+/**
+ * Active = latest succeeded revision per key. Stale (Phase 7) = the revision no longer reflects what the run holds:
+ *  - it reads a superseded revision, directly or transitively (exact recorded revision IDs); or
+ *  - an input its compiler declares had no valid revision when it was compiled, and one exists now: the engine
+ *    reads every active input, so a revision that recorded none of that stage was compiled without it. "Now" is
+ *    the store's creation order (a revision created after this one could not have been read by it). Historical
+ *    artifacts carry no such record and are judged by their recorded dependencies only.
+ */
 export function deriveStageGraph(stages) {
   const byId = Object.fromEntries(stages.map(s => [s.id, s]));
   const active = {}, latest = {};
@@ -45,6 +56,15 @@ export function deriveStageGraph(stages) {
     if (s.status === "succeeded" && (!active[s.stage_key] || s.revision > active[s.stage_key].revision)) active[s.stage_key] = s;
   }
   const memo = {};
+  const unreadInput = (s) => {
+    if (s.legacy || !s.created_date) return null;
+    const read = new Set((s.depends_on || []).map(id => byId[id]?.stage_key).filter(Boolean));
+    for (const k of declaredInputs(s.stage_key)) {
+      const now = active[k];
+      if (now && !now.legacy && !read.has(k) && now.created_date > s.created_date) return `${k} ${revisionLabel(now)} was produced after this revision was compiled without it`;
+    }
+    return null;
+  };
   const staleReason = (s, trail = new Set()) => {
     if (s.id in memo) return memo[s.id];
     if (trail.has(s.id)) return null;
@@ -58,7 +78,7 @@ export function deriveStageGraph(stages) {
       const upstream = staleReason(dep, trail);
       if (upstream) { reason = `upstream ${dep.stage_key} is stale (${upstream})`; break; }
     }
-    return (memo[s.id] = reason);
+    return (memo[s.id] = reason || unreadInput(s));
   };
 
   const isActive = (s) => active[s.stage_key]?.id === s.id;

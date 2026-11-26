@@ -8,6 +8,7 @@ import { PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, lowestConfidence } from "@/lib/ja
 import { completionManifest, enforceConfidencePropagation, normalizeTag, qualify, releaseDecision,
   QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS } from "@/lib/janus/lifecycleContract";
 import { QUALIFICATION_KEY } from "@/lib/janus/stageModel";
+import { continuationOf, continuableFor } from "@/lib/janus/executionState";
 
 /** Durable artifacts in the shape the contract reads (six intersections and four patterns named apart). */
 export function contractArtifacts(artifacts) {
@@ -136,12 +137,25 @@ export function deriveQualification(view, lifecycle = view.run.status) {
   });
   const result = blocked ? { state: "not_started", missing: [], failed: [], invalid: [], not_applicable: [] } : qualify(verdicts);
   const live = q?.latest?.status === "running";
-  const pending = blocked || evaluation ? null : live ? "in_progress" : q?.latest?.status === "failed" ? "evaluation_failed" : "awaiting_evaluation";
+  // A running evaluation whose last call settled as a retryable failure with budget left waits for its next
+  // attempt on the SAME revision (Phase 7 tranche 1); any other running evaluation is a call whose outcome is unknown.
+  const waiting = live && continuableFor(run, QUALIFICATION_KEY) ? continuationOf(q.latest, view.attempts?.[q.latest.id]) : null;
+  // The last evaluation of THIS Blueprint version. If it bought a call and settled without verdicts, another one is
+  // a new version with a new attempt limit: only the operator's explicit decision makes it, never the engine.
+  const forBlueprint = (view.lineage || []).filter(s => s.stage_key === QUALIFICATION_KEY && (s.depends_on || []).includes(bp?.active?.id));
+  const last = forBlueprint[forBlueprint.length - 1];
+  const spent = last?.status === "failed" || (last?.status === "cancelled" && last.error_class === "artifact_not_recorded");
+  const evaluationAction = blocked || evaluation ? null : live ? (waiting ? "continue" : null) : spent ? "new_version" : "start";
+  const pending = blocked || evaluation ? null : live ? (waiting ? "awaiting_retry" : "in_progress") : q?.latest?.status === "failed" ? "evaluation_failed" : "awaiting_evaluation";
 
   return {
     state: result.state, result, criteria, blocked, pending, completion,
     evaluationError: pending === "evaluation_failed" ? q.latest.error_message : null,
-    needsEvaluation: !blocked && !evaluation && !live,
+    // continue | start | new_version | null — what the evaluation pathway may do now (adapter: evaluateJanus)
+    evaluationAction, evaluationRetry: waiting ? { nextAttempt: waiting.nextAttempt, revision: q.latest.revision } : null,
+    lastEvaluationError: spent ? last.error_message : null,
+    // The engine starts an evaluation on its own only when this Blueprint version has never had one that made a call.
+    needsEvaluation: evaluationAction === "start",
     release: releaseDecision(lifecycle, result.state),
     blueprintStageId: bp?.active?.id || null,
     strongestObjection: evaluation?.output?.strongest_objection || null,

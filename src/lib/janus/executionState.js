@@ -32,6 +32,16 @@ export function continuationOf(stage, attempts = []) {
   return { stageId: stage.id, stageKey: stage.stage_key, revision: stage.revision, callsMade: called.length, nextAttempt: called.length + 1, after: last };
 }
 
+/**
+ * Where a revision of `stageKey` may be left WAITING for its next attempt: only where an operator action can still
+ * reach it. A run stage: an open staged run (Resume continues it). The quality evaluation: a completed staged run
+ * (it runs after completion, and "Continue evaluation" continues it — run completion stays distinct from
+ * qualification). Anywhere else (cancellation, a run whose lifecycle ended, a historical Run) the revision is
+ * settled from its last actual call.
+ */
+export const continuableFor = (run, stageKey) => run?.storage_model === STORAGE_MODEL.staged
+  && run.status === (stageKey === QUALIFICATION_KEY ? "completed" : "running");
+
 const laterDomain = (pair) => pair.domains.reduce((a, b) => (DOMAIN_ORDER.indexOf(a) > DOMAIN_ORDER.indexOf(b) ? a : b));
 
 /** Ordered stage keys a mode executes. A pair becomes available once its later domain has settled. */
@@ -74,23 +84,24 @@ export function deriveExecutionState(view, { driving = false } = {}) {
   const staged = storage === STORAGE_MODEL.staged;
   const plan = stagePlan(run.execution_mode);
   const keys = [...plan, ...STAGE_KEY_ORDER.filter(k => !plan.includes(k) && stageInfo[k])];
-  // Only an open staged run can be resumed, so only there can a revision be waiting for its next attempt.
-  // On a cancelling, ended or historical run the same records read as an unsettled revision, which
-  // "Check recorded outcome" closes from its last actual call.
-  const open = staged && run.status === "running";
+  // A revision can be waiting for its next attempt only where it can still be continued (continuableFor).
+  // Elsewhere the same records read as an unsettled revision, which "Check recorded outcome" closes from its
+  // last actual call.
   const rows = keys.map(key => {
     const info = stageInfo[key];
     const running = info?.latest?.status === "running";
     // A running revision whose last call settled as a retryable failure is waiting for its next attempt, not live.
-    const waiting = running && open ? continuationOf(info.latest, view.attempts?.[info.latest.id]) : null;
+    const waiting = running && continuableFor(run, key) ? continuationOf(info.latest, view.attempts?.[info.latest.id]) : null;
     const state = waiting ? "awaiting" : running ? "live" : info?.active ? "completed" : info?.latest?.status === "failed" ? "failed" : "pending";
     return { key, label: stageLabel(key), state, revision: info?.active?.revision ?? null, attempts: attemptsMade(view, info?.latest),
       ...(waiting ? { nextAttempt: waiting.nextAttempt, lastEvidence: waiting.after.outcome } : {}) };
   });
   const live = rows.find(r => r.state === "live") || null;
-  const awaiting = rows.find(r => r.state === "awaiting") || null;
+  // A waiting evaluation belongs to a completed run: it is continued from the qualification controls, never by Resume.
+  const awaiting = rows.find(r => r.state === "awaiting" && r.key !== QUALIFICATION_KEY) || null;
+  const qualificationAwaiting = rows.find(r => r.state === "awaiting" && r.key === QUALIFICATION_KEY) || null;
   // The revision waiting for its retry is continued before anything else is started.
-  const remaining = [...rows.filter(r => r.state === "awaiting"), ...rows.filter(r => r.state === "pending" || r.state === "failed")];
+  const remaining = [...(awaiting ? [awaiting] : []), ...rows.filter(r => r.state === "pending" || r.state === "failed")];
 
   let status = run.status || "idle";
   if (status !== "cancel_requested" && status !== "cancelled") {
@@ -102,7 +113,7 @@ export function deriveExecutionState(view, { driving = false } = {}) {
   const ended = staged && TERMINAL_STATES.includes(run.status);
 
   return {
-    staged, status, label, rows, live, awaiting,
+    staged, status, label, rows, live, awaiting, qualificationAwaiting,
     completed: rows.filter(r => r.state === "completed").length,
     total: rows.length,
     next: live ? null : remaining[0] || null,

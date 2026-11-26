@@ -72,6 +72,14 @@ export const voidAttempt = async (attemptId, { settledBy = "recovery", message =
     { id: attemptId, claim_state: "unclaimed", outcome: "in_flight" },
     { $set: { claim_state: "void", outcome: "not_started", settled_by: settledBy, ended_at: new Date().toISOString(), error_message: message } }));
 
+/**
+ * Initiate an explicit revision-producing operation (a re-run, a re-evaluation) on a staged run, in ONE conditional
+ * write: the run's epoch goes from n to n+1 only if it is still n and the run is still in `status`. Of two
+ * initiations from the same durable state, exactly one takes it; the other starts nothing.
+ */
+export const claimInitiation = async (runId, { epoch, status, patch = {} }) => took(await base44.entities.Run.updateMany(
+  { id: runId, status, graph_epoch: epoch === 0 ? { $in: [0, null] } : epoch }, { $set: { graph_epoch: epoch + 1, ...patch } }));
+
 /** Free the run's execution slot if this settled attempt still holds it. Conditional, so it can only free its own. */
 export const releaseSlot = (runId, attemptId) =>
   base44.entities.Run.updateMany({ id: runId, active_attempt_id: attemptId }, { $set: { active_attempt_id: "" } });

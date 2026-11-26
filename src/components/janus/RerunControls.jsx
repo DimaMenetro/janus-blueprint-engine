@@ -1,47 +1,47 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { RefreshCw, Layers, Map, AlertTriangle } from "lucide-react";
-import { rerunSynthesis, rerunBlueprint } from "@/lib/janus/browserAdapter";
+import { RefreshCw, Layers, Map } from "lucide-react";
 import { rerunNeeds } from "@/lib/janus/runView";
+import { stagePlan } from "@/lib/janus/executionState";
+import { INTERSECTION_KEYS, STORAGE_MODEL } from "@/lib/janus/stageModel";
 import { useExecution } from "@/components/janus/ExecutionContext";
+import RerunImpactPreview from "@/components/janus/RerunImpactPreview";
+
+const TARGETS = { synthesis: [...INTERSECTION_KEYS, "synthesis"], blueprint: ["blueprint"] };
 
 export default function RerunControls({ view, t, isDark, onRerunComplete }) {
-  const [rerunning, setRerunning] = useState(null); // "synthesis" | "blueprint" | null
-  const [error, setError] = useState(null);
-  const { drive, busy } = useExecution();
+  const [preview, setPreview] = useState(null); // "synthesis" | "blueprint" | null — its impact is shown before anything runs
+  const { busy } = useExecution();
 
   // Needs derive from durable stage state: missing, failed or invalid revisions, stale dependents,
   // and (historical Runs only) errors recorded on the original record.
   const needs = rerunNeeds(view);
-  const hasCoreData = needs.core;
   const hasBlueprint = !!view.artifacts.blueprint;
   const synthesisMissing = !view.artifacts.synthesis;
-
-  const canRerunSynthesis = hasCoreData && !rerunning && !busy;
-  const canRerunBlueprint = hasCoreData && !rerunning && !busy;
-
-  const showSynthesisRerun = needs.synthesis;
+  // A staged run re-runs only stages of its own plan (a partial profile has no synthesis stages).
+  const inPlan = (key) => view.storage !== STORAGE_MODEL.staged || stagePlan(view.run.execution_mode).includes(key);
+  const showSynthesisRerun = needs.synthesis && inPlan("synthesis");
   const showBlueprintRerun = needs.blueprint;
 
-  // Don't render anything if nothing needs re-running and core data exists
-  if (!hasCoreData || (!showSynthesisRerun && !showBlueprintRerun)) return null;
+  if (!needs.core || (!showSynthesisRerun && !showBlueprintRerun)) return null;
 
-  const handleRerun = async (target) => {
-    setRerunning(target);
-    setError(null);
-
-    try {
-      const fn = target === "synthesis" ? rerunSynthesis : rerunBlueprint;
-      const result = await drive(hooks => fn(view.run.id, hooks));
-      if (result.unresolved) setError(`Stopped: a call for ${result.unresolved} has not settled`);
-      else if (!result.success) setError(`Completed with errors: ${result.errors.join(", ")}`);
-      onRerunComplete();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setRerunning(null);
-    }
-  };
+  const button = (target, Icon, label, color) => (
+    <motion.button
+      whileHover={!busy ? { scale: 1.02 } : {}}
+      whileTap={!busy ? { scale: 0.98 } : {}}
+      onClick={() => setPreview(p => (p === target ? null : target))}
+      disabled={busy}
+      aria-expanded={preview === target}
+      style={{
+        display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", minHeight: 40, borderRadius: 12, fontSize: 13, fontWeight: 600,
+        background: color.bg, color: color.fg, border: `1px solid ${color.border}`, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.5 : 1,
+      }}
+    >
+      <Icon style={{ width: 14, height: 14 }} />{label}
+    </motion.button>
+  );
+  const violet = { bg: isDark ? "rgba(139,92,246,0.15)" : "rgba(139,92,246,0.1)", fg: isDark ? "#c4b5fd" : "#7c3aed", border: isDark ? "rgba(139,92,246,0.3)" : "rgba(139,92,246,0.25)" };
+  const green = { bg: isDark ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.1)", fg: isDark ? "#6ee7b7" : "#059669", border: isDark ? "rgba(16,185,129,0.3)" : "rgba(16,185,129,0.25)" };
 
   return (
     <motion.div
@@ -50,93 +50,27 @@ export default function RerunControls({ view, t, isDark, onRerunComplete }) {
       style={{
         background: isDark ? "rgba(59,130,246,0.06)" : "rgba(219,234,254,0.4)",
         border: `1px solid ${isDark ? "rgba(59,130,246,0.15)" : "rgba(147,197,253,0.5)"}`,
-        borderRadius: 16,
-        padding: "16px 20px",
-        marginBottom: 20,
+        borderRadius: 16, padding: "16px 20px", marginBottom: 20,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <RefreshCw style={{ width: 15, height: 15, color: isDark ? "#60a5fa" : "#2563eb" }} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#93bbfd" : "#1e40af" }}>
-          Domain Re-run Available
-        </span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? "#93bbfd" : "#1e40af" }}>Domain Re-run Available</span>
       </div>
 
-      {!hasCoreData && (
-        <p style={{ fontSize: 12, color: t.subtitle, marginBottom: 8 }}>
-          Core domains (Corpus, Cogito, Animus, Actus) must complete before re-running synthesis or blueprint.
-        </p>
-      )}
-
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {showSynthesisRerun && (
-          <motion.button
-            whileHover={canRerunSynthesis ? { scale: 1.02 } : {}}
-            whileTap={canRerunSynthesis ? { scale: 0.98 } : {}}
-            onClick={() => canRerunSynthesis && handleRerun("synthesis")}
-            disabled={!canRerunSynthesis}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "10px 18px",
-              borderRadius: 12,
-              fontSize: 13, fontWeight: 600,
-              background: isDark ? "rgba(139,92,246,0.15)" : "rgba(139,92,246,0.1)",
-              color: isDark ? "#c4b5fd" : "#7c3aed",
-              border: `1px solid ${isDark ? "rgba(139,92,246,0.3)" : "rgba(139,92,246,0.25)"}`,
-              cursor: canRerunSynthesis ? "pointer" : "not-allowed",
-              opacity: canRerunSynthesis ? 1 : 0.5,
-            }}
-          >
-            {rerunning === "synthesis" ? (
-              <RefreshCw style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
-            ) : (
-              <Layers style={{ width: 14, height: 14 }} />
-            )}
-            {rerunning === "synthesis" ? "Re-running Synthesis..." : synthesisMissing ? "Run Synthesis" : "Re-run Synthesis"}
-          </motion.button>
-        )}
-
-        {showBlueprintRerun && (
-          <motion.button
-            whileHover={canRerunBlueprint ? { scale: 1.02 } : {}}
-            whileTap={canRerunBlueprint ? { scale: 0.98 } : {}}
-            onClick={() => canRerunBlueprint && handleRerun("blueprint")}
-            disabled={!canRerunBlueprint}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "10px 18px",
-              borderRadius: 12,
-              fontSize: 13, fontWeight: 600,
-              background: isDark ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.1)",
-              color: isDark ? "#6ee7b7" : "#059669",
-              border: `1px solid ${isDark ? "rgba(16,185,129,0.3)" : "rgba(16,185,129,0.25)"}`,
-              cursor: canRerunBlueprint ? "pointer" : "not-allowed",
-              opacity: canRerunBlueprint ? 1 : 0.5,
-            }}
-          >
-            {rerunning === "blueprint" ? (
-              <RefreshCw style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
-            ) : (
-              <Map style={{ width: 14, height: 14 }} />
-            )}
-            {rerunning === "blueprint" ? "Re-running Blueprint..." : !hasBlueprint ? "Run Blueprint" : needs.blueprintStale ? "Re-run Blueprint (stale)" : "Re-run Blueprint"}
-          </motion.button>
-        )}
+        {showSynthesisRerun && button("synthesis", Layers, synthesisMissing ? "Run Synthesis" : "Re-run Synthesis", violet)}
+        {showBlueprintRerun && button("blueprint", Map, !hasBlueprint ? "Run Blueprint" : needs.blueprintStale ? "Re-run Blueprint (stale)" : "Re-run Blueprint", green)}
       </div>
 
       {/* Staleness is derived from exact dependency revisions */}
-      {needs.blueprintStale && !rerunning && (
-        <p style={{ marginTop: 10, marginBottom: 0, fontSize: 12, color: t.subtitle }}>
-          Blueprint is stale: {needs.blueprintStale}
-        </p>
+      {needs.blueprintStale && !preview && (
+        <p style={{ marginTop: 10, marginBottom: 0, fontSize: 12, color: t.subtitle }}>Blueprint is stale: {needs.blueprintStale}</p>
       )}
 
-      {/* Error display */}
-      {error && (
-        <div style={{ marginTop: 10, fontSize: 12, color: isDark ? "#f87171" : "#dc2626", display: "flex", alignItems: "center", gap: 6 }}>
-          <AlertTriangle style={{ width: 12, height: 12 }} />
-          {error}
-        </div>
+      {preview && (
+        <RerunImpactPreview runId={view.run.id} targets={TARGETS[preview]} title={preview === "synthesis" ? "Synthesis (six intersections and the patterns)" : "Blueprint"}
+          t={t} onDone={onRerunComplete} onClose={() => setPreview(null)} />
       )}
     </motion.div>
   );

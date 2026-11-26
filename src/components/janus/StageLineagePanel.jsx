@@ -2,10 +2,14 @@ import { useState } from "react";
 import { GitBranch, ChevronDown } from "lucide-react";
 import { glassSurface } from "@/components/ui/LiquidGlass";
 import { STAGE_KEY_ORDER, STORAGE_MODEL } from "@/lib/janus/stageModel";
+import { stagePlan } from "@/lib/janus/executionState";
 import StageLineageRow from "@/components/janus/StageLineageRow";
 
-// Durable stage lineage: active revision, newer failed/running attempts and derived staleness per stage.
-export default function StageLineagePanel({ view, t }) {
+// Durable stage lineage: active revision, newer failed/running attempts, derived staleness, every recorded version,
+// and (operators, staged runs) an explicit re-run of any stage of the run's plan behind an impact preview.
+export default function StageLineagePanel({ view, t, isAdmin = false, onChanged = async () => {} }) {
+  const plan = view.storage === STORAGE_MODEL.staged ? stagePlan(view.run.execution_mode) : [];
+  const canRerun = (key) => isAdmin && plan.includes(key);
   const [open, setOpen] = useState(false);
   const rows = STAGE_KEY_ORDER.map(k => view.stageInfo[k]).filter(Boolean);
   if (rows.length === 0) return null;
@@ -33,7 +37,7 @@ export default function StageLineagePanel({ view, t }) {
       </button>
       {open && (
         <div style={{ marginTop: 8 }}>
-          {rows.map(info => <StageLineageRow key={info.key} info={info} t={t} />)}
+          {rows.map(info => <StageLineageRow key={info.key} info={info} view={view} t={t} canRerun={canRerun(info.key)} onChanged={onChanged} />)}
         </div>
       )}
     </div>

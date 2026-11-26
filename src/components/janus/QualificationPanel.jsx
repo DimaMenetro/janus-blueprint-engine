@@ -3,15 +3,17 @@ import { ShieldCheck, ShieldAlert, ChevronDown, ChevronRight } from "lucide-reac
 import { glassSurface } from "@/components/ui/LiquidGlass";
 import { deriveQualification } from "@/lib/janus/qualification";
 import QualificationCriterion from "@/components/janus/QualificationCriterion";
+import EvaluationControls from "@/components/janus/EvaluationControls";
 
 const PENDING = {
   in_progress: "The independent evaluation is running.",
   awaiting_evaluation: "The independent evaluation has not run for this Blueprint version yet.",
+  awaiting_retry: "The independent evaluation is waiting for its retry.",
 };
 const line = (t, strong) => ({ margin: "8px 0 0", fontSize: 12, color: strong ? t.text : t.subtitle });
 
 // Completion and quality qualification for one run — derived from durable stage records, never stored.
-export default function QualificationPanel({ view, t }) {
+export default function QualificationPanel({ view, t, isAdmin = false, onChanged = async () => {} }) {
   const [open, setOpen] = useState(false);
   if (view.storage !== "staged_v1") return null;
   const q = deriveQualification(view);
@@ -36,6 +38,7 @@ export default function QualificationPanel({ view, t }) {
       {q.pending === "evaluation_failed" && <p style={line(t, true)}>The independent evaluation did not complete, so nothing is released: {q.evaluationError}</p>}
       {failed.length > 0 && <p style={line(t, true)}>Not qualified: {failed.length} of {q.criteria.filter(c => c.applies).length} criteria failed. Refinement is required before release.</p>}
       {q.strongestObjection && <p style={line(t)}>Strongest objection: {q.strongestObjection}</p>}
+      {isAdmin && <EvaluationControls q={q} runId={view.run.id} t={t} onChanged={onChanged} />}
 
       {!q.blocked && (
         <button onClick={() => setOpen(!open)} style={{ marginTop: 10, minHeight: 40, background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: t.text }}>

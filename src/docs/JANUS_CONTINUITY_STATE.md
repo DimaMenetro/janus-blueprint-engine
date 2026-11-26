@@ -78,5 +78,12 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 - Pending evidence, not a defect: the deployed function's slot/claim/record path (to be verified in a later approved integration test; no probe Run). The five-minute transport ceiling stays fail-safe (unresolved) until the durable server/workflow work.
 - Flagged for DIMA in record §8.3: a retry that could not start in a live session also leaves the revision waiting; four Phase 6 tests were changed for the directive.
 
+## Phase 7 (2026-11-26) — IMPLEMENTED, NOT CLOSED — record `JANUS_PHASE7_VERSIONED_RERUN_2026-11-26.md`
+- 177/177 (104 inherited byte-identical to `239319f`, 52 Phase 6 with 1 changed under DIMA's directive item 2, 21 Phase 7). Build passes. 69 historical Runs and DIMA's reference run `6b0780183aba68f84ea10cfc` untouched.
+- Evaluation pathway of a completed run (`evaluateJanus`, `evaluateStage`): continue (same revision and budget, identity proven), start, or explicit `newVersion`. No hidden re-evaluation (`needsEvaluation` only when this Blueprint version never had a paid evaluation).
+- Re-run: `rerunImpact.js` (exact recorded IDs + compiler-declared inputs), `previewRerun`, `rerunStages` (`cascade`, preview token fail-closed, `Run.graph_epoch` initiation claim). New staleness rule: a revision compiled without a declared input is stale once that input exists.
+- Screens: impact preview before every re-run, per-stage Re-run and Versions in Stage lineage, evaluation controls in QualificationPanel.
+- **Awaiting DIMA:** record §2.1. The inherited assertion that plain Resume regenerates an exhausted revision conflicts with the directive. The proposed replacement is in the record. Not changed.
+
 ## Next action
-Phase 7 (Versioned Rerun & Dependency Invalidation, plan "Phase 7"), starting from the 156/156 baseline. Not started. Do not publish. Do not make a paid call.
+Await DIMA's adjudication of Phase 7 record §2.1, then close Phase 7 and start Phase 8 (Synthesis Realignment). Do not publish. Do not make a paid call.

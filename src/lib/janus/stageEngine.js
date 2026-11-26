@@ -66,10 +66,19 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
  *  - a stage whose call outcome is unknown stops the drive: nothing was settled and nothing follows it;
  *  - a stage for which no call was made (the function refused it) stops the drive and leaves the run open.
  * Retries happen inside a stage, only after the previous attempt settled (stageRunner).
+ * `force: true` gives every key a new revision (an explicit re-run of exactly those stages). `force: { dependents }`
+ * (a Phase 7 cascade) gives every key outside `dependents` a new revision, and a key in `dependents` one only if
+ * its active revision is stale at that moment — an upstream re-run that produced no new valid revision
+ * invalidated nothing, so the valid revision is reused, not regenerated.
  * Ends as { errors } | { errors, cancelled } | { errors, unresolved } | { errors, refused } | { errors, blocked }.
  */
 export async function driveStages({ runId, keys, origin, force = false, onDurableChange = async () => {} }) {
   const errors = [];
+  const regenerate = (view, key) => {
+    const info = view.stageInfo[key];
+    if (!info?.active || force === true) return true;
+    return Array.isArray(force?.dependents) && (!force.dependents.includes(key) || !!info.stale);
+  };
   /** What one stage result means for the drive: `null` to go on, or the outcome the drive ends with. */
   const landed = async (res, stageKey, staged) => {
     if (res.unresolved) return { errors, unresolved: res.unresolved }; // outcome unknown: nothing was settled, nothing follows
@@ -117,7 +126,7 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
     }
     if (cancelled) return { errors, cancelled: true };
     i += 1;
-    if (!force && view.stageInfo[stageKey]?.active) continue;
+    if (!regenerate(view, stageKey)) continue;
 
     const res = await executeStage({ view, stageKey, origin, onBegan: () => onDurableChange(runId) });
     if (res.skipped) continue;
@@ -174,6 +183,36 @@ async function persistClose(view, lifecycle) {
     ...(lifecycle === "failed" ? { error_message: errors.join("\n") } : {}),
   });
   return q;
+}
+
+/**
+ * THE QUALITY EVALUATION OF A COMPLETED RUN, outside run execution (Phase 7, first tranche). The run's lifecycle
+ * is not touched: completion stays distinct from qualification and release. `action` is what deriveQualification
+ * allows now:
+ *  - continue     the evaluation revision waiting for its retry is continued — the SAME RunStage, its next
+ *                 attempt, its original attempt limit — only after its identity is proven (verifyContinuation);
+ *                 a mismatch ends `blocked` and nothing is started, settled or regenerated;
+ *  - start        the first evaluation of this Blueprint version;
+ *  - new_version  the operator's explicit new evaluation after the last one settled without verdicts.
+ * The call goes through the canonical runner (slot, claim, recorded outcome, bounded retry). Afterwards the
+ * qualification state and release are re-derived from the durable records.
+ * Ends as { record } | { failure } | { refused } | { unresolved } | { blocked }.
+ */
+export async function evaluateStage({ runId, action, origin, onDurableChange = async () => {} }) {
+  const view = await loadRunView(runId);
+  let res;
+  if (action === "continue") {
+    const stage = view.stageInfo[QUALIFICATION_KEY].latest;
+    const attempts = view.attempts[stage.id] || [];
+    const identity = await verifyContinuation(view, stage);
+    if (!identity.ok) return { blocked: { stageKey: QUALIFICATION_KEY, revision: stage.revision, nextAttempt: continuationOf(stage, attempts)?.nextAttempt, reasons: identity.reasons } };
+    res = await continueStage({ stage, attempts, prompt: identity.prompt, staged: true, onBegan: () => onDurableChange(runId) });
+  } else {
+    res = await executeStage({ view, stageKey: QUALIFICATION_KEY, origin, onBegan: () => onDurableChange(runId) });
+  }
+  await reclose(runId);
+  await onDurableChange(runId);
+  return res;
 }
 
 /** Re-persist what the durable stages say for a run whose lifecycle has already ended. Starts no model call. */
