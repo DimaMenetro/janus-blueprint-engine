@@ -4,6 +4,7 @@ import { glassSurface } from "@/components/ui/LiquidGlass";
 import { deriveQualification } from "@/lib/janus/qualification";
 import QualificationCriterion from "@/components/janus/QualificationCriterion";
 import EvaluationControls from "@/components/janus/EvaluationControls";
+import EvaluatorFindings from "@/components/janus/EvaluatorFindings";
 
 const PENDING = {
   in_progress: "The independent evaluation is running.",
@@ -46,6 +47,7 @@ export default function QualificationPanel({ view, t, isAdmin = false, onChanged
         </button>
       )}
       {open && !q.blocked && q.criteria.map(c => <QualificationCriterion key={c.id} criterion={c} t={t} />)}
+      {open && !q.blocked && <EvaluatorFindings findings={q.findings} t={t} />}
     </div>
   );
 }

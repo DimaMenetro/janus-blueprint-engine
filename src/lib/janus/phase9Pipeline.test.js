@@ -208,7 +208,7 @@ describe("failure, continuity and regeneration inside the pipeline", () => {
     h.llm.transport["blueprint:expansion"] = "unreached"; // the request never reaches the platform: no call was made
     const first = await executeJanus(params("standard"));
     h.llm.transport = {};
-    expect(first.status).not.toBe("completed");
+    expect(first).toMatchObject({ status: "running", refused: { stageKey: "blueprint:expansion", reason: "never_claimed" } });
     const before = ["blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton"].map(k => stageOf(k).id);
     h.llm.stages.length = 0;
 
@@ -216,7 +216,9 @@ describe("failure, continuity and regeneration inside the pipeline", () => {
     expect(result.status).toBe("completed");
     expect(h.llm.stages).toEqual(["blueprint:expansion", "blueprint:criteria", "blueprint:critique", "blueprint", "qualification"]);
     expect(["blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton"].map(k => stageOf(k).id)).toEqual(before);
-    expect(stagesOf("blueprint:expansion")).toHaveLength(1); // the same revision, continued
+    // The first request made no call, so its revision was closed as not started (no failure invented) and the stage ran once.
+    expect(stagesOf("blueprint:expansion").map(s => [s.revision, s.status])).toEqual([[1, "cancelled"], [2, "succeeded"]]);
+    expect(h.db.RunAttempt.filter(a => a.stage_key === "blueprint:expansion").map(a => a.outcome)).toEqual(["not_started", "succeeded"]);
   });
 
   it("re-running one pipeline stage regenerates exactly what read it; the brief, the candidates and all upstream cognition are reused", async () => {
@@ -240,10 +242,11 @@ describe("failure, continuity and regeneration inside the pipeline", () => {
   it("one Blueprint, one pipeline: when a stage of a re-run cannot be replaced, nothing is built on its predecessor", async () => {
     const { runId } = await executeJanus(params("full"));
     const current = stageOf("blueprint").id;
-    h.llm.failOn = "candidates"; h.llm.stages.length = 0;
+    h.llm.failOn = "blueprint:candidates"; h.llm.stages.length = 0;
     const result = await rerunBlueprint(runId);
     h.llm.failOn = null;
-    expect(h.llm.stages).toEqual(["blueprint:brief"]); // see the note below: the test model fails "candidates" by its short key
+    expect(h.llm.stages).toEqual(["blueprint:brief", "blueprint:candidates", "blueprint:candidates", "blueprint:candidates"]); // its own bounded attempts, then nothing
+    expect(stagesOf("blueprint:candidates").map(s => [s.revision, s.status])).toEqual([[1, "succeeded"], [2, "failed"]]);
     expect(result.errors).toEqual(expect.arrayContaining([expect.stringMatching(/^blueprint:selection: not started — blueprint:candidates, which it builds on, produced no valid new version in this operation$/)]));
     PIPELINE.slice(2).forEach(k => expect(stagesOf(k)).toHaveLength(1)); // no revision, no call, for anything after it
     expect(viewOf(runId).stageInfo.blueprint.active.id).toBe(current); // the Blueprint the operator has is the one they had

@@ -1,5 +1,10 @@
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import BlueprintStrategy from "@/components/janus/blueprint/BlueprintStrategy";
+import BlueprintStructure from "@/components/janus/blueprint/BlueprintStructure";
+import BlueprintDispositions from "@/components/janus/blueprint/BlueprintDispositions";
+import BlueprintAcceptance from "@/components/janus/blueprint/BlueprintAcceptance";
+import BlueprintCritique from "@/components/janus/blueprint/BlueprintCritique";
+import BlueprintStepPlan from "@/components/janus/blueprint/BlueprintStepPlan";
 import { traceIndex } from "@/lib/janus/qualification";
 import BlueprintStepTrace from "@/components/janus/tabs/BlueprintStepTrace";
 import { CheckCircle2, Target, Lightbulb, AlertTriangle, Clock, Zap, CheckSquare, TestTube } from "lucide-react";
@@ -16,7 +21,7 @@ const effortColors = {
   high: "backdrop-blur-[40px] bg-red-50/[0.15] dark:bg-red-900/[0.15] text-red-700 dark:text-red-400 border border-red-300/60 dark:border-red-500/35",
 };
 
-export default function BlueprintTab({ data, blueprintLevel, artifacts = {} }) {
+export default function BlueprintTab({ data, blueprintLevel, artifacts = {}, pipeline = {} }) {
   if (!data) return <div className="text-slate-500 p-6">No blueprint data available.</div>;
   const traceIdx = traceIndex(artifacts);
 
@@ -33,6 +38,8 @@ export default function BlueprintTab({ data, blueprintLevel, artifacts = {} }) {
           <p className="text-slate-700 dark:text-slate-200 font-medium">{data.goal}</p>
         </div>
       )}
+
+      <BlueprintStrategy data={data} />
 
       {data.assumptions && data.assumptions.length > 0 && (
         <div className="backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] border border-white/60 dark:border-white/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] rounded-lg p-4">
@@ -60,7 +67,9 @@ export default function BlueprintTab({ data, blueprintLevel, artifacts = {} }) {
           <div className="space-y-3">
             {data.alternative_approaches.map((approach, idx) => (
               <Card key={idx} className="p-3 backdrop-blur-[40px] bg-white/[0.15] dark:bg-white/[0.08] border border-white/60 dark:border-white/35">
-                <h5 className="font-medium text-slate-900 dark:text-white mb-2">{approach.name}</h5>
+                <h5 className="font-medium text-slate-900 dark:text-white mb-2">{approach.id ? `${approach.id} · ` : ""}{approach.name}</h5>
+                {approach.thesis && <p className="text-sm text-slate-700 dark:text-slate-200 mb-2">{approach.thesis}</p>}
+                {approach.mechanism && <p className="text-sm text-slate-600 dark:text-slate-300 mb-2"><span className="font-medium">Mechanism:</span> {approach.mechanism}</p>}
                 {approach.pros && approach.pros.length > 0 && (
                   <div className="mb-2">
                     <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Pros:</span>
@@ -86,11 +95,15 @@ export default function BlueprintTab({ data, blueprintLevel, artifacts = {} }) {
                     Not chosen: {approach.why_not_chosen}
                   </p>
                 )}
+                {approach.salvaged && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Kept from it: {approach.salvaged}</p>}
               </Card>
             ))}
           </div>
         </div>
       )}
+
+      <BlueprintStructure data={data} />
+      <BlueprintDispositions data={data} brief={pipeline["blueprint:brief"]} actus={artifacts.actus} />
 
       {data.steps && data.steps.length > 0 && (
         <div>
@@ -128,6 +141,7 @@ export default function BlueprintTab({ data, blueprintLevel, artifacts = {} }) {
                     </span>
                   )}
                 </div>
+                <BlueprintStepPlan step={step} />
                 <BlueprintStepTrace step={step} index={traceIdx} />
 
                 <p className="text-slate-700 dark:text-slate-200 text-sm mb-3 pl-11">{step.instructions}</p>
@@ -229,6 +243,8 @@ export default function BlueprintTab({ data, blueprintLevel, artifacts = {} }) {
           </ul>
         </div>
       )}
+
+      <BlueprintAcceptance data={data} />
 
       {data.risk_register && data.risk_register.length > 0 && (
         <div>
