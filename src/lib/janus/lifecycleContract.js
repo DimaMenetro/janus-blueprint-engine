@@ -172,6 +172,24 @@ const INTEGRITY = {
     return e;
   },
 };
+/**
+ * CONFIDENCE PROPAGATION AT THE FINAL BLUEPRINT (CP-002 §8.3, plan §5.5), against the exact Cogito and Actus it was
+ * compiled from. A step's label may be weaker than its support, never stronger: the ceiling is the weakest tag
+ * among the claims it cites and the claims behind the recommendations it cites. A generative stage cannot raise it
+ * by saying so; it changes only when what the step cites changes.
+ */
+export function stepConfidenceErrors(blueprint, inputs) {
+  const claims = inputs?.cogito?.claims;
+  if (!Array.isArray(claims)) return [];
+  const tag = Object.fromEntries(claims.map(c => [c?.id, normalizeTag(c?.tag)]));
+  enforceConfidencePropagation(claims, list(inputs?.actus?.recommendations)).recommendations.forEach(r => { tag[r.id] = normalizeTag(r.inherited_confidence); });
+  const rank = (t) => CONFIDENCE_TAXONOMY.indexOf(normalizeTag(t));
+  return list(blueprint?.steps).flatMap(s => {
+    const ceiling = lowestConfidence(list(s?.derived_from).map(id => tag[id]).filter(Boolean));
+    return ceiling && rank(s.confidence) >= 0 && rank(s.confidence) < rank(ceiling)
+      ? [`step ${s.step}: labelled ${s.confidence} but rests on ${ceiling} material. Confidence is the weakest of what the step cites; it changes only if derived_from does`] : [];
+  });
+}
 const PAIR_FIELDS = ["insight", "tension", "resolution"];
 /** Serious alternatives the mode and novelty setting require beside the selected approach (plan §7.4, §15.5). */
 export const minAlternatives = (mode, novelty) => Math.max(MODE_EXPECTATIONS[mode]?.min_alternatives ?? 0, novelty === "high" ? 3 : 0);
@@ -185,7 +203,7 @@ export function stageIntegrity(stageKey, output, { inputs } = {}) {
   if (String(stageKey).startsWith("intersection:")) return PAIR_FIELDS.filter(f => !output?.[f]).map(f => `${stageKey}.${f}: missing`);
   const config = inputs?.["@config"];
   // The final Blueprint: its own mandatory parts, plus what it owes the draft and the critique it was refined from.
-  if (stageKey === "blueprint") return [...INTEGRITY.blueprint(output), ...refinementErrors(output, inputs)];
+  if (stageKey === "blueprint") return [...INTEGRITY.blueprint(output), ...refinementErrors(output, inputs), ...stepConfidenceErrors(output, inputs)];
   if (INTEGRITY[stageKey]) return INTEGRITY[stageKey](output, inputs);
   return pipelineIntegrity(stageKey, output, inputs, { config, minCandidates: config ? minAlternatives(config.executionMode, config.noveltyDial) + 1 : 0 });
 }

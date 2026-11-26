@@ -73,6 +73,7 @@ export const BLUEPRINT_SCHEMA = obj({
     dispositions: list({ finding: str, action: { type: "string", enum: ["resolved", "declined"] }, change: str, reason: str }, ["finding", "action"]),
     scope_changes: list({ requirement: str, what: str, reason: str }, ["what", "reason"]),
     removals: list({ path: str, reason: str }, ["path", "reason"]),
+    changes: list({ path: str, finding: str, what: str, reason: str }, ["path", "what"]),
     summary: str,
   }),
 });
@@ -293,11 +294,63 @@ export function preservationErrors(final, draft) {
   return e;
 }
 
+/**
+ * TRANSACTIONAL REFINEMENT — untouched means identical. Equal list lengths do not establish equal substance: an
+ * entry can be rewritten into a thinner paraphrase and keep every count. So the refinement is read as a
+ * transaction against its base: every piece of content of the base is either returned VERBATIM or lies under a
+ * path the refinement DECLARES in refinement.changes (what was done, and the finding or the reason behind it).
+ * An undeclared difference is refused by name, so nothing is lost by accident; a declared one is free to rewrite,
+ * reorganise or replace, and is exactly what the independent evaluator is shown to judge.
+ *  - a declaration must name something that actually differs (a claimed repair with no change is refused);
+ *  - a finding marked "resolved" must be the stated reason of at least one declared change.
+ * Trace fields (derived_from, confidence, dispositions) are not content: they have their own rules.
+ */
+const NOT_CONTENT = new Set(["derived_from", "confidence", "requirement_dispositions", "recommendation_dispositions", "refinement"]);
+const entryKey = (x, i) => x?.step ?? x?.id ?? x?.substep ?? x?.name ?? x?.risk ?? x?.item ?? i;
+function contentOf(v, path = "", out = { scalars: new Map(), members: new Map() }) {
+  if (Array.isArray(v)) {
+    if (v.every(x => x === null || typeof x !== "object")) out.members.set(path, new Set(v.map(String)));
+    else v.forEach((x, i) => contentOf(x, `${path}[${entryKey(x, i)}]`, out));
+  } else if (v && typeof v === "object") Object.entries(v).forEach(([k, x]) => { if (!NOT_CONTENT.has(k)) contentOf(x, path ? `${path}.${k}` : k, out); });
+  else if (v !== undefined && v !== null && v !== "") out.scalars.set(path, String(v));
+  return out;
+}
+const covers = (declared, path) => declared.some(d => path === d || path.startsWith(`${d}.`) || path.startsWith(`${d}[`));
+export function changeErrors(final, base, findingIds = []) {
+  const e = [], was = contentOf(base), now = contentOf(final);
+  const stepsNow = stepNumbers(final?.steps);
+  const underDroppedStep = (p) => { const m = p.match(/^steps\[(\d+)\]/); return m && !stepsNow.has(Number(m[1])); }; // reported as a dropped step
+  const changes = arr(final?.refinement?.changes), removals = arr(final?.refinement?.removals).filter(r => said(r?.reason)).map(r => r.path);
+  const declared = [...changes.filter(c => said(c?.path)).map(c => c.path), ...removals];
+  const differing = new Set();
+  was.scalars.forEach((v, p) => { if (now.scalars.get(p) !== v) differing.add(p); });
+  was.members.forEach((set, p) => { if ([...set].some(x => !now.members.get(p)?.has(x))) differing.add(p); });
+  [...differing].filter(p => !underDroppedStep(p) && !covers(declared, p))
+    .forEach(p => e.push(`${p}: differs from the base and is not declared. Return it word for word, or declare the change in refinement.changes with its path and reason`));
+  // What the refinement added: content at a path the base does not hold, or a new member of a list.
+  const added = new Set();
+  now.scalars.forEach((v, p) => { if (!was.scalars.has(p)) added.add(p); });
+  now.members.forEach((set, p) => { if ([...set].some(x => !was.members.get(p)?.has(x))) added.add(p); });
+  const touched = [...differing, ...added];
+  changes.forEach((c, i) => {
+    if (!said(c?.path)) { e.push(`refinement.changes[${i}].path: missing`); return; }
+    if (!said(c.what)) e.push(`refinement.changes ${c.path}: "what" is missing — say what was changed`);
+    if (c.finding ? !findingIds.includes(c.finding) : !said(c.reason)) e.push(`refinement.changes ${c.path}: ${c.finding ? `cites ${c.finding}, which is not a finding it was given` : "needs the finding it answers or its reason"}`);
+    if (!touched.some(p => covers([c.path], p))) e.push(`refinement.changes names ${c.path}, but nothing there differs from the base: a declared repair must be an actual change`);
+  });
+  return e;
+}
+
 export function refinementErrors(final, inputs = {}) {
   const e = [];
   const draft = inputs[BP.assembly]?.blueprint;
+  const findingIds = arr(inputs[BP.critique]?.findings).map(f => f.id);
   if (draft) {
     e.push(...preservationErrors(final, draft));
+    e.push(...changeErrors(final, draft, findingIds));
+    // The alternatives are the comparison's record: none of the base's may disappear (plan §15.1–15.3).
+    const b = arr(draft.alternative_approaches).length, a = arr(final?.alternative_approaches).length;
+    if (a < b) e.push(`alternative_approaches: the base holds ${b} and the refinement returned ${a}. Every alternative that was seriously compared stays on the record`);
     const kept = stepNumbers(final?.steps);
     arr(draft.steps).filter(s => !kept.has(s.step)).forEach(s => e.push(`step ${s.step} ("${s.title}") of the assembled draft was dropped: refinement adds and repairs, it does not remove`));
     const declared = new Set(arr(final?.refinement?.scope_changes).filter(c => said(c?.reason)).map(c => c.requirement));
@@ -314,6 +367,7 @@ export function refinementErrors(final, inputs = {}) {
     const d = answered[f.id];
     if (!d) e.push(`critique finding ${f.id} has no entry in refinement.dispositions`);
     else if (d.action === "resolved" && !said(d.change)) e.push(`${f.id}: resolved needs "change" — what was changed, and where`);
+    else if (d.action === "resolved" && draft && !arr(final?.refinement?.changes).some(c => c?.finding === f.id)) e.push(`${f.id}: marked resolved, but no entry of refinement.changes cites ${f.id}: a resolution is a change that can be pointed to`);
     else if (d.action === "declined" && !said(d.reason)) e.push(`${f.id}: declined needs its reason`);
   });
   return e;

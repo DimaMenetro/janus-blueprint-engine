@@ -9,6 +9,7 @@
  */
 import { subdomainIds, PAIRS, PATTERNS } from "@/lib/janus/protocolRegistry";
 import { QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
+import { assembleBlueprint } from "@/lib/janus/blueprintPipeline";
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k] ?? null) : rec[k] === v));
@@ -17,21 +18,22 @@ const subs = (d) => Object.fromEntries(subdomainIds(d).map(id => [id, { perspect
 const step = (n, title, derived_from) => ({ step: n, title, purpose: `Purpose of ${title}`, phase: "P1", fulfils: n === 1 ? ["Q1"] : [], instructions: "Do it", inputs: ["i"], outputs: ["o"], validation: "Check it",
   depends_on_steps: n > 1 ? [1] : [], substeps: [{ substep: `${n}a`, details: "d" }], acceptance_tests: ["t"], derived_from, confidence: "Contested" });
 // A Blueprint that cites only what its prompt actually showed it (so its traces resolve in every mode).
-const blueprintFor = (prompt = "") => ({
-  // The refiner carries the draft's parts forward (the pipeline fixtures below produce the same ones).
-  goal: "Pilot", assumptions: ["a"], phases: [{ id: "P1", name: "Pilot" }],
-  selected_strategy: { name: "Approach 1", mode: "selected", built_from: ["K1"] },
-  acceptance: PIPELINE["blueprint:criteria"]().acceptance, outcome_interpretation: PIPELINE["blueprint:criteria"]().outcome_interpretation,
-  alternative_approaches: ["A", "B", "C"].map(name => ({ name, pros: ["p"], cons: ["c"], why_not_chosen: "w" })),
-  steps: [
-    step(1, "Scope", ["C1", "corpus:1"]),
-    ...(prompt.includes("ACTUS: Key Recommendations") ? [step(2, "Pilot", ["R1", "animus:1"])] : []),
-    ...(prompt.includes("[pattern:") ? [step(3, "Scale", [PAIRS[0].id, `pattern:${PATTERNS[0].id}`])] : []),
-  ],
-  success_criteria: ["s"], risk_register: [{ risk: "r", impact: "med", mitigation: "m" }],
-  ...dispositions(prompt),
-  refinement: { dispositions: [{ finding: "F1", action: "resolved", change: "Step 1 now states its interface" }] },
-});
+// The final refiner: it returns the assembled draft word for word (the same pipeline fixtures the engine assembles),
+// restates the goal, and — where the pipeline has a self-critique (the modes with Actus) — repairs finding F1 by
+// stating step 1's interface. Both changes are declared, as the transactional rule requires.
+const blueprintFor = (prompt = "") => {
+  const draft = assembleBlueprint(Object.fromEntries(["brief", "candidates", "selection", "skeleton", "expansion", "criteria"].map(k => [`blueprint:${k}`, PIPELINE[`blueprint:${k}`](prompt)])));
+  const critiqued = withActus(prompt);
+  return {
+    ...draft, goal: "Pilot",
+    steps: draft.steps.map(s => (s.step === 1 && critiqued ? { ...s, interfaces: ["Operator console API"] } : s)),
+    refinement: {
+      dispositions: [{ finding: "F1", action: "resolved", change: "Step 1 now states its interface" }],
+      changes: [{ path: "goal", what: "Restated as the pilot", reason: "The pilot is the deliverable" },
+        ...(critiqued ? [{ path: "steps[1].interfaces", finding: "F1", what: "Added the operator console API" }] : [])],
+    },
+  };
+};
 // The Blueprint pipeline's sub-artifacts (Phase 9). Like the Blueprint above, the plan cites only what its prompt showed.
 const withActus = (prompt) => prompt.includes("ACTUS: Key Recommendations");
 const withPatterns = (prompt) => prompt.includes("[pattern:");
