@@ -120,6 +120,63 @@ export function finalSynthesisErrors(output) {
   return e;
 }
 
+// ── 5b. STAGE INTEGRITY — ONE definition, applied at three boundaries ──────────────────────────────
+// What must hold BEFORE any later stage reads an artifact: structure a later stage relies on and references that
+// must resolve. The same function is applied
+//   - when a stage settles (stageRunner.validateStageOutput): a violation is invalid mandatory output
+//     (schema_failure, bounded retry with the violations named), never successful cognition;
+//   - when a stage is about to be read as an input (stageEngine.executeStage): a revision recorded under an
+//     earlier validator that fails it today is not consumed;
+//   - at completion (qualification.completionOf, and the validators below): so the three can never disagree.
+// Field TYPES stay the schema's (janusSchema). Completion-only requirements (the explicit subdomain sets of a Full
+// run, the mode's minimum alternatives, an anchored recommendation) stay below, in STAGE_VALIDATORS.
+// `inputs` maps stage key → the output this artifact was built from; a cross-artifact reference is checked only
+// when the artifact it points into is supplied.
+const noList = (v) => v == null || (Array.isArray(v) && v.length === 0);
+const list = (v) => (Array.isArray(v) ? v : []);
+const duplicates = (ids) => [...new Set(ids.filter((id, i) => id && ids.indexOf(id) !== i))];
+const INTEGRITY = {
+  corpus: (a) => (noList(a?.constraints) ? ["corpus.constraints empty"] : []),
+  cogito: (a) => {
+    if (noList(a?.claims)) return ["cogito.claims empty"];
+    const claims = list(a.claims), ids = new Set(claims.map(c => c?.id)), e = [];
+    claims.forEach(c => {
+      if (!c?.id || !c?.text) e.push("cogito claim missing id/text");
+      // depends_on is the LOGICAL dependency between claims. A document or source name is provenance (claim.sources).
+      list(c?.depends_on).forEach(d => { if (!ids.has(d)) e.push(`${c.id}: dangling depends_on ${d}`); });
+    });
+    duplicates(claims.map(c => c?.id)).forEach(id => e.push(`${id}: claim id used more than once`));
+    return e;
+  },
+  animus: (a) => (noList(a?.boundary_checks) ? ["animus.boundary_checks empty"] : []),
+  actus: (a, inputs) => {
+    if (noList(a?.recommendations)) return ["actus.recommendations empty"];
+    const recs = list(a.recommendations), e = [];
+    duplicates(recs.map(r => r?.id)).forEach(id => e.push(`${id}: recommendation id used more than once`));
+    const claims = inputs?.cogito?.claims;
+    if (Array.isArray(claims)) {
+      const ids = new Set(claims.map(c => c?.id));
+      recs.forEach(r => list(r?.depends_on_claims).forEach(d => { if (!ids.has(d)) e.push(`${r.id}: depends_on_claims cites ${d}, which is not a Cogito claim id`); }));
+    }
+    return e;
+  },
+  synthesis: (a) => finalSynthesisErrors(a),
+  blueprint: (a) => {
+    if (!a?.goal) return ["blueprint.goal missing"];
+    const e = [];
+    if (noList(a.steps)) e.push("blueprint.steps empty");
+    list(a.steps).forEach(s => { if (!s?.title || !s?.instructions || !s?.validation) e.push(`step ${s?.step}: title/instructions/validation required`); });
+    if (noList(a.success_criteria)) e.push("blueprint.success_criteria empty");
+    if (noList(a.risk_register)) e.push("blueprint.risk_register empty");
+    return e;
+  },
+};
+const PAIR_FIELDS = ["insight", "tension", "resolution"];
+export function stageIntegrity(stageKey, output, { inputs } = {}) {
+  if (String(stageKey).startsWith("intersection:")) return PAIR_FIELDS.filter(f => !output?.[f]).map(f => `${stageKey}.${f}: missing`);
+  return INTEGRITY[stageKey] ? INTEGRITY[stageKey](output, inputs) : [];
+}
+
 export const STAGE_VALIDATORS = {
   refresh: (a, ctx) => {
     if (!a) return ["refresh artifact missing"];
@@ -131,40 +188,37 @@ export const STAGE_VALIDATORS = {
     if (miss.length) e.push(`refresh on: uncovered subdomains (explicit "no sufficiently strong current update established" is valid): ${miss.join(", ")}`);
     return e;
   },
+  // Each validator is the shared stage integrity (5b) plus what only completion requires. A value of the wrong TYPE
+  // (a string where a list belongs) is the schema's finding at the stage; here it still reads as "empty".
   corpus: (a, ctx) => [
-    ...(!nonEmpty(a?.constraints) ? ["corpus.constraints empty"] : []),
+    ...(!nonEmpty(a?.constraints) ? ["corpus.constraints empty"] : INTEGRITY.corpus(a)),
     ...(ctx.full ? missingSubdomains(a, "corpus").map(id => `corpus subdomain missing: ${id}`) : []),
   ],
   cogito: (a, ctx) => {
     if (!nonEmpty(a?.claims)) return ["cogito.claims empty"];
-    const ids = new Set(a.claims.map(c => c.id)), e = [];
-    a.claims.forEach(c => {
-      if (!c.id || !c.text) e.push("cogito claim missing id/text");
-      if (!CONFIDENCE_TAXONOMY.includes(normalizeTag(c.tag))) e.push(`${c.id}: tag outside taxonomy (${c.tag})`);
-      (c.depends_on || []).forEach(d => { if (!ids.has(d)) e.push(`${c.id}: dangling depends_on ${d}`); });
-    });
+    const e = INTEGRITY.cogito(a);
+    a.claims.forEach(c => { if (!CONFIDENCE_TAXONOMY.includes(normalizeTag(c.tag))) e.push(`${c.id}: tag outside taxonomy (${c.tag})`); });
     if (ctx.full) e.push(...missingSubdomains(a, "cogito").map(id => `cogito subdomain missing: ${id}`));
     return e;
   },
   animus: (a, ctx) => [
-    ...(!nonEmpty(a?.boundary_checks) ? ["animus.boundary_checks empty"] : []),
+    ...(!nonEmpty(a?.boundary_checks) ? ["animus.boundary_checks empty"] : INTEGRITY.animus(a)),
     ...(ctx.full ? missingSubdomains(a, "animus").map(id => `animus subdomain missing: ${id}`) : []),
   ],
   actus: (a, ctx) => [
-    ...(!nonEmpty(a?.recommendations) ? ["actus.recommendations empty"] : []),
+    ...(!nonEmpty(a?.recommendations) ? ["actus.recommendations empty"] : INTEGRITY.actus(a, ctx.inputs)),
     ...(ctx.full ? missingSubdomains(a, "actus").map(id => `actus subdomain missing: ${id}`) : []),
   ],
+  // The neutral bag names the six intersections and the four patterns apart. The synthesis-level outputs
+  // (takeaways, collisions, limitation) live on the durable patterns revision and are held to the same
+  // finalSynthesisErrors at completion through qualification.completionOf.
   synthesis: (a) => [
     ...PAIRS.filter(p => !a?.intersections?.[p.id]).map(p => `intersection missing: ${p.id}`),
     ...patternErrors(a?.emergent_patterns),
   ],
   blueprint: (a, ctx) => {
-    if (!a?.goal) return ["blueprint.goal missing"];
-    const e = [];
-    if (!nonEmpty(a.steps)) e.push("blueprint.steps empty");
-    (a.steps || []).forEach(s => { if (!s.title || !s.instructions || !s.validation) e.push(`step ${s.step}: title/instructions/validation required`); });
-    if (!nonEmpty(a.success_criteria)) e.push("blueprint.success_criteria empty");
-    if (!nonEmpty(a.risk_register)) e.push("blueprint.risk_register empty");
+    const e = INTEGRITY.blueprint(a);
+    if (!a?.goal) return e;
     const minAlt = MODE_EXPECTATIONS[ctx.mode]?.min_alternatives ?? 0;
     if ((a.alternative_approaches || []).length < minAlt) e.push(`blueprint needs ≥${minAlt} serious alternative approaches`);
     return e;
@@ -175,7 +229,7 @@ export const STAGE_VALIDATORS = {
 export function completionManifest(mode, artifacts, { refreshEnabled = false } = {}) {
   const profile = MODE_PROFILES[mode];
   if (!profile) throw new Error(`Unknown mode: ${mode}`);
-  const ctx = { mode, full: !profile.partial, refreshEnabled };
+  const ctx = { mode, full: !profile.partial, refreshEnabled, inputs: artifacts };
   const stages = profile.stages.map(s => ({ stage: s, errors: STAGE_VALIDATORS[s](artifacts[s], ctx) }));
   const blocking = stages.flatMap(s => s.errors.map(e => `${s.stage}: ${e}`));
   let confidence = { corrections: [], errors: [] };
