@@ -158,10 +158,14 @@ describe("continuation identity is the stage's own", () => {
   // evaluation since Phase 5).
   it("the compiler gives each stage its own template identity: it moves only when that stage's own prompt contract does", () => {
     const id = templateVersionOf;
-    expect(new Set([...INTERSECTION_KEYS, "synthesis"].map(id))).toEqual(new Set(["stage-compiler/2026-11-26.1"])); // unchanged since Phase 8
-    expect(new Set(["refresh", "qualification"].map(id))).toEqual(new Set(["stage-compiler/2026-11-25.3"]));      // unchanged since Phase 5
-    expect(new Set(["corpus", "cogito", "animus", "actus", "blueprint"].map(id)).size).toBe(1);                    // changed together by the Phase 9 corrections
-    expect(new Set([id("refresh"), id("synthesis"), id("actus")]).size).toBe(3);
+    // UPDATED AGAIN 2026-11-26 (Phase 9 pipeline, DIMA's continuation directive). The pipeline changed the prompt
+    // contract of every stage except Refresh: the domains, the pairs and the patterns stage gained the
+    // cognitive-discipline clause, the Blueprint became a pipeline, and the evaluation returns new findings. So each
+    // of them moved, as II.4 requires, and Refresh, whose contract did not change, did not.
+    expect(id("refresh")).toBe("stage-compiler/2026-11-25.3"); // unchanged since Phase 5
+    const changed = ["corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis", "qualification", "blueprint",
+      "blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria", "blueprint:assembly", "blueprint:critique"];
+    expect(new Set(changed.map(id))).toEqual(new Set(["stage-compiler/2026-11-26.3"]));
   });
 
   it.each([

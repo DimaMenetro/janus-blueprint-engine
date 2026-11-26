@@ -14,6 +14,14 @@ import { INTERSECTION_KEYS, intersectionKey } from "@/lib/janus/stageModel";
 import SynthesisStructure from "@/components/janus/tabs/SynthesisStructure";
 
 const DOMAINS4 = ["corpus", "cogito", "animus", "actus"];
+// UPDATED 2026-11-26 (Phase 9, DIMA's continuation directive). This file's assertions about "the Blueprint" were
+// written when it was one stage and one call. It is now a pipeline, written out here independently of the engine.
+// The Phase 8 rules they protect are unchanged: Synthesis is entered after the four domains, 6/6 pairs are
+// required, and no Blueprint stage starts before the validated Synthesis.
+const BLUEPRINT_PIPELINE = ["blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria",
+  "blueprint:assembly", "blueprint:critique", "blueprint"];
+const pipelineOf = (mode) => BLUEPRINT_PIPELINE.filter(k => mode !== "quick" || k !== "blueprint:critique"); // Quick has no self-critique
+const modelCalls = (keys) => keys.filter(k => k !== "blueprint:assembly"); // the assembly is computed by code
 const params = (mode) => ({ queryText: "How should a city pilot autonomous transit?", executionMode: mode, outputMode: "Blueprint", blueprintLevel: "L2", noveltyDial: "medium", refreshEnabled: false });
 const snapshot = (x) => JSON.parse(JSON.stringify(x));
 const everything = () => snapshot({ runs: h.db.Run, stages: h.db.RunStage, attempts: h.db.RunAttempt });
@@ -27,12 +35,13 @@ beforeEach(() => h.reset());
 
 describe("Synthesis is entered after the four primary domains", () => {
   it("Full plan: refresh, the four domains, the six pairs, the patterns, then the Blueprint; partial profiles have no Synthesis", async () => {
-    expect(stagePlan("full")).toEqual(["refresh", ...DOMAINS4, ...INTERSECTION_KEYS, "synthesis", "blueprint"]);
-    expect(stagePlan("standard")).toEqual([...DOMAINS4, "blueprint"]);
-    expect(stagePlan("quick")).toEqual(["corpus", "cogito", "blueprint"]);
+    const full = ["refresh", ...DOMAINS4, ...INTERSECTION_KEYS, "synthesis", ...BLUEPRINT_PIPELINE];
+    expect(stagePlan("full")).toEqual(full);
+    expect(stagePlan("standard")).toEqual([...DOMAINS4, ...pipelineOf("standard")]);
+    expect(stagePlan("quick")).toEqual(["corpus", "cogito", ...pipelineOf("quick")]);
     const { runId, status } = await executeJanus(params("full"));
     expect(status).toBe("completed");
-    expect(h.llm.stages).toEqual([...stagePlan("full"), "qualification"]); // the real call order
+    expect(h.llm.stages).toEqual([...modelCalls(full), "qualification"]); // the real call order
     expect(INTERSECTION_KEYS).toHaveLength(6);
     const view = viewOf(runId);
     INTERSECTION_KEYS.forEach(k => expect(view.stageInfo[k].active.output).toEqual(expect.objectContaining({ insight: expect.any(String), tension: expect.any(String), resolution: expect.any(String) })));
@@ -47,7 +56,7 @@ describe("Synthesis is entered after the four primary domains", () => {
     }
     const result = await resumeJanus(run.id);
     expect(result.status).toBe("completed");
-    expect(h.llm.stages).toEqual(["actus", "intersection:corpus_x_actus", "intersection:cogito_x_actus", "intersection:animus_x_actus", "synthesis", "blueprint", "qualification"]);
+    expect(h.llm.stages).toEqual(["actus", "intersection:corpus_x_actus", "intersection:cogito_x_actus", "intersection:animus_x_actus", "synthesis", ...modelCalls(BLUEPRINT_PIPELINE), "qualification"]);
     expect(stagesOf("intersection:corpus_x_cogito")).toHaveLength(1);
     expect(viewOf(run.id).artifacts.synthesis.intersection_matrix.corpus_x_cogito).toEqual(pair("a"));
   });
@@ -56,9 +65,15 @@ describe("Synthesis is entered after the four primary domains", () => {
 describe("6/6 pairs are required, and there is no premature Blueprint", () => {
   it("the compiler states the rule: patterns need all six pairs; a Full Blueprint needs the Synthesis; partial profiles do not", () => {
     expect(requiredInputs("synthesis", "full")).toEqual(INTERSECTION_KEYS);
-    expect(requiredInputs("blueprint", "full")).toEqual(["synthesis"]);
-    expect(requiredInputs("blueprint", "standard")).toEqual([]);
-    expect(requiredInputs("blueprint", "quick")).toEqual([]);
+    // Every Blueprint stage of a Full run needs the validated Synthesis, the brief included; then its own chain.
+    BLUEPRINT_PIPELINE.forEach(k => expect(requiredInputs(k, "full")[0]).toBe("synthesis"));
+    expect(requiredInputs("blueprint:brief", "full")).toEqual(["synthesis"]);
+    expect(requiredInputs("blueprint", "full")).toEqual(["synthesis", "blueprint:assembly", "blueprint:critique"]);
+    // The partial profiles have no Synthesis to wait for: only the pipeline's own chain.
+    ["standard", "quick"].forEach(mode => pipelineOf(mode).forEach(k => expect(requiredInputs(k, mode)).not.toContain("synthesis")));
+    expect(requiredInputs("blueprint:brief", "quick")).toEqual([]);
+    expect(requiredInputs("blueprint", "standard")).toEqual(["blueprint:assembly", "blueprint:critique"]);
+    expect(requiredInputs("blueprint", "quick")).toEqual(["blueprint:assembly"]);
     expect(requiredInputs(INTERSECTION_KEYS[0], "full")).toEqual(PAIRS[0].domains);
   });
 
@@ -83,10 +98,14 @@ describe("6/6 pairs are required, and there is no premature Blueprint", () => {
     // Neither can be forced past the rule: both re-runs are refused, and nothing is written.
     h.llm.invalidOn = null;
     const before = everything();
-    expect((await previewRerun(runId, { targets: ["blueprint"] })).refusals).toEqual([expect.stringMatching(/^blueprint needs synthesis, which has no valid revision$/)]);
+    BLUEPRINT_PIPELINE.forEach(k => expect(calls(k)).toBe(0)); // no stage of the Blueprint pipeline was started, the brief included
+    expect(h.db.RunStage.filter(s => s.stage_key.startsWith("blueprint"))).toEqual([]);
+    // The final stage alone lacks the Synthesis and its own chain; the whole pipeline lacks the Synthesis at every stage.
+    expect((await previewRerun(runId, { targets: ["blueprint"] })).refusals).toEqual(["blueprint needs synthesis, blueprint:assembly, blueprint:critique, which has no valid revision"]);
+    expect((await previewRerun(runId, { targets: BLUEPRINT_PIPELINE })).refusals).toEqual(BLUEPRINT_PIPELINE.map(k => `${k} needs synthesis, which has no valid revision`));
     expect((await previewRerun(runId, { targets: ["synthesis"] })).refusals).toEqual([expect.stringMatching(new RegExp(`^synthesis needs ${intersectionKey(lost.id)}, which has no valid revision$`))]);
     await expect(rerunStages(runId, { targets: ["blueprint"] })).rejects.toThrow(/blueprint needs synthesis/);
-    await expect(rerunBlueprint(runId)).rejects.toThrow(/blueprint needs synthesis/);
+    await expect(rerunBlueprint(runId)).rejects.toThrow(/blueprint:brief needs synthesis/); // the pipeline is refused at its first stage
     expect(everything()).toEqual(before);
 
     // The explicit path: the Synthesis re-run, then the Blueprint.
@@ -115,7 +134,7 @@ describe("6/6 pairs are required, and there is no premature Blueprint", () => {
       h.reset();
       const { status } = await executeJanus(params(mode));
       expect(status).toBe("completed");
-      expect(h.llm.stages).toEqual([...stagePlan(mode), "qualification"]);
+      expect(h.llm.stages).toEqual([...modelCalls(stagePlan(mode)), "qualification"]);
     }
   });
 });

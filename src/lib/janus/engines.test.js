@@ -26,15 +26,26 @@ describe("execution — durable stages (Phase 3 exit tests, on the canonical eng
     STAGE_ORDER.forEach(k => expect(run[k]).toBeUndefined());
 
     const stages = stagesOf(run.id);
-    expect(stages).toHaveLength(14); // 7 stages + 6 intersections + the independent quality evaluation
+    // Phase 9 (DIMA's continuation directive, 2026-11-26): the Blueprint is a pipeline of nine durable stages, no longer
+    // one. Counts and the Blueprint's dependency set changed with it; every stage is still a durable revision with
+    // exact dependencies. 6 upstream stages + 6 intersections + 9 pipeline stages + the independent quality evaluation.
+    expect(stages).toHaveLength(22);
     expect(stages.every(s => s.status === "succeeded" && s.revision === 1 && /^sha256:[0-9a-f]{64}$/.test(s.input_fingerprint))).toBe(true);
     const id = (k) => byKey(run.id, k)[0].id;
     expect(byKey(run.id, "cogito")[0].depends_on).toEqual([id("refresh"), id("corpus")]);
     PAIRS.forEach(p => expect(byKey(run.id, intersectionKey(p.id))[0].depends_on).toEqual(p.domains.map(d => id(d))));
     expect([...byKey(run.id, "synthesis")[0].depends_on].sort()).toEqual(INTERSECTION_KEYS.map(id).sort());
-    expect([...byKey(run.id, "blueprint")[0].depends_on].sort()).toEqual(["refresh", "corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis"].map(id).sort());
+    const upstream = ["refresh", "corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis"];
+    // The final Blueprint read the upstream cognition, the brief, the assembled draft and its critique: exactly those revisions.
+    expect([...byKey(run.id, "blueprint")[0].depends_on].sort()).toEqual([...upstream, "blueprint:brief", "blueprint:assembly", "blueprint:critique"].map(id).sort());
+    expect(byKey(run.id, "blueprint:brief")[0].depends_on).toEqual([]); // the brief reads the operator's query alone
+    expect([...byKey(run.id, "blueprint:assembly")[0].depends_on].sort()).toEqual([...upstream, "blueprint:brief", "blueprint:candidates", "blueprint:selection",
+      "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria"].map(id).sort());
 
-    expect(h.db.RunAttempt).toHaveLength(14);
+    // One attempt per model call. The assembly is computed by code: a durable revision with no attempt.
+    expect(h.db.RunAttempt).toHaveLength(21);
+    expect(h.db.RunAttempt.filter(a => a.stage_key === "blueprint:assembly")).toEqual([]);
+    expect(byKey(run.id, "blueprint:assembly")[0].provenance.method).toBe("deterministic");
     expect(h.db.RunAttempt.every(a => a.outcome === "succeeded" && stages.some(s => s.id === a.stage_id))).toBe(true);
     expect(h.llm.calls.every(keys => keys.join() === "stage_id,prompt")).toBe(true); // no per-call model override
   });
@@ -55,7 +66,7 @@ describe("execution — durable stages (Phase 3 exit tests, on the canonical eng
     const bp = byKey(run.id, "blueprint")[0];
     expect(bp).toMatchObject({ status: "failed", error_class: "provider_error" });
     expect(h.db.RunAttempt.find(a => a.stage_id === bp.id).outcome).toBe("provider_error");
-    expect(stagesOf(run.id).filter(s => s.status === "succeeded")).toHaveLength(12);
+    expect(stagesOf(run.id).filter(s => s.status === "succeeded")).toHaveLength(20); // Phase 9: 12 upstream + the 8 pipeline stages before the failed one
     const view = viewOf(run.id);
     expect(view.artifacts.blueprint).toBeUndefined();
     expect(view.artifacts.corpus).toBeDefined();

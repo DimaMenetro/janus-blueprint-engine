@@ -10,7 +10,7 @@ import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
 import { completionOf, deriveQualification, recordedInputs, inputIntegrity, blueprintAudit } from "@/lib/janus/qualification";
 import { loadRunView, updateRun, recordDeterministicStage } from "@/lib/janus/stageStore";
 import { runStage, continueStage, closeFromLastCall, validateStageOutput } from "@/lib/janus/stageRunner";
-import { BP, isDeterministicStage, assembleBlueprint } from "@/lib/janus/blueprintPipeline";
+import { BP, BLUEPRINT_PIPELINE_KEYS, isDeterministicStage, assembleBlueprint } from "@/lib/janus/blueprintPipeline";
 import { composeArtifacts } from "@/lib/janus/runView";
 import { compileStage, stageInputs, requiredInputs, templateVersionOf } from "@/lib/janus/stageCompiler";
 import { stageFailures, continuationOf, rerunOnly } from "@/lib/janus/executionState";
@@ -101,6 +101,8 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
  */
 export async function driveStages({ runId, keys, origin, force = false, onDurableChange = async () => {} }) {
   const errors = [];
+  const unreplaced = new Set(); // stages this drive tried to give a revision and could not
+  const isPipeline = (key) => BLUEPRINT_PIPELINE_KEYS.includes(key);
   const regenerate = (view, key) => {
     const info = view.stageInfo[key];
     // Resume is not regeneration: without an explicit re-run, a stage whose newest revision settled as failed with
@@ -163,7 +165,19 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
     i += 1;
     if (!regenerate(view, stageKey)) continue;
 
+    // ONE BLUEPRINT, ONE PIPELINE (Phase 9). In an operation that produces new revisions, a pipeline stage is not
+    // built on the predecessor of a pipeline stage this same operation set out to replace and could not. It would
+    // be paid cognition known in advance to rest on what the operator asked to replace. The current Blueprint and
+    // everything valid stay as they are; the failure is reported.
+    const lost = force && isPipeline(stageKey) ? requiredInputs(stageKey, staged ? view.run.execution_mode : undefined).filter(k => isPipeline(k) && unreplaced.has(k)) : [];
+    if (lost.length) {
+      errors.push(`${stageKey}: not started — ${lost.join(", ")}, which it builds on, produced no valid new version in this operation`);
+      unreplaced.add(stageKey);
+      continue;
+    }
+
     const res = await executeStage({ view, stageKey, origin, onBegan: () => onDurableChange(runId) });
+    if (res.failure || res.skipped) unreplaced.add(stageKey);
     if (res.skipped) {
       // Not started because an input it would read fails mandatory integrity: said, not passed over in silence.
       (res.skipped.unfit || []).forEach(u => errors.push(`${stageKey}: not started — its input ${u.key} r${u.revision} fails mandatory integrity (${u.errors.slice(0, 3).join("; ")}${u.errors.length > 3 ? `; +${u.errors.length - 3} more` : ""}). Re-run ${u.key} first.`));

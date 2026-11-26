@@ -118,7 +118,7 @@ describe("completion is a validated contract, not a returned process", () => {
     const result = await run("full");
     const record = h.db.Run[0];
     expect(result.status).toBe("partial");
-    expect(stagesOf(result.runId).filter(s => s.status === "succeeded")).toHaveLength(13); // every stage settled as valid output
+    expect(stagesOf(result.runId).filter(s => s.status === "succeeded")).toHaveLength(21); // every stage settled as valid output (Phase 9: 12 upstream + the 9 Blueprint pipeline stages)
     expect(record.completion_manifest.complete).toBe(false);
     expect(record.validation_errors.some(e => blocking.test(e))).toBe(true);
     expect(h.llm.stages).not.toContain("qualification"); // nothing to qualify, no evaluation purchased
@@ -199,7 +199,7 @@ describe("structurally valid mediocrity is not released", () => {
       expect(q).toMatchObject({ pending: "evaluation_failed" });
       const view = viewOf(runId);
       expect(view.stageInfo.qualification).toMatchObject({ active: null, latest: expect.objectContaining({ status: "failed", error_class: evidence }) });
-      expect(stagesOf(runId).filter(s => s.status === "succeeded")).toHaveLength(13);
+      expect(stagesOf(runId).filter(s => s.status === "succeeded")).toHaveLength(21); // Phase 9: 12 upstream + the 9 Blueprint pipeline stages
       expect(view.stageInfo.blueprint.active.status).toBe("succeeded");
     });
 

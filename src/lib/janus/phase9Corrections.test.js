@@ -23,6 +23,13 @@ const stagesOf = (key) => h.db.RunStage.filter(s => s.stage_key === key);
 const promptsOf = (key) => h.llm.prompts.filter((_, i) => h.llm.stages[i] === key);
 const ledger = (key) => h.db.RunAttempt.filter(a => a.stage_key === key).map(a => [a.attempt_number, a.outcome, a.retry_decision]);
 const ACTUS_PAIRS = INTERSECTION_KEYS.filter(k => k.endsWith("_x_actus"));
+// The Blueprint pipeline (Phase 9), written out independently of the engine. The assertions below that name it
+// replaced ones written when the Blueprint was a single stage (DIMA's continuation directive, 2026-11-26): what
+// completion plans, blocks and calls is now the pipeline; what it keeps and never regenerates is unchanged.
+const BLUEPRINT_PIPELINE = ["blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria",
+  "blueprint:assembly", "blueprint:critique", "blueprint"];
+/** The assembly is computed by code: it is planned and recorded, but it is never a model call. */
+const modelCalls = (keys) => keys.filter(k => k !== "blueprint:assembly");
 const DOCUMENT_DEPS = () => { const c = clone(h.out.cogito); c.claims[0].depends_on = ["Phase 0 Walkthrough", "ShapeScan Product Codex"]; return c; };
 const LIST_WHERE_STRING = () => ({ ...clone(h.out.actus), recommendations: [{ ...h.out.actus.recommendations[0], probability: "moderate" }],
   behavioral_factors: { identity_economics: ["a list where one string belongs"] } });
@@ -123,7 +130,7 @@ describe("completion of cognition a finished run never produced", () => {
   it("previews exactly the unproduced stages, keeps every valid one, and produces only those", async () => {
     const runId = await liveShape();
     const impact = await previewCompletion(runId);
-    expect(impact.plan).toEqual([...ACTUS_PAIRS, "synthesis", "blueprint"]);
+    expect(impact.plan).toEqual([...ACTUS_PAIRS, "synthesis", ...BLUEPRINT_PIPELINE]);
     expect(impact.planned.every(p => p.reason === "unproduced")).toBe(true);
     expect(impact.kept.map(k => k.key)).toEqual(stagePlan("full").filter(k => !impact.plan.includes(k)));
     expect(impact).toMatchObject({ blocked: [], findings: [], refusals: [] });
@@ -131,7 +138,8 @@ describe("completion of cognition a finished run never produced", () => {
 
     const result = await completeJanus(runId, { expected: impact.token });
     expect(result).toMatchObject({ success: true, status: "completed", qualification: "qualified" });
-    expect(h.llm.stages).toEqual([...impact.plan, "qualification"]); // nothing valid was regenerated
+    expect(h.llm.stages).toEqual([...modelCalls(impact.plan), "qualification"]); // nothing valid was regenerated
+    expect(h.db.RunAttempt.filter(a => a.stage_key === "blueprint:assembly")).toEqual([]); // a computed stage has no attempt
     impact.plan.forEach(k => expect(stagesOf(k)).toEqual([expect.objectContaining({ revision: 1, status: "succeeded", provenance: expect.objectContaining({ origin: "completion" }) })]));
     expect(h.db.RunStage.slice(0, before.length)).toEqual(before); // every earlier revision is exactly as it was
     expect(stagesOf("actus")).toHaveLength(2); // history kept, no third version
@@ -146,7 +154,7 @@ describe("completion of cognition a finished run never produced", () => {
     const plain = await previewCompletion(runId);
     expect(plain.findings.map(f => f.key)).toEqual(["cogito"]);
     expect(plain.plan).toEqual(ACTUS_PAIRS.filter(k => !k.includes("cogito")));
-    expect(plain.blocked.map(b => b.key)).toEqual([ACTUS_PAIRS.find(k => k.includes("cogito")), "synthesis", "blueprint"]);
+    expect(plain.blocked.map(b => b.key)).toEqual([ACTUS_PAIRS.find(k => k.includes("cogito")), "synthesis", ...BLUEPRINT_PIPELINE]);
     const partial = await completeJanus(runId, { expected: plain.token });
     expect(h.llm.stages).toEqual(plain.plan); // no Synthesis, no Blueprint on an unfit Cogito
     expect(partial.status).toBe("partial");
@@ -158,7 +166,8 @@ describe("completion of cognition a finished run never produced", () => {
     expect(repair.kept.map(k => k.key)).toEqual(["refresh", "corpus"]);
     const done = await completeJanus(runId, { repair: true, expected: repair.token });
     expect(done).toMatchObject({ success: true, status: "completed" });
-    expect(h.llm.stages).toEqual([...repair.plan, "qualification"]);
+    expect(repair.plan.slice(-BLUEPRINT_PIPELINE.length)).toEqual(BLUEPRINT_PIPELINE);
+    expect(h.llm.stages).toEqual([...modelCalls(repair.plan), "qualification"]);
     expect(stagesOf("corpus")).toHaveLength(1);
     expect(completionOf(viewOf(runId)).complete).toBe(true);
   });
@@ -170,7 +179,7 @@ describe("completion of cognition a finished run never produced", () => {
     const repair = await previewCompletion(runId, { repair: true });
     await completeJanus(runId, { repair: true, expected: repair.token });
     expect(h.llm.stages.filter(s => s === "cogito")).toHaveLength(3); // its own bounded attempts
-    expect(h.llm.stages.filter(s => ["animus", "actus", "synthesis", "blueprint"].includes(s))).toEqual([]);
+    expect(h.llm.stages.filter(s => ["animus", "actus", "synthesis"].includes(s) || s.startsWith("blueprint"))).toEqual([]);
     expect(stagesOf("animus")).toHaveLength(1);
   });
 

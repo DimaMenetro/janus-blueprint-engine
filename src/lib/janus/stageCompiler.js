@@ -92,8 +92,10 @@ export const requiredInputs = (stageKey, mode) => {
   // BLUEPRINT PIPELINE (plan §15, Phase 9): the validated Synthesis where the mode has one (no premature Blueprint
   // cognition), then the chain: no stage is compiled before the sub-artifacts it builds on exist and are valid. The
   // final Blueprint needs the assembled draft, and the self-critique where the mode's pipeline has one.
+  // The brief reads the operator's query alone (its recorded dependencies stay empty), but it is still Blueprint
+  // cognition: it too waits for the validated Synthesis, so a run whose Synthesis failed starts no Blueprint stage.
   if (BLUEPRINT_PIPELINE_KEYS.includes(stageKey)) return [
-    ...(stageKey !== BP.brief && MODE_PROFILES[mode]?.stages.includes("synthesis") ? ["synthesis"] : []),
+    ...(MODE_PROFILES[mode]?.stages.includes("synthesis") ? ["synthesis"] : []),
     ...PIPELINE_REQUIRES[stageKey],
     ...(stageKey === BP.final && hasCritique(mode) ? [BP.critique] : []),
   ];

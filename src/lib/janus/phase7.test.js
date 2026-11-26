@@ -29,6 +29,17 @@ const keys = (items) => items.map(i => i.key).sort();
 const staleIds = (view) => new Set(Object.values(view.stageInfo).filter(i => i.key !== "qualification" && i.active && i.stale).map(i => i.active.id));
 const pairKeys = (pred) => PAIRS.filter(pred).map(p => intersectionKey(p.id));
 const reads = (...domains) => (p) => p.domains.some(d => domains.includes(d));
+// PHASE 9 REPLACEMENTS (DIMA's continuation directive, 2026-11-26). Where this file said "the Blueprint" it meant one
+// stage and one call. The Blueprint is now a pipeline of durable stages, written out here independently of the
+// engine. The assertions that name it below replaced the single-stage ones; the re-run, staleness, continuity and
+// evaluation rules they protect are unchanged. Two facts follow from the pipeline's recorded dependencies:
+//  - the brief reads the operator's query alone, so no upstream re-run makes it stale;
+//  - every other pipeline stage reads the upstream cognition, so an upstream re-run makes each of them stale.
+const BLUEPRINT_PIPELINE = ["blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria",
+  "blueprint:assembly", "blueprint:critique", "blueprint"];
+const pipelineOf = (mode) => BLUEPRINT_PIPELINE.filter(k => mode !== "quick" || k !== "blueprint:critique"); // Quick has no self-critique
+const afterBrief = (mode) => pipelineOf(mode).filter(k => k !== "blueprint:brief");
+const callsOf = (keys) => keys.filter(k => k !== "blueprint:assembly"); // the assembly is computed by code: no model call
 
 beforeEach(() => h.reset());
 
@@ -43,8 +54,8 @@ describe("versioned re-run: exact dependents, through recorded revision IDs", ()
     expect(impact.refusals).toEqual([]);
     expect(impact.plan).toEqual(["animus"]);
     // Actus reads Animus; every pair reading Animus or Actus; the patterns read the pairs; the Blueprint reads all.
-    expect(keys(impact.invalidated)).toEqual(["actus", ...pairKeys(reads("animus", "actus")), "synthesis", "blueprint"].sort());
-    expect(keys(impact.unaffected)).toEqual(["refresh", "corpus", "cogito", ...pairKeys(p => !reads("animus", "actus")(p))].sort());
+    expect(keys(impact.invalidated)).toEqual(["actus", ...pairKeys(reads("animus", "actus")), "synthesis", ...afterBrief("full")].sort());
+    expect(keys(impact.unaffected)).toEqual(["refresh", "corpus", "cogito", ...pairKeys(p => !reads("animus", "actus")(p)), "blueprint:brief"].sort());
     expect(impact.supersedes).toEqual([expect.objectContaining({ key: "animus", revision: "r1" })]);
     expect(impact.qualification).toEqual({ next: "blocked", evaluationInvalidated: true, releaseWithdrawn: true });
     expect(everything().stages).toEqual(records); // a preview writes nothing
@@ -68,18 +79,18 @@ describe("versioned re-run: exact dependents, through recorded revision IDs", ()
   it("cascade: re-running Cogito regenerates exactly its dependents, reuses everything else, and the new Blueprint is evaluated afresh", async () => {
     const { runId } = await executeJanus(params("full"));
     const impact = await previewRerun(runId, { targets: ["cogito"], cascade: true });
-    expect(impact.plan).toEqual(["cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis", "blueprint"]);
+    expect(impact.plan).toEqual(["cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis", ...afterBrief("full")]);
     expect(impact.invalidated).toEqual([]);
-    expect(keys(impact.unaffected)).toEqual(["corpus", "refresh"]);
+    expect(keys(impact.unaffected)).toEqual(["blueprint:brief", "corpus", "refresh"]);
     expect(impact.qualification).toEqual({ next: "re_evaluated", evaluationInvalidated: true, releaseWithdrawn: true });
 
     h.llm.stages.length = 0;
     await rerunStages(runId, { targets: ["cogito"], cascade: true, expected: impact.token });
-    expect(h.llm.stages).toEqual([...impact.plan, "qualification"]);
+    expect(h.llm.stages).toEqual([...callsOf(impact.plan), "qualification"]);
     const after = viewOf(runId);
     expect(staleIds(after).size).toBe(0);
     impact.plan.forEach(k => expect(after.stageInfo[k].active.revision).toBe(2));
-    ["refresh", "corpus"].forEach(k => expect(after.stageInfo[k].active.revision).toBe(1));
+    ["refresh", "corpus", "blueprint:brief"].forEach(k => expect(after.stageInfo[k].active.revision).toBe(1));
     expect(after.stageInfo.animus.active.depends_on).toEqual(expect.arrayContaining([after.stageInfo.cogito.active.id, after.stageInfo.corpus.active.id]));
     expect(h.db.Run[0]).toMatchObject({ status: "completed", qualification_state: "qualified", released_blueprint_stage_id: after.stageInfo.blueprint.active.id });
   });
@@ -105,20 +116,28 @@ describe("versioned re-run: exact dependents, through recorded revision IDs", ()
     const { runId } = await executeJanus(params("quick"));
     h.llm.failOn = null;
     expect(h.db.Run[0].status).toBe("partial");
-    expect(stageOf("blueprint").depends_on).toEqual([stageOf("corpus").id]);
+    expect(stageOf("blueprint").depends_on).toEqual(["corpus", "blueprint:brief", "blueprint:assembly"].map(k => stageOf(k).id)); // no Cogito among them
+    expect(stageOf("blueprint:candidates").depends_on).toEqual(["corpus", "blueprint:brief"].map(k => stageOf(k).id));
 
     const impact = await previewRerun(runId, { targets: ["cogito"] });
     expect(impact.supersedes).toEqual([]); // there is no valid Cogito revision to supersede
-    expect(impact.invalidated).toEqual([expect.objectContaining({ key: "blueprint", revision: "r1" })]);
+    // Every pipeline stage that was compiled without Cogito, each at r1; the brief never reads it.
+    expect(keys(impact.invalidated)).toEqual(afterBrief("quick").sort());
+    impact.invalidated.forEach(i => expect(i.revision).toBe("r1"));
     await rerunStages(runId, { targets: ["cogito"], expected: impact.token });
     const view = viewOf(runId);
-    expect(view.stageInfo.blueprint.stale).toMatch(/^cogito r2 was produced after this revision was compiled without it/);
+    // The stage that read the domains directly says so; the final Blueprint reaches the same cause through its chain.
+    expect(view.stageInfo["blueprint:candidates"].stale).toMatch(/^cogito r2 was produced after this revision was compiled without it/);
+    expect(view.stageInfo.blueprint.stale).toMatch(/^upstream blueprint:assembly is stale \(.*cogito r2 was produced after this revision was compiled without it/);
+    expect(view.stageInfo["blueprint:brief"].stale).toBeNull();
     expect(h.db.Run[0]).toMatchObject({ status: "completed", released_blueprint_stage_id: "" });
     expect(deriveQualification(view).blocked).toMatch(/stale/);
     expect(modelCalls("qualification")).toBe(0); // never evaluated a Blueprint that did not see Cogito
 
-    const cascade = await previewRerun(runId, { targets: ["blueprint"] });
-    await rerunStages(runId, { targets: ["blueprint"], expected: cascade.token });
+    const cascade = await previewRerun(runId, { targets: afterBrief("quick") });
+    expect(cascade.refusals).toEqual([]);
+    await rerunStages(runId, { targets: afterBrief("quick"), expected: cascade.token });
+    expect(stagesOf("blueprint:brief")).toHaveLength(1); // the brief was valid and current: it is reused, not regenerated
     expect(viewOf(runId).stageInfo.blueprint.active.depends_on).toContain(viewOf(runId).stageInfo.cogito.active.id);
     expect(h.db.Run[0]).toMatchObject({ qualification_state: "qualified" });
   });
@@ -127,9 +146,9 @@ describe("versioned re-run: exact dependents, through recorded revision IDs", ()
     const { runId } = await executeJanus(params("full"));
     const before = viewOf(runId);
     const impact = await previewRerun(runId, { targets: [...INTERSECTION_KEYS, "synthesis"] });
-    expect(keys(impact.invalidated)).toEqual(["blueprint"]);
+    expect(keys(impact.invalidated)).toEqual(afterBrief("full").sort());
     await rerunSynthesis(runId);
-    expect([...staleIds(viewOf(runId))].filter(id => !staleIds(before).has(id))).toEqual([before.stageInfo.blueprint.active.id]);
+    expect([...staleIds(viewOf(runId))].filter(id => !staleIds(before).has(id)).sort()).toEqual(afterBrief("full").map(k => before.stageInfo[k].active.id).sort());
   });
 });
 
@@ -166,17 +185,20 @@ describe("re-run safety: stale previews, concurrency, unresolved calls, cancella
   it("an interrupted re-run leaves the call unresolved: nothing is invalidated, nothing starts beside it, and it resolves from the record", async () => {
     const { runId } = await executeJanus(params("full"));
     const before = staleIds(viewOf(runId));
-    h.llm.transport.blueprint = "late";
+    // Phase 9: the Blueprint re-run is a pipeline, so the interrupted call is its first one. (Interrupted later, the
+    // stages that had already produced new valid revisions have, truthfully, superseded what the old Blueprint read.)
+    h.llm.transport["blueprint:brief"] = "late";
     const result = await rerunBlueprint(runId);
     h.llm.transport = {};
-    expect(result.unresolved).toBe("blueprint");
+    expect(result.unresolved).toBe("blueprint:brief");
     expect(staleIds(viewOf(runId))).toEqual(before);
-    expect((await previewRerun(runId, { targets: ["animus"] })).refusals).toEqual(["a call for blueprint has not settled and its outcome is unknown"]);
+    expect((await previewRerun(runId, { targets: ["animus"] })).refusals).toEqual(["a call for blueprint:brief has not settled and its outcome is unknown"]);
     await expect(rerunStages(runId, { targets: ["animus"] })).rejects.toThrow(/has not settled/);
+    expect(BLUEPRINT_PIPELINE.slice(1).every(k => stagesOf(k).length === 1)).toBe(true); // nothing was started beside it
 
     await h.finishPending();
     expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null });
-    expect(viewOf(runId).stageInfo.blueprint.active.revision).toBe(2);
+    expect(viewOf(runId).stageInfo["blueprint:brief"].active.revision).toBe(2);
   });
 
   it("a re-run never overrides a cancellation request", async () => {
@@ -208,7 +230,7 @@ describe("re-run safety: stale previews, concurrency, unresolved calls, cancella
     const legacy = { id: "legacy-7", query_text: "q", execution_mode: "full", output_mode: "Blueprint", status: "completed",
       corpus: h.out.corpus, cogito: h.out.cogito, animus: h.out.animus, actus: h.out.actus };
     h.db.Run.push(snapshot(legacy));
-    const impact = await previewRerun("legacy-7", { targets: ["blueprint"] });
+    const impact = await previewRerun("legacy-7", { targets: BLUEPRINT_PIPELINE }); // what the Blueprint control re-runs
     expect(impact.refusals).toEqual([]);
     await rerunBlueprint("legacy-7");
     expect(h.db.Run[0]).toEqual(legacy);
@@ -240,7 +262,7 @@ describe("Resume is continuity, retry is the same revision, only a re-run makes 
     const runId = await interruptedAtLastCall(message);
     expect(cogito()).toEqual([[1, "failed", evidence, "execution"]]);
     const state = deriveExecutionState(viewOf(runId));
-    expect(state).toMatchObject({ status: "interrupted", resumable: true, next: { key: "blueprint" } });
+    expect(state).toMatchObject({ status: "interrupted", resumable: true, next: { key: "blueprint:brief" } }); // Phase 9: the pipeline's first stage
     expect(state.failures).toEqual([expect.objectContaining({ key: "cogito", rerunOnly: true, attempts: calls })]);
 
     const result = await resumeJanus(runId);
@@ -248,7 +270,7 @@ describe("Resume is continuity, retry is the same revision, only a re-run makes 
     expect(cogito()).toEqual([[1, "failed", evidence, "execution"]]);
     expect(modelCalls("cogito")).toBe(calls);
     expect(attemptsOf("cogito")).toHaveLength(calls);
-    expect(modelCalls("blueprint")).toBe(1); // the unfinished part of the plan did run
+    callsOf(pipelineOf("quick")).forEach(k => expect(modelCalls(k)).toBe(1)); // the unfinished part of the plan did run, each stage once
     await expect(resumeJanus(runId)).rejects.toThrow(/has ended/);
     expect(modelCalls("cogito")).toBe(calls);
   });
@@ -279,7 +301,7 @@ describe("Resume is continuity, retry is the same revision, only a re-run makes 
     await resumeJanus(runId);
     const failed = snapshot(stageOf("cogito"));
     const impact = await previewRerun(runId, { targets: ["cogito"], cascade: true });
-    expect(impact.plan).toEqual(["cogito", "blueprint"]);
+    expect(impact.plan).toEqual(["cogito", ...afterBrief("quick")]);
     await rerunStages(runId, { targets: ["cogito"], cascade: true, expected: impact.token });
     expect(cogito()).toEqual([[1, "failed", "provider_error", "execution"], [2, "succeeded", undefined, "rerun"]]);
     expect(h.db.RunStage.find(s => s.id === failed.id)).toEqual(failed); // the failed revision is preserved as it was
@@ -380,9 +402,12 @@ describe("the evaluation pathway of a completed run (Phase 7, first tranche)", (
     const { runId } = await executeJanus(params("full"));
     h.llm.failOn = null;
     expect(modelCalls("qualification")).toBe(3);
-    h.llm.invalidOn = "blueprint";
-    await rerunBlueprint(runId); // its new revision fails: the evaluated Blueprint stays active
+    h.llm.invalidOn = "blueprint:brief";
+    const evaluated = stageOf("blueprint").id;
+    await rerunBlueprint(runId); // the new pipeline fails at its first stage: the evaluated Blueprint stays active and current
     h.llm.invalidOn = null;
+    expect(viewOf(runId).stageInfo.blueprint).toMatchObject({ active: expect.objectContaining({ id: evaluated }), stale: null });
+    expect(modelCalls("blueprint:candidates")).toBe(1); // nothing downstream of the failed stage ran
     expect(modelCalls("qualification")).toBe(3);
     expect(deriveQualification(viewOf(runId))).toMatchObject({ evaluationAction: "new_version", pending: "evaluation_failed" });
   });
