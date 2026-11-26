@@ -1,7 +1,7 @@
 # JANUS PHASE 7 — Versioned Rerun & Dependency Invalidation (2026-11-26)
 - Document type: phase record (Kytheion, Scribe-Particle-4). Governing plan: `JANUS_FINAL_FORM_ARCHITECTURE_IMPLEMENTATION_PLAN_v1.2_2026-09-29.md`, Phase 7.
 - Authorization: DIMA, via Daionae (IC-001), 2026-11-25. Builder development only: no paid Janus execution, no probe Run, no retrieval provider, no historical mutation, no republication.
-- Status: **IMPLEMENTED AND GREEN; NOT CLOSED.** One item of tranche 1 needs DIMA's adjudication (§2.1). 177/177 tests, build passes. Automated evidence only.
+- Status: **EXIT CRITERIA MET IN AUTOMATED EVIDENCE (§6); AWAITING DIMA'S CLOSE.** §2.1 was adjudicated by DIMA on 2026-11-26 and is implemented (§6). 182/182 tests, build passes. No manual pass with real staged data.
 
 ## 0. Baseline confirmed before editing
 - HEAD `0eb24d5`, 156/156, the six inherited test files byte-identical to `239319f` (104 tests), Phase 6 tests 52.
@@ -19,7 +19,7 @@
 - **Cancellation:** a completed run is not cancellable (Phase 2 transition table), so an evaluation in progress on it has no cancel control. A cancelled or cancelling run settles a waiting evaluation from its last call, as before. A separate evaluation-cancel axis was not invented.
 
 ## 2. Tranche 1, item 1 — Resume vs explicit new revision
-### 2.1 CONFLICT FOR DIMA'S ADJUDICATION (not changed)
+### 2.1 CONFLICT FOR DIMA'S ADJUDICATION (RESOLVED 2026-11-26: see §6; the text below is the record of the conflict as raised)
 The pinned assertion, `src/lib/janus/stageEngine.test.js` lines 238–250, "resume does not treat the invalid revision as completed: the stage runs again":
 ```
 await driveStages({ runId, keys: ["cogito"], origin: "execution" });   // cogito invalid 3 times → revision 1 failed, exhausted
@@ -90,7 +90,42 @@ expect(viewOf(run.id).stageInfo.cogito.active).toMatchObject({ revision: 2, stat
 - Not verified: the screens with real data. The preview browser session cannot read DIMA's run; it showed "Run not found" under row-level security. No manual pass. No live model call.
 
 ## 5. Limits carried forward
-- Resume semantics for settled failed revisions: §2.1, awaiting DIMA.
+- Resume semantics for settled failed revisions: resolved in §6.
 - Concurrent **resume** from two tabs may still open two attempts that the function refuses (Phase 6 limit). Resume was not given the epoch claim: that would write the Run on a blocked resume, which a Phase 6 test pins as write-free.
 - A re-run on an open run closes it through `finalizeRun`, as before Phase 7 (unchanged behaviour).
 - External-evidence continuation stays blocked; the five-minute transport ceiling stays fail-safe and unresolved; the 20k Blueprint context truncation and the reference run's synthesis and Blueprint deficiencies stay with Phases 8 and 9.
+
+## 6. Resume correction (DIMA's adjudication of §2.1, 2026-11-26)
+### 6.1 Invariant
+Resume is execution continuity. A retry is another attempt of the same revision. Only an explicit re-run creates a new revision. Recovery reads and settles; it creates nothing. The original guarantee stays: a failed or invalid revision never counts as completed.
+### 6.2 Why the existing behaviour could not satisfy it
+`driveStages` regenerated every stage without a valid revision. On Resume that gave an exhausted or non-retryable failed stage revision n+1 with three fresh calls, which an uninterrupted session would never have made.
+### 6.3 Change (three small pieces, no new entity field, no new mechanism)
+- `executionState.rerunOnly(stage, attempts)`, pure, from the attempt ledger and the existing bounded policy: a failed revision whose operation is spent (limit used, or a failure the policy never retries, or no recorded call).
+- `stageEngine.driveStages`: without `force`, a stage whose newest revision is `rerunOnly` and that has no valid revision is not regenerated. The drive continues the rest of the plan and the run closes from what exists (`partial` or `failed`), as the uninterrupted session would have closed it. An open run whose only unfinished stages are such failures is closed by Resume with no call.
+- `rerunImpact`: a re-run is refused on a run that is still open ("Resume it first"). Reason: a re-run closes the run when it ends, so on an open run it ended the run before its unexecuted stages ever ran. Continuity first, regeneration after. Proven by test; nothing is written on refusal.
+- Screens: the Resume notice now says which failed stages Resume leaves alone and that a new version comes from Stage lineage → Re-run. `deriveExecutionState.next` never points at such a stage.
+### 6.4 Inherited test replaced (the only one; authorized by DIMA)
+`stageEngine.test.js`, "resume does not treat the invalid revision as completed: the stage runs again" → "…and does not replace it: only an explicit re-run does". Old expectation no longer authoritative: Resume produced Cogito revision 2. The replacement is stronger on the original guarantee: after Resume the invalid revision is still failed, is not active, is not an artifact, the run is `partial` (not completed), nothing is released; then the explicit cascade re-run produces revision 2 (origin `rerun`), keeps revision 1, rebuilds the Blueprint from it, and the run completes. The reason is written above the test. `git diff 239319f` on the six inherited files now shows exactly this one test; the other five files are byte-identical.
+### 6.5 Two retained behaviours DIMA should know about (not changed, both pinned by Phase 6 tests)
+- **Operator-closed revision.** After `closeBlockedRevision` (a waiting revision that can no longer be continued, closed by the operator's explicit "close this version to start a new one"), Resume does start revision n+1. That revision is failed with its limit NOT spent, so `rerunOnly` is false. On an open run that record can only come from that explicit decision (every other path that settles a revision with budget left requires a cancelled or ended run). If DIMA wants this to go through the re-run control as well, it needs a narrow authorization for the Phase 6 test "a blocked revision needs the operator's explicit decision…".
+- **Revisions for which no call was ever made** (`cancelled / not_started`) and **a paid result that was lost** (`cancelled / artifact_not_recorded`) are not failures. Resume still runs those stages. The first bought nothing. The second is one paid call whose artifact exists nowhere; Resume giving it a new revision is unchanged Phase 6 behaviour.
+### 6.6 Concurrency
+No new mechanism. Re-run initiation: the epoch claim (§3.3). Resume from two sessions: the server slot refuses the second call (`run_busy`), that session's attempt is voided and its revision closes `not_started`; one call, one succeeded revision, and it is the active one that the evaluation and the release point at. New test proves it. A duplicate revision NUMBER can exist as a `not_started` record; it is never active.
+### 6.7 Exit standard, with the test that proves each line (182/182)
+| Criterion | Proof |
+|---|---|
+| explicit re-run creates revision n+1 | phase7 "the explicit re-run is what replaces it"; branching; cascade |
+| Resume never creates n+1 to escape failure | phase7 "Resume after an exhausted revision / a non-retryable failure"; replaced inherited test |
+| prior valid revisions preserved; no overwrite | phase7 branching (records byte-equal after) |
+| failed newer revision does not erase the older valid one | phase7 "a failed new revision invalidates nothing"; inherited "a prior valid revision stays active" |
+| exact downstream invalidation; unaffected branches valid | phase7 branching (exact sets, preview = actual) |
+| stale state has a causal reason | `stale` strings ("superseded by", "compiled without"); phase7 missing-input test |
+| downstream re-run reads current dependency revisions | phase7 cascade (`depends_on` of new revisions) |
+| no budget reset through re-run/resume confusion | Resume tests above; resilience "a re-run never starts beside a revision that is waiting"; evaluation tests |
+| no conflicting active revisions under concurrency | phase7 "two initiations", "a second session cannot create a conflicting active revision" |
+| historical Runs untouched | phase7 + engines historical tests; live read: 69 (34/16/19), newest update 2026-08-11 |
+| suites and build | 104 inherited (1 replaced) + 52 Phase 6 (untouched this pass) + 26 Phase 7; build passes; lint clean |
+### 6.8 Live data observed (read-only)
+- 69 historical Runs unchanged. Reference run `6b0780183aba68f84ea10cfc` unchanged.
+- A second staged run exists that this work did not create: `6b07cabc0e1fd52012766c16`, Full, created 2026-11-26 05:59 UTC, open, with an Actus call in flight at attempt 2 after a `schema_failure` on attempt 1 when read. It was not written, reconciled or resumed from here.

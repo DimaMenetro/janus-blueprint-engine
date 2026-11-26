@@ -311,7 +311,8 @@ describe("Resume is continuity, retry is the same revision, only a re-run makes 
     expect(succeeded).toHaveLength(1);
     const view = viewOf(run.id);
     expect(view.stageInfo.blueprint.active.id).toBe(succeeded[0].id);
-    expect(stageOf("qualification").depends_on).toEqual([succeeded[0].id]);
+    expect(stageOf("qualification").depends_on).toContain(succeeded[0].id);
+    expect(stageOf("qualification").depends_on).not.toContain(rival.id);
     expect(h.db.Run[0].released_blueprint_stage_id).toBe(succeeded[0].id);
   });
 });

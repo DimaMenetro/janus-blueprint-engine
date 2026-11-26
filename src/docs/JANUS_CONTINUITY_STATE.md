@@ -83,7 +83,10 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 - Evaluation pathway of a completed run (`evaluateJanus`, `evaluateStage`): continue (same revision and budget, identity proven), start, or explicit `newVersion`. No hidden re-evaluation (`needsEvaluation` only when this Blueprint version never had a paid evaluation).
 - Re-run: `rerunImpact.js` (exact recorded IDs + compiler-declared inputs), `previewRerun`, `rerunStages` (`cascade`, preview token fail-closed, `Run.graph_epoch` initiation claim). New staleness rule: a revision compiled without a declared input is stale once that input exists.
 - Screens: impact preview before every re-run, per-stage Re-run and Versions in Stage lineage, evaluation controls in QualificationPanel.
-- **Awaiting DIMA:** record §2.1. The inherited assertion that plain Resume regenerates an exhausted revision conflicts with the directive. The proposed replacement is in the record. Not changed.
+- **Resume correction (DIMA, 2026-11-26; record §6):** Resume = continuity, retry = same revision, re-run = new revision, recovery = nothing. `executionState.rerunOnly`: Resume never regenerates a failed revision whose operation is spent (exhausted, non-retryable); it finishes the plan and closes the run. A re-run is refused on an open run ("Resume it first"). One inherited test replaced under explicit authorization (`stageEngine.test.js`, marked in place); `git diff 239319f` on the six inherited files must show only that test.
+- 182/182 (104 inherited with that one replaced, 52 Phase 6, 26 Phase 7). Build passes. Exit table: record §6.7.
+- Retained and flagged (record §6.5): after the operator's explicit `closeBlockedRevision`, Resume still starts the new revision (Phase 6 test pins it); `not_started` and `artifact_not_recorded` revisions are not failures and Resume still runs those stages.
+- Open staged run `6b07cabc0e1fd52012766c16` (Full, started by the operator 2026-11-26) was seen live and not touched.
 
 ## Next action
-Await DIMA's adjudication of Phase 7 record §2.1, then close Phase 7 and start Phase 8 (Synthesis Realignment). Do not publish. Do not make a paid call.
+Phase 7 exit criteria are met in automated evidence; DIMA closes it (and rules on record §6.5 if desired). Then Phase 8 (Synthesis Realignment). Not started. Do not publish. Do not make a paid call.
