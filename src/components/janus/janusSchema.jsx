@@ -338,7 +338,8 @@ function validateProperty(value, schema, path = "") {
     }
   } else if (schema.type === "string") {
     if (typeof value !== "string") {
-      errors.push(`${path}: Expected string, got ${typeof value}`);
+      // Names a list as a list: "got object" for an array told the model nothing it could correct.
+      errors.push(`${path}: Expected string, got ${Array.isArray(value) ? "a list (array)" : typeof value}`);
     } else if (schema.enum && !schema.enum.includes(value)) {
       errors.push(`${path}: Value "${value}" not in allowed values: ${schema.enum.join(", ")}`);
     }

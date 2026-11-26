@@ -13,7 +13,8 @@ import { recoverStage, closeFromLastCall } from "@/lib/janus/stageRunner";
 import { stagePlan, continuationOf, continuableFor, stageLabel } from "@/lib/janus/executionState";
 import { REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
 import { rerunImpact } from "@/lib/janus/rerunImpact";
-import { deriveQualification } from "@/lib/janus/qualification";
+import { completionImpact } from "@/lib/janus/completionImpact";
+import { deriveQualification, recordedInputs } from "@/lib/janus/qualification";
 
 export { REFRESH_UNAVAILABLE_MESSAGE };
 const CORE_DOMAINS = ["corpus", "cogito", "animus", "actus"];
@@ -130,6 +131,33 @@ async function rerunCore(runId, { targets = [], cascade = false, expected } = {}
 }
 export const rerunStages = (runId, request, hooks) => rerunCore(runId, request, hooks);
 
+/** What completing this run would produce, and why each stage (completionImpact). Starts nothing, writes nothing. */
+export async function previewCompletion(runId, request) {
+  const view = await loadRunView(runId);
+  if (!view) throw new Error("Run not found");
+  return completionImpact(view, request);
+}
+
+/**
+ * COMPLETION (Phase 9): produce the cognition a finished run never produced, lost to a failure, or holds only out
+ * of date — and nothing else. Distinct from Resume (same revision, open runs) and from a re-run (named stages,
+ * valid revisions superseded): a valid, current revision is never regenerated here. With `repair`, the operator
+ * also replaces valid revisions that fail today's mandatory integrity. Same guards as a re-run: the approved
+ * preview's token, no unresolved or waiting revision, no cancellation, operator only, one initiation per state.
+ */
+export async function completeJanus(runId, { repair = false, expected } = {}, hooks) {
+  const view = await loadRunView(runId);
+  if (!view) throw new Error("Run not found");
+  const impact = completionImpact(view, { repair });
+  if (impact.refusals.length) throw new Error(`Cannot complete this run — ${impact.refusals[0]}`);
+  if (expected !== undefined && expected !== impact.token) throw new Error(STALE_PREVIEW_MESSAGE);
+  if (driving.has(runId)) throw new Error("This run is already being executed in this session");
+  await assertOperator();
+  await claim(view, { status: "running" });
+  const result = await advance(runId, { keys: impact.plan, origin: "completion", force: { complete: true, replace: impact.replace } }, hooks);
+  return { ...result, impact, success: result.stageErrors.length === 0 && !result.unresolved && !result.refused && !result.cancelled, errors: result.stageErrors };
+}
+
 async function rerun(runId, target, keys, hooks) {
   const view = await loadRunView(runId);
   if (!view) throw new Error("Run not found");
@@ -198,7 +226,7 @@ export async function requestCancel(runId) {
   // A revision waiting for its retry has no call in flight, so the boundary is here too: no further attempt
   // is scheduled, and the revision is closed from the real outcome of its last call.
   const waiting = running.length === 1 && continuationOf(running[0], view.attempts[running[0].id]);
-  if (waiting) await closeFromLastCall(running[0], view.attempts[running[0].id]);
+  if (waiting) await closeFromLastCall(running[0], view.attempts[running[0].id], recordedInputs(view, running[0]));
   if (running.length === 0 || waiting) await updateRun(runId, { status: "cancelled" });
 }
 
@@ -217,7 +245,7 @@ export async function closeBlockedRevision(runId, hooks = {}) {
   const attempts = stage ? view.attempts[stage.id] || [] : [];
   if (!stage || !continuableFor(view.run, stage.stage_key) || !continuationOf(stage, attempts)) throw new Error("No version of this run is waiting for a retry");
   if ((await verifyContinuation(view, stage)).ok) throw new Error(`This version can still be continued: ${stage.stage_key === QUALIFICATION_KEY ? "continue the evaluation" : "resume the run"}. A new version is started only when it can no longer be continued.`);
-  await closeFromLastCall(stage, attempts);
+  await closeFromLastCall(stage, attempts, recordedInputs(view, stage));
   if (hooks.onDurableChange) await hooks.onDurableChange(runId);
   return { closed: stage.stage_key, revision: stage.revision };
 }
@@ -235,7 +263,7 @@ export async function reconcileJanus(runId, hooks = {}) {
   if (!view) throw new Error("Run not found");
   const [live] = liveStages(view);
   if (!live || driving.has(runId)) return { settled: false, unresolved: live?.stage_key || null };
-  const res = await recoverStage(live, view.attempts[live.id] || [], { slot: view.storage === STORAGE_MODEL.staged });
+  const res = await recoverStage(live, view.attempts[live.id] || [], { slot: view.storage === STORAGE_MODEL.staged, integrity: recordedInputs(view, live) });
   if (!res.unresolved && view.storage === STORAGE_MODEL.staged) {
     if (view.run.status === "cancel_requested") await finalizeRun(runId, { cancelled: true });
     else if (TERMINAL_STATES.includes(view.run.status)) await reclose(runId);

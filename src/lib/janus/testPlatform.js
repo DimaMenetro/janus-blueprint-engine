@@ -55,7 +55,7 @@ const FAIL_MESSAGE = "provider returned 500";
 
 const db = { Run: [], RunStage: [], RunAttempt: [] };
 const llm = { failOn: null, invalidOn: null, failTimes: {}, invalidTimes: {}, failMessage: FAIL_MESSAGE, transport: {}, pending: [],
-  override: {}, verdicts: {}, calls: [], prompts: [], stages: [], gate: null };
+  override: {}, sequence: {}, verdicts: {}, calls: [], prompts: [], stages: [], gate: null };
 const session = { user: { ...OPERATOR } };
 let n = 0;
 
@@ -161,6 +161,7 @@ const model = async (prompt) => {
   const times = (bag) => { if (bag[key] > 0) { bag[key] -= 1; return true; } return false; };
   if (llm.failOn === key || times(llm.failTimes)) throw new Error(llm.failMessage);
   if (llm.invalidOn === key || times(llm.invalidTimes)) return { [key]: INVALID[key] || { insight: `${key} insight only` } };
+  if (llm.sequence[key]?.length) return { [key]: clone(llm.sequence[key].shift()) }; // one seeded output per call, in order
   if (llm.override[key]) return { [key]: clone(llm.override[key]) }; // structurally valid output a test wants to seed
   if (key === "blueprint") return { blueprint: blueprintFor(prompt) };
   if (key === "qualification") return { qualification: evaluation() };
@@ -178,7 +179,7 @@ export const platform = {
     db.Run.length = 0; db.RunStage.length = 0; db.RunAttempt.length = 0;
     session.user = { ...OPERATOR };
     llm.failOn = null; llm.invalidOn = null; llm.failTimes = {}; llm.invalidTimes = {}; llm.failMessage = FAIL_MESSAGE; llm.transport = {}; llm.pending.length = 0;
-    llm.override = {}; llm.verdicts = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
+    llm.override = {}; llm.sequence = {}; llm.verdicts = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
   },
   /** Hold the model call for one stage open until release() — an unresolved, live call. */
   gateOn(stageKey) {

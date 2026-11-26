@@ -6,8 +6,8 @@
  */
 import { STAGE_ORDER, PROTOCOL } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, QUALIFICATION_KEY, fingerprintInputs, revisionLabel } from "@/lib/janus/stageModel";
-import { outcomeAfterStageFailure, stageIntegrity } from "@/lib/janus/lifecycleContract";
-import { completionOf, deriveQualification } from "@/lib/janus/qualification";
+import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
+import { completionOf, deriveQualification, recordedInputs, inputIntegrity } from "@/lib/janus/qualification";
 import { loadRunView, updateRun } from "@/lib/janus/stageStore";
 import { runStage, continueStage, closeFromLastCall } from "@/lib/janus/stageRunner";
 import { compileStage, stageInputs, requiredInputs, templateVersionOf } from "@/lib/janus/stageCompiler";
@@ -27,17 +27,6 @@ export const configOf = (run) => ({
   noveltyDial: run.novelty_dial || "medium",
   refreshEnabled: !!run.refresh_enabled,
 });
-
-/** The outputs a revision was compiled from, by stage key — from the EXACT revisions it recorded. */
-export function recordedInputs(view, stage) {
-  const byId = Object.fromEntries(view.lineage.map(s => [s.id, s]));
-  return Object.fromEntries((stage?.depends_on || []).map(id => byId[id]).filter(Boolean).map(d => [d.stage_key, d.output]));
-}
-/** Today's integrity findings on the ACTIVE revision of `key`, judged against the revisions it was built from. */
-export function inputIntegrity(view, key) {
-  const rev = view.stageInfo[key]?.active;
-  return rev ? stageIntegrity(key, rev.output, { inputs: recordedInputs(view, rev) }) : [];
-}
 
 /**
  * Execute one stage against the durable view. Inputs and exact dependency revisions are whatever the view

@@ -9,6 +9,7 @@ import StatusPill from "@/components/janus/StatusPill";
 import { EXECUTION_MODES } from "@/components/janus/janusSchema";
 import GlassResultTabs from "@/components/janus/GlassResultTabs";
 import RerunControls from "@/components/janus/RerunControls";
+import CompletionControls from "@/components/janus/CompletionControls";
 import StageLineagePanel from "@/components/janus/StageLineagePanel";
 import ExecutionStatePanel from "@/components/janus/ExecutionStatePanel";
 import QualificationPanel from "@/components/janus/QualificationPanel";
@@ -171,6 +172,9 @@ export default function Results() {
 
       {/* Completion + quality qualification (derived from the same stage records) */}
       <QualificationPanel view={view} t={t} isAdmin={isAdmin} onChanged={reload} />
+
+      {/* Completion of cognition this run never produced (previewed, operator-authorized) */}
+      <CompletionControls view={view} t={t} isAdmin={isAdmin} onChanged={reload} />
 
       {/* Domain re-run controls — show when synthesis or blueprint missing/errored */}
       <RerunControls view={view} t={t} isDark={isDark} onRerunComplete={reload} isAdmin={isAdmin} />

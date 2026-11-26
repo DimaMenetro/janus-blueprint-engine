@@ -96,5 +96,16 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 - **Open run `6b07cabc0e1fd52012766c16`:** Actus r1 attempt 2 has a recorded response that reads as `schema_failure`; after "Check recorded outcome" it waits for attempt 3. Under a build with Phase 8 the template differs, so it is `blocked` and needs "Close this version to start a new one". Not touched.
 - **Operator account control** (header): identity, role, Sign out, Switch account, through `AuthContext` unchanged (`operatorAccess.js`). Non-admins are view only. The real round trip in the installed app is unverified until DIMA publishes.
 
+## Phase 8 — CLOSED 2026-11-26 (DIMA)
+- Final Synthesis validated at its stage; stage-scoped template identity authorized by DIMA, including the one `stageEngine.test.js` assertion replacement. 232/232 at close.
+
+## Phase 9 (2026-11-26) — CORRECTION TRANCHE DONE, PIPELINE NOT STARTED — record `JANUS_PHASE9_BLUEPRINT_COGNITION_2026-11-26.md`
+- 245/245, build passes. No paid call. Live run `6b07cabc…` (now `partial`, Actus r2 succeeded) and reference run `6b0780…` untouched.
+- `lifecycleContract.stageIntegrity`: one integrity definition used at settlement, before an input is read, and at completion (`qualification.completionOf`). Cogito `depends_on` = claim ids only; `sources` = provenance.
+- Contracts list field types from the schema (`typeLegend`); schema/parse retries carry the rejections (`withCorrection`); the prompt fingerprint is unchanged.
+- Completion: `completionImpact.js`, `completeJanus`, `CompletionControls.jsx`. Third operation beside Resume and Re-run; never regenerates a valid current revision; `repair` is opt-in.
+- 20,000-character context cut removed everywhere.
+- Templates: four domains and Blueprint `2026-11-26.2`; pairs/patterns `2026-11-26.1`; Refresh/evaluation `2026-11-25.3`.
+
 ## Next action
-DIMA: rule on Phase 8 record §3, then Phase 8 can close. Then Phase 9 (Blueprint Cognition + Presentation). Not started. Publishing is DIMA's. Do not make a paid call.
+**DIMA decision needed (Phase 9 record §4):** the Blueprint sub-stage pipeline cannot coexist with inherited assertions that pin the Blueprint as one stage and one call (stage counts of 14/13/12, exact call sequences, exact Blueprint `depends_on`). Authorize replacing those specific assertions with the stronger invariants, then build the pipeline (candidates → comparison/selection → skeleton → expansion → criteria → deterministic assembly → critique → refinement → qualification) and the presentation. Do not start Phase 10. Publishing is DIMA's. Do not make a paid call.

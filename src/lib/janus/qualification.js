@@ -6,9 +6,9 @@
  */
 import { PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, lowestConfidence } from "@/lib/janus/protocolRegistry";
 import { completionManifest, enforceConfidencePropagation, normalizeTag, qualify, releaseDecision,
-  QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS } from "@/lib/janus/lifecycleContract";
-import { QUALIFICATION_KEY } from "@/lib/janus/stageModel";
-import { continuationOf, continuableFor } from "@/lib/janus/executionState";
+  QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS, stageIntegrity } from "@/lib/janus/lifecycleContract";
+import { QUALIFICATION_KEY, STORAGE_MODEL } from "@/lib/janus/stageModel";
+import { continuationOf, continuableFor, stagePlan } from "@/lib/janus/executionState";
 
 /** Durable artifacts in the shape the contract reads (six intersections and four patterns named apart). */
 export function contractArtifacts(artifacts) {
@@ -17,8 +17,31 @@ export function contractArtifacts(artifacts) {
   return { ...artifacts, synthesis: { ...syn, intersections: syn.intersection_matrix || {},
     emergent_patterns: Object.fromEntries(PATTERNS.filter(p => syn[p.id]).map(p => [p.id, syn[p.id]])) } };
 }
-export const completionOf = (view) =>
-  completionManifest(view.run.execution_mode, contractArtifacts(view.artifacts), { refreshEnabled: !!view.run.refresh_enabled });
+/** The outputs a revision was compiled from, by stage key — from the EXACT revisions it recorded. */
+export function recordedInputs(view, stage) {
+  const byId = Object.fromEntries((view.lineage || []).map(s => [s.id, s]));
+  return Object.fromEntries((stage?.depends_on || []).map(id => byId[id]).filter(Boolean).map(d => [d.stage_key, d.output]));
+}
+/** Today's stage-integrity findings on the ACTIVE revision of `key`, judged against the revisions it was built from. */
+export function inputIntegrity(view, key) {
+  const rev = view.stageInfo[key]?.active;
+  return rev ? stageIntegrity(key, rev.output, { inputs: recordedInputs(view, rev) }) : [];
+}
+/**
+ * COMPLETION = the contract's manifest PLUS the stage integrity of every active revision of the run's plan — the
+ * identical function a stage is validated with when it settles and before it is read (lifecycleContract §5b). So
+ * a revision that could not settle today cannot count toward completion either: the final Synthesis in full
+ * (takeaways, collisions, limitation — which the neutral manifest does not name), each pair's three fields,
+ * resolvable references. Staged runs only; a historical Run is judged by the manifest, as before.
+ */
+export function completionOf(view) {
+  const manifest = completionManifest(view.run.execution_mode, contractArtifacts(view.artifacts), { refreshEnabled: !!view.run.refresh_enabled });
+  if (view.run.storage_model !== STORAGE_MODEL.staged) return manifest;
+  const durable = stagePlan(view.run.execution_mode).flatMap(key =>
+    inputIntegrity(view, key).map(e => (key.startsWith("intersection:") ? e : `${key}: ${e}`)));
+  const extra = [...new Set(durable)].filter(e => !manifest.blocking.includes(e));
+  return extra.length ? { ...manifest, blocking: [...manifest.blocking, ...extra], complete: false, completion_label: null } : manifest;
+}
 
 const rank = (tag) => CONFIDENCE_TAXONOMY.indexOf(normalizeTag(tag));
 const filled = (a) => Array.isArray(a) && a.length > 0;
