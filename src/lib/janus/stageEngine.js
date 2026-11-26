@@ -9,7 +9,6 @@ import { STORAGE_MODEL, QUALIFICATION_KEY, CONFIG_INPUT, configOf, fingerprintIn
 import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
 import { completionOf, deriveQualification, recordedInputs, inputIntegrity, blueprintAudit, enforceStepConfidence, refinementBasis } from "@/lib/janus/qualification";
 import { REFINE_INPUT } from "@/lib/janus/blueprintSpecs";
-import { retrieveEvidence } from "@/lib/janus/evidenceRetrieval";
 import { loadRunView, updateRun, recordDeterministicStage } from "@/lib/janus/stageStore";
 import { runStage, continueStage, closeFromLastCall, validateStageOutput } from "@/lib/janus/stageRunner";
 import { BP, BLUEPRINT_PIPELINE_KEYS, isDeterministicStage, assembleBlueprint } from "@/lib/janus/blueprintPipeline";
@@ -71,16 +70,8 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
     if (onBegan) await onBegan(record);
     return validation.valid ? { record } : { failure: { evidence: "schema_failure", message: record.error_message, attempts: 0 } };
   }
-  // LIVE REFRESH (CP-002 §7.1). With the toggle on, the source corpus is retrieved now, once, for this revision
-  // (no model is called for that). If nothing can be retrieved, the stage is not started and says why: the run
-  // stays open, and no research is claimed.
-  let retrieval = null;
-  if (stageKey === "refresh" && config.refreshEnabled && !evidence.length) {
-    try { ({ evidence, retrieval } = await retrieveEvidence()); } catch (err) { return { refused: { reason: "retrieval_failed", message: `refresh: ${err.message}` } }; }
-  }
-  const compiled = compileStage({ stageKey, config, evidence, retrieval, inputs });
+  const compiled = compileStage({ stageKey, config, evidence, inputs });
   return runStage({
-    retrieval,
     runId: view.run.id, stageKey, origin, onBegan, integrity,
     revision: (view.stageInfo[stageKey]?.max_revision || 0) + 1,
     dependsOn: inputKeys.map(k => active(k).id),
@@ -250,15 +241,10 @@ export async function verifyContinuation(view, stage) {
   // The inputs the engine would read for this stage now must be exactly the revisions this one recorded.
   const now = stageInputs(key).map(k => view.stageInfo[k]?.active?.id).filter(Boolean);
   if ([...now].sort().join("|") !== [...recorded].sort().join("|")) reasons.push("its dependency revisions are no longer the active ones");
-  // A corpus retrieved live is stored whole on the revision that read it (Refresh), so its prompt can be rebuilt.
-  // Evidence a later stage derives from the Refresh output is rebuilt from that recorded dependency. Only a
-  // retrieved corpus whose text was not kept cannot be rebuilt.
-  const stored = key === "refresh" ? stage.provenance?.sources || [] : [];
-  if (stored.some(s => typeof s?.text !== "string")) reasons.push("it read external evidence whose text is not stored");
+  if (stage.provenance?.sources?.length) reasons.push("it read external evidence whose text is not stored");
   if (reasons.length) return { ok: false, reasons };
 
-  const compiled = compileStage({ stageKey: key, config: configOf(view.run), evidence: stored, retrieval: stage.provenance?.retrieval || null,
-    inputs: Object.fromEntries(deps.map(d => [d.stage_key, d.output])) });
+  const compiled = compileStage({ stageKey: key, config: configOf(view.run), inputs: Object.fromEntries(deps.map(d => [d.stage_key, d.output])) });
   const fingerprint = await fingerprintInputs({ stageKey: key, templateVersion: compiled.templateVersion, dependsOn: recorded, prompt: compiled.prompt });
   if (fingerprint !== stage.input_fingerprint) return { ok: false, reasons: ["the prompt compiled from its recorded inputs no longer matches its input fingerprint"] };
   return { ok: true, prompt: compiled.prompt };
@@ -305,7 +291,7 @@ export async function evaluateStage({ runId, action, origin, onDurableChange = a
     const attempts = view.attempts[stage.id] || [];
     const identity = await verifyContinuation(view, stage);
     if (!identity.ok) return { blocked: { stageKey: QUALIFICATION_KEY, revision: stage.revision, nextAttempt: continuationOf(stage, attempts)?.nextAttempt, reasons: identity.reasons } };
-    res = await continueStage({ stage, attempts, prompt: identity.prompt, staged: true, integrity: recordedInputs(view, stage), onBegan: () => onDurableChange(runId) });
+    res = await continueStage({ stage, attempts, prompt: identity.prompt, staged: true, onBegan: () => onDurableChange(runId) });
   } else {
     res = await executeStage({ view, stageKey: QUALIFICATION_KEY, origin, onBegan: () => onDurableChange(runId) });
   }

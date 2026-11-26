@@ -20,8 +20,6 @@
  * read them through janusSchema), the stage integrity rules and the deterministic assembly. It imports nothing from
  * the lifecycle contract, which reads the integrity rules from here.
  */
-import { PAIRS, PATTERNS } from "@/lib/janus/protocolRegistry";
-
 export const BP = {
   brief: "blueprint:brief", candidates: "blueprint:candidates", selection: "blueprint:selection", skeleton: "blueprint:skeleton",
   expansion: "blueprint:expansion", criteria: "blueprint:criteria", assembly: "blueprint:assembly", critique: "blueprint:critique",
@@ -65,7 +63,6 @@ const list = (properties, required) => ({ type: "array", items: obj(properties, 
 const DISPOSITION = (subject, values) => list({ [subject]: str, disposition: { type: "string", enum: values }, where: nums, reasoning: str }, [subject, "disposition"]);
 export const REQUIREMENT_DISPOSITIONS = ["implemented", "integrated", "deferred", "alternative"];
 export const RECOMMENDATION_DISPOSITIONS = ["implemented", "integrated", "deferred", "rejected"];
-export const SYNTHESIS_DISPOSITIONS = ["implemented", "integrated", "rejected"];
 const CARRIED = ["implemented", "integrated"]; // the two dispositions that put a requirement into the plan
 
 export const SPECIFICATION_KINDS = ["algorithm", "formula", "data_structure", "state_machine", "interface_contract", "procedure", "tolerance", "experiment", "failure_handling", "physical_mechanism"];
@@ -91,14 +88,11 @@ export const BLUEPRINT_SCHEMA = obj({
   success_criteria: strs, acceptance: ACCEPTANCE, outcome_interpretation: OUTCOMES, risk_register: RISKS,
   requirement_dispositions: DISPOSITION("requirement", REQUIREMENT_DISPOSITIONS),
   recommendation_dispositions: DISPOSITION("recommendation", RECOMMENDATION_DISPOSITIONS),
-  synthesis_dispositions: DISPOSITION("source", SYNTHESIS_DISPOSITIONS),
   refinement: obj({
     dispositions: list({ finding: str, action: { type: "string", enum: ["resolved", "declined"] }, change: str, reason: str }, ["finding", "action"]),
     scope_changes: list({ requirement: str, what: str, reason: str }, ["what", "reason"]),
-    removals: list({ path: str, finding: str, reason: str }, ["path", "reason"]),
+    removals: list({ path: str, reason: str }, ["path", "reason"]),
     changes: list({ path: str, finding: str, what: str, reason: str }, ["path", "what"]),
-    // Edits to trace fields (what a step cites, a disposition): recorded apart, because they are not content.
-    trace_changes: list({ path: str, finding: str, what: str, reason: str }, ["path", "what"]),
     summary: str,
   }),
 });
@@ -109,7 +103,7 @@ export const PIPELINE_SCHEMAS = {
     requirements: list({ id: str, text: str, kind: { type: "string", enum: ["capability", "interface", "constraint", "control", "evidence", "acceptance", "non_goal"] },
       priority: { type: "string", enum: ["must", "should"] }, basis: str }, ["id", "text", "kind", "priority"]),
     end_state: str, implied_necessities: strs, relationships: strs,
-    coverage: list({ section: str, disposition: { type: "string", enum: ["requirements", "context"] }, substance: str, requirements: strs, note: str }, ["section", "disposition"]),
+    coverage: list({ section: str, disposition: { type: "string", enum: ["requirements", "context"] }, requirements: strs, note: str }, ["section", "disposition"]),
     ambition_guard: strs,
   }, ["objective", "requirements", "ambition_guard"]),
   [BP.candidates]: obj({
@@ -134,7 +128,6 @@ export const PIPELINE_SCHEMAS = {
     invariants: strs, decision_points: strs, steps: list(STEP_PLAN, ["step", "title", "purpose"]),
     requirement_dispositions: DISPOSITION("requirement", REQUIREMENT_DISPOSITIONS),
     recommendation_dispositions: DISPOSITION("recommendation", RECOMMENDATION_DISPOSITIONS),
-    synthesis_dispositions: DISPOSITION("source", SYNTHESIS_DISPOSITIONS),
   }, ["goal", "steps", "requirement_dispositions"]),
   [BP.expansion]: obj({ steps: list({ step: { type: "number" }, ...STEP_DETAIL }, ["step", "instructions", "validation"]) }, ["steps"]),
   [BP.criteria]: obj({ success_criteria: strs, acceptance: ACCEPTANCE, outcome_interpretation: OUTCOMES, risk_register: RISKS },
@@ -180,12 +173,6 @@ function dispositionErrors(dispositions, subject, ids, carried, steps, e, { cite
   });
 }
 
-/** The handles of the Nexus artifacts a stage was given: pair ids and pattern:<id>. */
-export const nexusHandles = (inputs = {}) => [
-  ...PAIRS.filter(p => inputs?.[`intersection:${p.id}`]).map(p => p.id),
-  ...PATTERNS.filter(p => inputs?.synthesis?.[p.id]).map(p => `pattern:${p.id}`),
-];
-
 const RULES = {
   [BP.brief]: (a, _inputs, ctx = {}) => {
     const e = [];
@@ -201,8 +188,6 @@ const RULES = {
       const c = covered[s.id];
       if (!c) e.push(`coverage: section ${s.id} ("${s.title}") of the operator's material is not accounted for — give the requirements drawn from it, or mark it context and say why`);
       else if (c.disposition === "requirements" && !arr(c.requirements).some(id => ids.has(id))) e.push(`coverage ${s.id}: marked requirements, but names no requirement id of this brief`);
-      // A label is not preservation: a section that holds obligations says, in the analyst's own words, what it establishes.
-      else if (c.disposition === "requirements" && !said(c.substance)) e.push(`coverage ${s.id} ("${s.title}"): substance missing — state what this section establishes that the finished system must embody`);
       else if (c.disposition === "context" && !said(c.note)) e.push(`coverage ${s.id}: marked context, but gives no reason it holds no requirement`);
     });
     return e;
@@ -255,10 +240,6 @@ const RULES = {
     }
     const recs = arr(inputs?.actus?.recommendations).map(r => r.id);
     if (recs.length) dispositionErrors(a?.recommendation_dispositions, "recommendation", recs, CARRIED, steps, e, { cite: true });
-    // What the Nexus produced is inherited the same way: every intersection and every formal pattern the plan was
-    // given is built on by a step that cites it, or rejected with reasoning. A trace is a decision, not a label.
-    const nexus = nexusHandles(inputs);
-    if (nexus.length) dispositionErrors(a?.synthesis_dispositions, "source", nexus, CARRIED, steps, e, { cite: true });
     // The plan builds the architecture it declares: no component and no phase without a step that realises it.
     const touched = new Set(steps.flatMap(s => arr(s.components))), phased = new Set(steps.map(s => s.phase));
     arr(a?.architecture?.components).filter(c => c?.id && !touched.has(c.id)).forEach(c => e.push(`component ${c.id} ("${c.name}") is declared in the architecture but no step builds it (steps[].components)`));
@@ -361,16 +342,8 @@ export function preservationErrors(final, draft) {
  *  - a finding marked "resolved" must be the stated reason of at least one declared change.
  * Trace fields (derived_from, confidence, dispositions) are not content: they have their own rules.
  */
-export const TRACE_FIELDS = ["derived_from", "confidence", "requirement_dispositions", "recommendation_dispositions", "synthesis_dispositions"];
-const NOT_CONTENT = new Set([...TRACE_FIELDS, "refinement"]);
-/**
- * ONE ADDRESS FOR EVERY ENTRY — the same in the model-facing contract (blueprintRefinement.addressIndex), in the
- * deterministic integration (applyRefinement) and in this validator. An entry of a list is addressed by the
- * identifier it carries: a step by its number, a substep by its label, anything with an id by its id, a disposition
- * by what it disposes of. An entry that carries none is addressed by its position as shown, written #1, #2, …
- * Never by a zero-based index and never by its text (the benchmark's rejected responses did both).
- */
-export const entryKey = (x, i) => x?.step ?? x?.id ?? x?.substep ?? x?.requirement ?? x?.recommendation ?? x?.source ?? `#${i + 1}`;
+const NOT_CONTENT = new Set(["derived_from", "confidence", "requirement_dispositions", "recommendation_dispositions", "refinement"]);
+const entryKey = (x, i) => x?.step ?? x?.id ?? x?.substep ?? x?.name ?? x?.risk ?? x?.item ?? i;
 function contentOf(v, path = "", out = { scalars: new Map(), members: new Map() }) {
   if (Array.isArray(v)) {
     if (v.every(x => x === null || typeof x !== "object")) out.members.set(path, new Set(v.map(String)));
@@ -433,7 +406,7 @@ export function refinementErrors(final, inputs = {}) {
     const d = answered[f.id];
     if (!d) e.push(`critique finding ${f.id} has no entry in refinement.dispositions`);
     else if (d.action === "resolved" && !said(d.change)) e.push(`${f.id}: resolved needs "change" — what was changed, and where`);
-    else if (d.action === "resolved" && draft && !["changes", "trace_changes", "removals"].some(k => arr(final?.refinement?.[k]).some(c => c?.finding === f.id))) e.push(`${f.id}: marked resolved, but no entry of refinement.changes cites ${f.id}: a resolution is a change that can be pointed to`);
+    else if (d.action === "resolved" && draft && !arr(final?.refinement?.changes).some(c => c?.finding === f.id)) e.push(`${f.id}: marked resolved, but no entry of refinement.changes cites ${f.id}: a resolution is a change that can be pointed to`);
     else if (d.action === "declined" && !said(d.reason)) e.push(`${f.id}: declined needs its reason`);
   });
   return e;
@@ -471,6 +444,5 @@ export function assembleBlueprint(inputs = {}) {
     steps: [...arr(sk.steps)].sort((x, y) => x.step - y.step).map(s => { const { step: _n, ...rest } = detail[s.step] || {}; return { ...s, ...rest }; }),
     success_criteria: arr(cr.success_criteria), acceptance: cr.acceptance, outcome_interpretation: cr.outcome_interpretation, risk_register: arr(cr.risk_register),
     requirement_dispositions: sk.requirement_dispositions, recommendation_dispositions: sk.recommendation_dispositions,
-    synthesis_dispositions: sk.synthesis_dispositions,
   });
 }
