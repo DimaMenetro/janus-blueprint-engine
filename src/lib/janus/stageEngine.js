@@ -6,7 +6,7 @@
  */
 import { STAGE_ORDER, PROTOCOL } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, QUALIFICATION_KEY, fingerprintInputs, revisionLabel } from "@/lib/janus/stageModel";
-import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
+import { outcomeAfterStageFailure, stageIntegrity } from "@/lib/janus/lifecycleContract";
 import { completionOf, deriveQualification } from "@/lib/janus/qualification";
 import { loadRunView, updateRun } from "@/lib/janus/stageStore";
 import { runStage, continueStage, closeFromLastCall } from "@/lib/janus/stageRunner";
@@ -28,6 +28,17 @@ export const configOf = (run) => ({
   refreshEnabled: !!run.refresh_enabled,
 });
 
+/** The outputs a revision was compiled from, by stage key — from the EXACT revisions it recorded. */
+export function recordedInputs(view, stage) {
+  const byId = Object.fromEntries(view.lineage.map(s => [s.id, s]));
+  return Object.fromEntries((stage?.depends_on || []).map(id => byId[id]).filter(Boolean).map(d => [d.stage_key, d.output]));
+}
+/** Today's integrity findings on the ACTIVE revision of `key`, judged against the revisions it was built from. */
+export function inputIntegrity(view, key) {
+  const rev = view.stageInfo[key]?.active;
+  return rev ? stageIntegrity(key, rev.output, { inputs: recordedInputs(view, rev) }) : [];
+}
+
 /**
  * Execute one stage against the durable view. Inputs and exact dependency revisions are whatever the view
  * holds as active. Returns { record } | { failure } (both settled), { skipped } (a required input is absent),
@@ -35,17 +46,21 @@ export const configOf = (run) => ({
  */
 export async function executeStage({ view, stageKey, origin, evidence = [], onBegan }) {
   const active = (k) => view.stageInfo[k]?.active;
+  const staged = view.storage === STORAGE_MODEL.staged;
   // The mode's Synthesis-before-Blueprint rule binds staged runs (the engine's own plan). A historical Run is
   // re-run as before: its record predates the plan and is never held to it.
-  const missing = requiredInputs(stageKey, view.storage === STORAGE_MODEL.staged ? view.run.execution_mode : undefined).filter(k => !active(k));
+  const missing = requiredInputs(stageKey, staged ? view.run.execution_mode : undefined).filter(k => !active(k));
   if (missing.length) return { skipped: { stageKey, missing } };
   const inputKeys = stageInputs(stageKey).filter(active);
-  const compiled = compileStage({
-    stageKey, config: configOf(view.run), evidence,
-    inputs: Object.fromEntries(inputKeys.map(k => [k, active(k).output])),
-  });
+  // CONSUMPTION BOUNDARY (lifecycleContract §5b). An input is read only if it holds today's mandatory integrity.
+  // A revision that settled as succeeded under an earlier validator and fails it now is not built upon: the stage
+  // is not started, and says which input and why. Staged runs only (a historical Run is read as it was recorded).
+  const unfit = staged ? inputKeys.map(k => ({ key: k, revision: active(k).revision, errors: inputIntegrity(view, k) })).filter(x => x.errors.length) : [];
+  if (unfit.length) return { skipped: { stageKey, missing: [], unfit } };
+  const inputs = Object.fromEntries(inputKeys.map(k => [k, active(k).output]));
+  const compiled = compileStage({ stageKey, config: configOf(view.run), evidence, inputs });
   return runStage({
-    runId: view.run.id, stageKey, origin, onBegan,
+    runId: view.run.id, stageKey, origin, onBegan, integrity: inputs,
     revision: (view.stageInfo[stageKey]?.max_revision || 0) + 1,
     dependsOn: inputKeys.map(k => active(k).id),
     templateVersion: compiled.templateVersion, sources: compiled.sources,
@@ -84,6 +99,10 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
     // its operation spent (exhausted or non-retryable) gets no new revision. The drive goes on without it, exactly
     // as the session that produced the failure would have.
     if (!force && info && !info.active && rerunOnly(info.latest, view.attempts[info.latest.id])) return false;
+    // COMPLETION (Phase 9): a stage gets a revision only if, at this moment, the run holds no valid current one —
+    // none at all, a stale one, or one the operator chose to replace because it fails today's integrity. A valid
+    // current revision is never regenerated, so an upstream stage that failed again invalidates nothing.
+    if (force?.complete) return !info?.active || !!info.stale || (force.replace || []).includes(info.active.id);
     if (!info?.active || force === true) return true;
     return Array.isArray(force?.dependents) && (!force.dependents.includes(key) || !!info.stale);
   };
@@ -121,14 +140,14 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
       if (!waiting) return { errors, unresolved: running.stage_key };
       // The cancellation boundary: no further attempt is scheduled, and the revision is closed from the real
       // outcome of its last call.
-      if (cancelled) { await closeFromLastCall(running, attempts); return { errors, cancelled: true }; }
+      if (cancelled) { await closeFromLastCall(running, attempts, recordedInputs(view, running)); return { errors, cancelled: true }; }
       // SAME-REVISION CONTINUATION. The revision is continued only if it is provably the same operation.
       const identity = await verifyContinuation(view, running);
       if (!identity.ok) {
         errors.push(`${running.stage_key}: ${revisionLabel(running)} is not continued — ${identity.reasons.join("; ")}. It needs an explicit new version.`);
         return { errors, blocked: { stageKey: running.stage_key, revision: running.revision, nextAttempt: waiting.nextAttempt, reasons: identity.reasons } };
       }
-      const end = await landed(await continueStage({ stage: running, attempts, prompt: identity.prompt, staged, onBegan: () => onDurableChange(runId) }), running.stage_key, staged);
+      const end = await landed(await continueStage({ stage: running, attempts, prompt: identity.prompt, staged, integrity: recordedInputs(view, running), onBegan: () => onDurableChange(runId) }), running.stage_key, staged);
       if (end) return end;
       continue; // the same plan position is read again from durable state
     }
@@ -137,7 +156,11 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
     if (!regenerate(view, stageKey)) continue;
 
     const res = await executeStage({ view, stageKey, origin, onBegan: () => onDurableChange(runId) });
-    if (res.skipped) continue;
+    if (res.skipped) {
+      // Not started because an input it would read fails mandatory integrity: said, not passed over in silence.
+      (res.skipped.unfit || []).forEach(u => errors.push(`${stageKey}: not started — its input ${u.key} r${u.revision} fails mandatory integrity (${u.errors.slice(0, 3).join("; ")}${u.errors.length > 3 ? `; +${u.errors.length - 3} more` : ""}). Re-run ${u.key} first.`));
+      continue;
+    }
     const end = await landed(res, stageKey, staged);
     if (end) return end;
   }

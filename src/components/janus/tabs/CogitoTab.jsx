@@ -43,6 +43,12 @@ export default function CogitoTab({ data }) {
                   </div>
                 )}
 
+                {Array.isArray(claim.sources) && claim.sources.length > 0 && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                    <span className="font-medium">Sources:</span> {claim.sources.join("; ")}
+                  </p>
+                )}
+
                 {(claim.why_believed || claim.falsifiable_by || claim.verify_later) && (
                   <div className="space-y-2">
                     {claim.why_believed && (

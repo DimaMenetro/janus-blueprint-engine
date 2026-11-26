@@ -55,7 +55,8 @@ export const JANUS_SCHEMA = {
               id: { type: "string" },
               tag: { type: "string", enum: ["Established", "Contested", "Speculative"] },
               text: { type: "string" },
-              depends_on: { type: "array", items: { type: "string" } },
+              depends_on: { type: "array", items: { type: "string" } }, // logical: ids of other claims in this list
+              sources: { type: "array", items: { type: "string" } },    // provenance: named documents / evidence
               why_believed: { type: "string" },
               falsifiable_by: { type: "string" },
               verify_later: { type: "string" }

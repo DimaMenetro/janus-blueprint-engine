@@ -30,7 +30,7 @@ export function generateMarkdown(data, executionMode) {
 
   if (data.cogito) {
     md += "## Section II: Cogito\n\n";
-    if (data.cogito?.claims?.length) { md += "### Claims\n\n"; data.cogito.claims.forEach(claim => { md += `#### ${claim.id} [${claim.tag}]\n${claim.text}\n`; if (claim.why_believed) md += `**Why Believed:** ${claim.why_believed}\n`; if (claim.falsifiable_by) md += `**Falsifiable By:** ${claim.falsifiable_by}\n`; md += "\n"; }); }
+    if (data.cogito?.claims?.length) { md += "### Claims\n\n"; data.cogito.claims.forEach(claim => { md += `#### ${claim.id} [${claim.tag}]\n${claim.text}\n`; if (claim.why_believed) md += `**Why Believed:** ${claim.why_believed}\n`; if (claim.falsifiable_by) md += `**Falsifiable By:** ${claim.falsifiable_by}\n`; if (claim.verify_later) md += `**Verify Later:** ${claim.verify_later}\n`; if (claim.depends_on?.length) md += `**Depends On:** ${claim.depends_on.join(", ")}\n`; if (claim.sources?.length) md += `**Sources:** ${claim.sources.join("; ")}\n`; md += "\n"; }); }
     if (data.cogito?.reasoning_map?.length) { md += "### Reasoning Map\n"; data.cogito.reasoning_map.forEach(r => md += `- ${r}\n`); md += "\n"; }
   }
 

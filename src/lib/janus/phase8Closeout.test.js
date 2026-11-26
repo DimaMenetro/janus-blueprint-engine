@@ -149,10 +149,19 @@ describe("continuation identity is the stage's own", () => {
     return runId;
   };
 
-  it("the compiler gives each stage its own template identity: Phase 8 changed the Synthesis stages only", () => {
-    ["refresh", "corpus", "cogito", "animus", "actus", "blueprint", "qualification"].forEach(k => expect(templateVersionOf(k)).toBe(BASE));
-    [...INTERSECTION_KEYS, "synthesis"].forEach(k => expect(templateVersionOf(k)).not.toBe(BASE));
-    expect(new Set([...INTERSECTION_KEYS, "synthesis"].map(templateVersionOf)).size).toBe(1);
+  // UPDATED 2026-11-26 under DIMA's Phase 9 directive (II.4: "an actual modification to a stage's prompt contract
+  // must increment that stage's template identity"). This Phase 8 test (not one of the six inherited files) pinned
+  // a fact of its day: "Phase 8 changed the Synthesis stages only", i.e. every other stage shared one identity. The
+  // Phase 9 corrections changed the prompt contracts of the four domains and the Blueprint, so that fact is no
+  // longer true. The invariant it protected is kept and stated directly: identity is per stage, and a stage whose
+  // contract did not change keeps its identity (the six pairs and the patterns stage since Phase 8; Refresh and the
+  // evaluation since Phase 5).
+  it("the compiler gives each stage its own template identity: it moves only when that stage's own prompt contract does", () => {
+    const id = templateVersionOf;
+    expect(new Set([...INTERSECTION_KEYS, "synthesis"].map(id))).toEqual(new Set(["stage-compiler/2026-11-26.1"])); // unchanged since Phase 8
+    expect(new Set(["refresh", "qualification"].map(id))).toEqual(new Set(["stage-compiler/2026-11-25.3"]));      // unchanged since Phase 5
+    expect(new Set(["corpus", "cogito", "animus", "actus", "blueprint"].map(id)).size).toBe(1);                    // changed together by the Phase 9 corrections
+    expect(new Set([id("refresh"), id("synthesis"), id("actus")]).size).toBe(3);
   });
 
   it.each([

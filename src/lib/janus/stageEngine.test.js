@@ -58,10 +58,13 @@ describe("one canonical engine", () => {
     const origins = (o) => stagesOf(runId).filter(s => s.provenance.origin === o);
     expect(origins("execution")).toHaveLength(14); // 13 cognitive stages + the quality evaluation
     expect(origins("rerun")).toHaveLength(7);
-    // REPLACED UNDER DIMA'S EXPLICIT AUTHORIZATION (2026-11-26, Phase 8 closeout). The old assertion required every stage
-    // to carry one global template version. That made a change to one stage's prompt look like a change to every
-    // stage, so a retry of an untouched stage was blocked. Stronger invariant: every persisted stage carries the
-    // template identity the compiler returns for that exact stage.
+    // REPLACED 2026-11-26 during the Phase 8 closeout, BEFORE it was authorized; DIMA authorized the stage-scoped
+    // template identity and this one replacement explicitly afterwards (Phase 9 operator directive, 2026-11-26). The
+    // earlier wording of this note claimed prior authorization and was wrong. The old assertion required every
+    // stage to carry one global template version. That made a change to one stage's prompt look like a change to
+    // every stage, so a retry of an untouched stage was blocked. Stronger invariant: every persisted stage carries
+    // the template identity the compiler returns for that exact stage. Dependency, protocol, fingerprint and
+    // continuation checks are unchanged (stageEngine.verifyContinuation).
     stagesOf(runId).forEach(s => expect(s.prompt_template_version).toBe(templateVersionOf(s.stage_key)));
   });
 
