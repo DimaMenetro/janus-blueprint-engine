@@ -7,7 +7,9 @@
 import { DOMAINS, DOMAIN_ORDER, PAIRS, PATTERNS, MODE_PROFILES, allSubdomains, refreshKeysFor, subdomainIds, patternTaskText,
   patternJsonTemplate, pairLabel, protocolLabel } from "@/lib/janus/protocolRegistry";
 import { intersectionKey, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
-import { QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS } from "@/lib/janus/lifecycleContract";
+import { QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS, minAlternatives, hasCritique } from "@/lib/janus/lifecycleContract";
+import { BP, BLUEPRINT_PIPELINE_KEYS, isDeterministicStage } from "@/lib/janus/blueprintPipeline";
+import { BLUEPRINT_SPECS } from "@/lib/janus/blueprintSpecs";
 import { DATA_PLANE_LAW, PLANES, sealEvidence, renderEvidenceBlock, renderDataBlock, assertBoundaryIntegrity } from "@/lib/janus/evidenceBoundary";
 import { JANUS_SCHEMA } from "@/components/janus/janusSchema";
 
@@ -22,17 +24,16 @@ import { JANUS_SCHEMA } from "@/components/janus/janusSchema";
  *  - 2026-11-26.2: the four domains and the Blueprint (Phase 9 corrections: field types and allowed values stated
  *    from the schema; Cogito separates a claim's logical dependencies from its sources; Actus states what
  *    depends_on_claims may cite; derived context is no longer cut at a character count).
- * Refresh and the quality evaluation are unchanged since Phase 5 and keep 2026-11-25.3.
+ *  - 2026-11-26.3: every stage except Refresh (Phase 9 pipeline). The four domains, the six pairs and the patterns
+ *    stage gained the cognitive-discipline clause (objective fidelity, mechanism over vocabulary, valid evidence
+ *    logic); a pair may state its mechanism. The Blueprint became the final refinement of a pipeline of new stages
+ *    (blueprintSpecs), each with this identity. The evaluation reads the operator objective and the pipeline record
+ *    and returns its findings on surplus, objective preservation and substantive errors.
+ * Refresh is unchanged since Phase 5 and keeps 2026-11-25.3.
  */
 const UNCHANGED_SINCE_PHASE5 = "stage-compiler/2026-11-25.3";
-const SYNTHESIS_PHASE8 = "stage-compiler/2026-11-26.1";
-const PHASE9_CORRECTIONS = "stage-compiler/2026-11-26.2";
-const TEMPLATE_IDENTITY = {
-  refresh: UNCHANGED_SINCE_PHASE5, [QUALIFICATION_KEY]: UNCHANGED_SINCE_PHASE5, synthesis: SYNTHESIS_PHASE8,
-  corpus: PHASE9_CORRECTIONS, cogito: PHASE9_CORRECTIONS, animus: PHASE9_CORRECTIONS, actus: PHASE9_CORRECTIONS, blueprint: PHASE9_CORRECTIONS,
-};
-export const templateVersionOf = (stageKey) =>
-  (PAIRS.some(p => intersectionKey(p.id) === stageKey) ? SYNTHESIS_PHASE8 : TEMPLATE_IDENTITY[stageKey] || UNCHANGED_SINCE_PHASE5);
+const PHASE9_PIPELINE = "stage-compiler/2026-11-26.3";
+export const templateVersionOf = (stageKey) => (stageKey === "refresh" ? UNCHANGED_SINCE_PHASE5 : PHASE9_PIPELINE);
 export const REFRESH_UNAVAILABLE_MESSAGE =
   "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
 
@@ -45,15 +46,35 @@ const pairOf = (stageKey) => PAIRS.find(p => intersectionKey(p.id) === stageKey)
 // patterns (CONTEXT_THREADING.blueprint): its steps must be traceable to them, and it cannot cite what it
 // never saw. The deeper Blueprint cognition (candidates, critique, refinement) remains Phase 8/9.
 const ALL_ARTIFACTS = ["refresh", "corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis"];
+// The Blueprint pipeline (Phase 9). Each stage reads the upstream cognition in full plus exactly the sub-artifacts
+// it builds on. The brief reads the operator's query alone, so no upstream re-run can make it stale.
+const PIPELINE_INPUTS = {
+  [BP.brief]: [],
+  [BP.candidates]: [...ALL_ARTIFACTS, BP.brief],
+  [BP.selection]: [...ALL_ARTIFACTS, BP.brief, BP.candidates],
+  [BP.skeleton]: [...ALL_ARTIFACTS, BP.brief, BP.candidates, BP.selection],
+  [BP.expansion]: [...ALL_ARTIFACTS, BP.brief, BP.selection, BP.skeleton],
+  [BP.criteria]: [...ALL_ARTIFACTS, BP.brief, BP.selection, BP.skeleton, BP.expansion],
+  [BP.assembly]: [...ALL_ARTIFACTS, BP.brief, BP.candidates, BP.selection, BP.skeleton, BP.expansion, BP.criteria],
+  [BP.critique]: [...ALL_ARTIFACTS, BP.brief, BP.assembly],
+};
+// What must exist, valid, before a pipeline stage is compiled: the chain it builds on.
+const PIPELINE_REQUIRES = {
+  [BP.brief]: [], [BP.candidates]: [BP.brief], [BP.selection]: [BP.brief, BP.candidates], [BP.skeleton]: [BP.brief, BP.selection],
+  [BP.expansion]: [BP.skeleton], [BP.criteria]: [BP.skeleton, BP.expansion],
+  [BP.assembly]: [BP.brief, BP.candidates, BP.selection, BP.skeleton, BP.expansion, BP.criteria],
+  [BP.critique]: [BP.assembly], [BP.final]: [BP.assembly],
+};
 const STAGE_INPUTS = {
-  [QUALIFICATION_KEY]: ["blueprint", ...ALL_ARTIFACTS],
+  ...PIPELINE_INPUTS,
+  [QUALIFICATION_KEY]: ["blueprint", ...ALL_ARTIFACTS, BP.brief, BP.candidates, BP.selection, BP.critique],
   refresh: [],
   corpus: ["refresh"],
   cogito: ["refresh", "corpus"],
   animus: ["refresh", "corpus", "cogito"],
   actus: ["refresh", "corpus", "cogito", "animus"],
   synthesis: [...INTERSECTION_KEYS],
-  blueprint: ALL_ARTIFACTS,
+  blueprint: [...ALL_ARTIFACTS, BP.brief, BP.assembly, BP.critique],
 };
 export const stageInputs = (stageKey) => (pairOf(stageKey)?.domains || STAGE_INPUTS[stageKey]).slice();
 /**
@@ -68,9 +89,26 @@ export const requiredInputs = (stageKey, mode) => {
   if (pairOf(stageKey)) return pairOf(stageKey).domains.slice();
   if (stageKey === QUALIFICATION_KEY) return ["blueprint"];
   if (stageKey === "synthesis") return [...INTERSECTION_KEYS];
-  if (stageKey === "blueprint" && MODE_PROFILES[mode]?.stages.includes("synthesis")) return ["synthesis"];
+  // BLUEPRINT PIPELINE (plan §15, Phase 9): the validated Synthesis where the mode has one (no premature Blueprint
+  // cognition), then the chain: no stage is compiled before the sub-artifacts it builds on exist and are valid. The
+  // final Blueprint needs the assembled draft, and the self-critique where the mode's pipeline has one.
+  if (BLUEPRINT_PIPELINE_KEYS.includes(stageKey)) return [
+    ...(stageKey !== BP.brief && MODE_PROFILES[mode]?.stages.includes("synthesis") ? ["synthesis"] : []),
+    ...PIPELINE_REQUIRES[stageKey],
+    ...(stageKey === BP.final && hasCritique(mode) ? [BP.critique] : []),
+  ];
   return [];
 };
+
+/**
+ * COGNITIVE DISCIPLINE (Phase 9) — stated to every reasoning stage, because a Blueprint cannot be better than the
+ * cognition it inherits: an objective narrowed upstream, or a pattern that is only a name, is already lost.
+ */
+const COGNITIVE_DISCIPLINE = `COGNITIVE DISCIPLINE:
+(a) OBJECTIVE FIDELITY — keep the operator's stated objective intact. Ground it, stage it and constrain it; do not replace it with a narrower, easier or more conventional one, and do not rename it into something smaller.
+(b) MECHANISM, NOT VOCABULARY — any construct, model or principle you name must come with what it does operationally: what it takes in, what it does, what it yields and how its effect would be evaluated. A physical or scientific term is literal only where the literal science applies; otherwise say plainly that it is an analogy. A new name is not a new idea.
+(c) VALID EVIDENCE LOGIC — a validation must let a positive, a null, a contradictory and an inconclusive result each occur and each mean something. Never define success as the absence of an effect.
+(d) SURPLUS — do not hand the operator's own material back as a finding. Say what it implies, what it misses or what it makes possible.`;
 
 // ── SME identity (registry-derived) ──
 function smeIdentity(domainKey) {
@@ -157,10 +195,20 @@ function domainContext(target, inp) {
         if (data.insight) parts.push(`    Insight: ${data.insight}`);
         if (data.tension) parts.push(`    Tension: ${data.tension}`);
         if (data.resolution) parts.push(`    Resolution: ${data.resolution}`);
+        if (data.mechanism) parts.push(`    Mechanism: ${data.mechanism}`);
       });
     }
+    const syn = inp.synthesis;
+    if (syn?.key_takeaways?.length) parts.push("SYNTHESIS: Key Takeaways", ...syn.key_takeaways.map(x => `  • ${x}`));
+    if (syn?.constraint_collisions?.length) parts.push("SYNTHESIS: Constraint Collisions (conflicts between findings that remain open)", ...syn.constraint_collisions.map(x => `  • ${x}`));
+    if (syn?.limitation_foreground) parts.push(`SYNTHESIS: Foreground Limitation — ${syn.limitation_foreground}`);
     if (inp.actus?.recommendations?.length) {
-      parts.push("ACTUS: Key Recommendations (confidence-propagated)", ...inp.actus.recommendations.map(r => `  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`));
+      parts.push("ACTUS: Key Recommendations (confidence-propagated)", ...inp.actus.recommendations.flatMap(r => [
+        `  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`,
+        ...(r.depends_on_claims?.length ? [`    rests on: ${r.depends_on_claims.join(", ")}`] : []),
+        ...(r.failure_modes?.length ? [`    failure modes: ${r.failure_modes.join(" | ")}`] : []),
+        ...(r.next_actions?.length ? [`    next actions: ${r.next_actions.join(" | ")}`] : []),
+      ]));
     }
     const sp = inp.actus?.strategic_plan;
     if (sp?.immediate_horizon) parts.push(`  Immediate Horizon: ${sp.immediate_horizon}`);
@@ -170,10 +218,21 @@ function domainContext(target, inp) {
       parts.push("FORMAL EMERGENT PATTERNS");
       patterns.forEach(p => parts.push(`  ▸ [pattern:${p.id}] ${p.name}`, ...p.fields.filter(f => inp.synthesis[p.id][f]).map(f => `    ${f}: ${[].concat(inp.synthesis[p.id][f]).join(" | ")}`)));
     }
-    if (inp.cogito?.claims?.length) parts.push("COGITO: Claims (handle = claim id)", ...claimLines(inp.cogito.claims));
+    if (sp?.key_decision_points?.length) parts.push(`  Decision Points: ${sp.key_decision_points.join(" | ")}`);
+    if (inp.actus?.integration_contracts?.length) parts.push("ACTUS: Integration Contracts", ...inp.actus.integration_contracts.map(x => `  • ${x}`));
+    if (inp.cogito?.claims?.length) parts.push("COGITO: Claims (handle = claim id)", ...inp.cogito.claims.flatMap(c => [
+      `  ${c.id} [${c.tag}]: ${c.text}`,
+      ...(c.depends_on?.length ? [`    rests on: ${c.depends_on.join(", ")}`] : []),
+      ...(c.falsifiable_by ? [`    falsifiable by: ${c.falsifiable_by}`] : []),
+    ]));
+    if (inp.cogito?.causal_chains?.length) parts.push("COGITO: Causal Chains", ...inp.cogito.causal_chains.map(cc => `  ${cc.cause} → ${cc.effect} [${cc.confidence}]`));
     if (inp.corpus?.constraints?.length) parts.push("CORPUS: Hard Constraints (non-negotiable)", ...inp.corpus.constraints.map((x, i) => `  corpus:${i + 1} — ${x}`));
+    if (inp.corpus?.feasibility_notes?.length) parts.push("CORPUS: Feasibility Notes", ...inp.corpus.feasibility_notes.map(x => `  • ${x}`));
     if (inp.animus?.ethical_stance) parts.push("ANIMUS: Ethical Stance", `  ${inp.animus.ethical_stance}`);
     if (inp.animus?.boundary_checks?.length) parts.push("ANIMUS: Boundaries", ...inp.animus.boundary_checks.map((x, i) => `  animus:${i + 1} — ${x}`));
+    if (inp.animus?.disallowed_moves?.length) parts.push("ANIMUS: Disallowed Moves", ...inp.animus.disallowed_moves.map(x => `  ✕ ${x}`));
+    const misalignment = inp.animus?.risk_analysis?.misalignment_risks;
+    if (misalignment?.length) parts.push("ANIMUS: Misalignment Risks", ...misalignment.map(x => `  • ${x}`));
   }
   return parts.join("\n");
 }
@@ -245,7 +304,9 @@ const domainSpec = (domain) => (config, inp) => ({
   title: `DOMAIN: ${DOMAINS[domain].label.toUpperCase()}`,
   instructions: `${smeIdentity(domain)}
 
-Analyze the operator's query (data block "query") through your unified expert perspective. Think FROM INSIDE your expertise — do not summarize textbook knowledge, produce findings that reflect genuine mastery. Push beyond conventional wisdom. If the physics and math support a novel approach, precedent is irrelevant.`,
+Analyze the operator's query (data block "query") through your unified expert perspective. Think FROM INSIDE your expertise — do not summarize textbook knowledge, produce findings that reflect genuine mastery. Push beyond conventional wisdom. If the physics and math support a novel approach, precedent is irrelevant.
+
+${COGNITIVE_DISCIPLINE}`,
   context: domainContext(domain, inp),
   untrusted: refreshEvidence(inp.refresh, domain),
   contract: domainContract(domain, config.executionMode),
@@ -292,7 +353,9 @@ Also produce:
 
 REQUIRED (checked by code): all four patterns with every field shown in the output contract; key_takeaways (not empty); constraint_collisions (always present: an empty list only when the analysis found no genuine collision, never omitted); limitation_foreground.
 
-CRITICAL: Every named pattern must produce EMERGENT insight — wisdom that transcends any single intersection pair. If it could come from one pair alone, it fails. Push past convention — novel problems require novel solutions.`,
+CRITICAL: Every named pattern must produce EMERGENT insight — wisdom that transcends any single intersection pair. If it could come from one pair alone, it fails. Push past convention — novel problems require novel solutions.
+
+${COGNITIVE_DISCIPLINE}`,
     context: PAIRS.map(p => {
       const v = inp[intersectionKey(p.id)] || {};
       return `${p.id.toUpperCase()} — ${p.resolution_label}\nInsight: ${v.insight || "(not computed)"}\nTension: ${v.tension || "(not computed)"}\nResolution: ${v.resolution || "(not computed)"}`;
@@ -304,32 +367,16 @@ ${patternJsonTemplate()}
 
 IMPORTANT: Do NOT include an intersection_matrix field — the pre-computed pairs are already stored separately.`,
   }),
-  blueprint: (config, inp) => {
-    const { blueprintLevel: lvl, noveltyDial: nov, outputMode } = config;
-    const minAlt = Math.max(MODE_EXPECTATIONS[config.executionMode]?.min_alternatives ?? 0, nov === "high" ? 3 : 0);
-    return {
-      parseKey: "blueprint", title: "DOMAIN: BLUEPRINT (Executable Deliverable)",
-      instructions: `You are the Janus Blueprint Module — the culmination of a multi-domain cognitive architecture.
-Your task: produce a concrete, executable plan that synthesizes ALL prior domain expertise into actionable wisdom.
-Level: ${lvl} | Novelty: ${nov} | Output Mode: ${outputMode}.
-${minAlt ? `alternative_approaches REQUIRED: at least ${minAlt} serious, materially different alternative${minAlt === 1 ? "" : "s"}, each with name, pros, cons, why_not_chosen.` : ""}
-
-CRITICAL DIRECTIVES:
-1. Every step must be traceable to the synthesis insights and domain constraints supplied as prior stage outputs.
-2. The blueprint must respect Animus ethical boundaries.
-3. If the physics and math check out, precedent does not matter. This protocol exists to find solutions that conventional thinking misses.
-4. Blueprints must be answers of WISDOM — highest probability paths to genuinely achieving the stated goal, even if unheard of.
-5. Complexity yields emergent behaviors. Do not oversimplify. The depth of the prior analysis IS the competitive advantage.
-6. TRACEABILITY (checked by code): every step lists in derived_from the handles of the prior material it is built on, exactly as they appear in the prior stage outputs — claim ids, recommendation ids, corpus:<n>, animus:<n>, intersection ids shown in brackets, pattern:<id>. Never invent a handle.
-7. CONFIDENCE (checked by code): every step carries confidence — the LOWEST confidence among the claims and recommendations it rests on (Established, Contested or Speculative). Never label a step stronger than its weakest support.`,
-      context: domainContext("blueprint", inp),
-      untrusted: refreshEvidence(inp.refresh, "blueprint"),
-      contract: `Output ONLY valid JSON: { "blueprint": { "goal": "...", "assumptions": ["..."], ${minAlt ? '"alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], ' : ""}"steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[],"derived_from":["C1","corpus:1"],"confidence":"Contested"${lvl !== "L1" ? ',"time_estimate":"...","effort_level":"medium"' : ""}${lvl === "L2" || lvl === "L3" ? ',"substeps":[{"substep":"1a","details":"..."}]' : ""}${lvl === "L3" ? ',"checklist":["..."],"acceptance_tests":["..."]' : ""}}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}] } }
-
-${typeLegend("blueprint")}`,
-    };
-  },
 };
+// The Blueprint pipeline (blueprintSpecs): the objective brief → candidates → … → the final refinement (`blueprint`).
+// Its stage specifications live in their own file; they are compiled here, like every other stage.
+Object.entries(BLUEPRINT_SPECS).forEach(([key, spec]) => {
+  SPECS[key] = (config, inp) => ({ parseKey: key, ...spec(config, inp, {
+    ledger: domainContext("blueprint", inp), typeLegend,
+    minAlternatives: minAlternatives(config.executionMode, config.noveltyDial),
+    untrusted: refreshEvidence(inp.refresh, "blueprint"),
+  }) });
+});
 
 // Independent evaluation: a separate call that never sees the generator's instructions or its self-assessment.
 SPECS[QUALIFICATION_KEY] = (config, inp) => {
@@ -371,9 +418,11 @@ Domain B — ${DOMAINS[b].title}: "${DOMAINS[b].core_insight}"
 
 CRITICAL INSTRUCTION: The insight you produce MUST be EMERGENT — something that could NOT have come from either domain alone. You are looking for the spark that happens when these two forms of expertise collide. Think like a polymath who sees what specialists miss.
 
-If the physics and math check out, precedent doesn't matter. Novel problems require novel solutions. Push past conventional thinking — if there's a non-obvious path that has higher probability of achieving the goal, NAME IT even if it's unheard of.`,
+If the physics and math check out, precedent doesn't matter. Novel problems require novel solutions. Push past conventional thinking — if there's a non-obvious path that has higher probability of achieving the goal, NAME IT even if it's unheard of.
+
+${COGNITIVE_DISCIPLINE}`,
     context: `${side("A", a)}\n\n${side("B", b)}`,
-    contract: `Output ONLY valid JSON: { "${pair.id}": { "insight": "the emergent wisdom that lives at this intersection", "tension": "where these two domains pull in different directions", "resolution": "how the tension resolves into something greater than either domain" } }`,
+    contract: `Output ONLY valid JSON: { "${pair.id}": { "insight": "the emergent wisdom that lives at this intersection", "tension": "where these two domains pull in different directions", "resolution": "how the tension resolves into something greater than either domain", "mechanism": "one text value, required whenever the resolution names a construct or principle: how it works operationally — what it takes in, what it does, what it yields, and how its effect would be evaluated" } }`,
   };
 }
 
@@ -401,12 +450,15 @@ export function withCorrection(prompt, previous, attemptNumber) {
  */
 export function compileStage({ stageKey, config, inputs = {}, evidence = [] }) {
   const pair = pairOf(stageKey);
+  if (isDeterministicStage(stageKey)) throw new Error(`${stageKey} is computed by code from validated artifacts: it has no prompt`);
   if (!pair && !SPECS[stageKey]) throw new Error(`Unknown stage key: ${stageKey}`);
   const spec = pair ? intersectionSpec(pair, inputs) : SPECS[stageKey](config, inputs, evidence);
   const sealed = sealEvidence(spec.untrusted || []);
   const blocks = [
     ...(sealed.length ? [renderEvidenceBlock(sealed, spec.untrustedLabel || "refresh_derived_evidence")] : []),
     ...(spec.context ? [renderDataBlock(PLANES.derived, "prior_stage_outputs", spec.context)] : []),
+    // Structured records a stage builds on (the objective brief, the decision, the assembled draft, …): derived data.
+    ...(spec.blocks || []).map(b => renderDataBlock(PLANES.derived, b.label, b.text)),
     renderDataBlock(PLANES.operator, "query", config.queryText),
   ];
   const prompt = [
