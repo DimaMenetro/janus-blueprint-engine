@@ -79,8 +79,37 @@ describe("completion is a validated contract, not a returned process", () => {
     expect(src("components/janus/tabs/BlueprintTab.jsx")).toMatch(/<BlueprintStepTrace step=\{step\}/);
   });
 
+  // REPLACED UNDER DIMA'S EXPLICIT AUTHORIZATION (2026-11-26, Phase 8 closeout). This was the first row of the table
+  // below ("a missing formal pattern"). Its guarantee is kept and made stronger: a Full run with an incomplete Synthesis
+  // cannot complete, qualify or release. Its sequencing expectation is superseded: the patterns stage used to settle
+  // as succeeded, a Blueprint was purchased on top of it, and the gap was found only afterwards by the completion
+  // manifest (13 succeeded stages). Final Form validates the final Synthesis before the Blueprint (plan §14, steps
+  // 9 to 12), so the incomplete Synthesis is itself the failure and no Blueprint is generated from it.
+  it("a Full run with a missing formal pattern fails at the Synthesis stage: no Blueprint, no completion, no qualification, no release", async () => {
+    const incomplete = clone(h.out.synthesis);
+    delete incomplete[PATTERNS[0].id];
+    h.llm.override.synthesis = incomplete;
+    const result = await run("full");
+    const record = h.db.Run[0];
+    const revisions = stagesOf(result.runId).filter(s => s.stage_key === "synthesis");
+    expect(revisions).toHaveLength(1); // retries are attempts of the same revision
+    expect(revisions[0]).toMatchObject({ revision: 1, status: "failed", error_class: "schema_failure" });
+    expect(revisions[0].validation).toMatchObject({ valid: false, errors: PATTERNS[0].fields.map(f => `pattern ${PATTERNS[0].id}.${f} missing`) });
+    expect(h.db.RunAttempt.filter(a => a.stage_id === revisions[0].id).map(a => [a.attempt_number, a.outcome, a.retry_decision]))
+      .toEqual([[1, "schema_failure", "retry_scheduled"], [2, "schema_failure", "retry_scheduled"], [3, "schema_failure", "exhausted"]]); // the normal bounded retry
+    expect(h.llm.stages.filter(s => s === "blueprint")).toEqual([]); // zero Blueprint calls
+    expect(stagesOf(result.runId).filter(s => s.stage_key === "blueprint")).toEqual([]);
+    expect(viewOf(result.runId).stageInfo.synthesis.active).toBeNull(); // the invalid Synthesis never becomes the active one
+    expect(result.status).toBe("partial");
+    expect(record.completion_manifest.complete).toBe(false);
+    expect(record.validation_errors.some(e => new RegExp(`pattern ${PATTERNS[0].id}`).test(e))).toBe(true);
+    expect(h.llm.stages).not.toContain("qualification"); // nothing to qualify, no evaluation purchased
+    expect(record).toMatchObject({ qualification_state: "not_started", released_blueprint_stage_id: "" });
+    expect(qOf(result.runId).release).toMatchObject({ released: false, status: "incomplete" });
+    expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "partial", resumable: false });
+  });
+
   it.each([
-    ["a missing formal pattern", "synthesis", () => { const s = clone(h.out.synthesis); delete s[PATTERNS[0].id]; return s; }, new RegExp(`pattern ${PATTERNS[0].id}`)],
     ["a missing subdomain", "cogito", () => { const c = clone(h.out.cogito); delete c.subdomains[subdomainIds("cogito")[0]]; return c; }, /cogito subdomain missing/],
     ["fewer than three alternatives", "blueprint", () => ({ ...h.blueprintFor("ACTUS: Key Recommendations [pattern:"), alternative_approaches: [{ name: "only one" }] }), /alternative approaches/],
     ["an unanchored recommendation", "actus", () => ({ ...clone(h.out.actus), recommendations: [{ id: "R1", text: "r", depends_on_claims: [], inherited_confidence: "Established", probability: "high" }] }), /no resolvable Cogito dependency/],

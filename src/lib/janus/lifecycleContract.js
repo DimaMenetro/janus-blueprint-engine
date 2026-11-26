@@ -92,6 +92,34 @@ export function enforceConfidencePropagation(claims = [], recommendations = []) 
 const nonEmpty = (a) => Array.isArray(a) && a.length > 0;
 const missingSubdomains = (obj, domain) => subdomainIds(domain).filter(id => !obj?.subdomains?.[id]);
 
+// ── 5a. FINAL SYNTHESIS (plan §14 steps 9–11) — ONE definition ──────
+// The stage validator (stageRunner.validateStageOutput) and the completion manifest below both read these.
+/** A value that says something: a string with at least one letter or digit. "", " " and "..." do not. */
+export const meaningful = (s) => typeof s === "string" && /[\p{L}\p{N}]/u.test(s);
+const filled = (v) => (Array.isArray(v) ? v.length > 0 && v.every(meaningful) : meaningful(v));
+/** The four formal emergent patterns: every pattern and every field the registry declares, each with content. */
+export const patternErrors = (patterns) =>
+  PATTERNS.flatMap(p => p.fields.filter(f => !filled(patterns?.[p.id]?.[f])).map(f => `pattern ${p.id}.${f} missing`));
+/**
+ * What the patterns stage must return to be a valid FINAL Synthesis: the four formal patterns plus the three
+ * synthesis-level outputs. "None found" and "not produced" are different states: constraint_collisions may be an
+ * empty list, but it may not be absent. Field types are the schema's (janusSchema); this is presence and content.
+ */
+export function finalSynthesisErrors(output) {
+  const e = patternErrors(output);
+  const list = (name, emptyIsValid) => {
+    const v = output?.[name];
+    if (v === undefined || v === null) { e.push(`${name} missing${emptyIsValid ? " (an empty list is valid, absence is not)" : ""}`); return; }
+    if (!Array.isArray(v)) { e.push(`${name} must be a list`); return; }
+    if (!v.length && !emptyIsValid) e.push(`${name} empty`);
+    v.forEach((x, i) => { if (!meaningful(x)) e.push(`${name}[${i}] is not a meaningful entry`); });
+  };
+  list("key_takeaways", false);
+  list("constraint_collisions", true);
+  if (!meaningful(output?.limitation_foreground)) e.push("limitation_foreground missing");
+  return e;
+}
+
 export const STAGE_VALIDATORS = {
   refresh: (a, ctx) => {
     if (!a) return ["refresh artifact missing"];
@@ -128,7 +156,7 @@ export const STAGE_VALIDATORS = {
   ],
   synthesis: (a) => [
     ...PAIRS.filter(p => !a?.intersections?.[p.id]).map(p => `intersection missing: ${p.id}`),
-    ...PATTERNS.flatMap(p => p.fields.filter(f => !a?.emergent_patterns?.[p.id]?.[f]).map(f => `pattern ${p.id}.${f} missing`)),
+    ...patternErrors(a?.emergent_patterns),
   ],
   blueprint: (a, ctx) => {
     if (!a?.goal) return ["blueprint.goal missing"];

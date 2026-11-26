@@ -9,7 +9,7 @@ import { platform as h } from "@/lib/janus/testPlatform";
 import * as adapter from "@/lib/janus/browserAdapter";
 import * as store from "@/lib/janus/stageStore";
 import { executeJanus, resumeJanus, rerunSynthesis, rerunBlueprint, requestCancel, OPERATOR_ONLY_MESSAGE } from "@/lib/janus/browserAdapter";
-import { compileStage, PROMPT_TEMPLATE_VERSION, REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
+import { compileStage, templateVersionOf, REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
 import { runStage, callLLM } from "@/lib/janus/stageRunner";
 import { driveStages } from "@/lib/janus/stageEngine";
 import { TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
@@ -58,7 +58,11 @@ describe("one canonical engine", () => {
     const origins = (o) => stagesOf(runId).filter(s => s.provenance.origin === o);
     expect(origins("execution")).toHaveLength(14); // 13 cognitive stages + the quality evaluation
     expect(origins("rerun")).toHaveLength(7);
-    expect(new Set(stagesOf(runId).map(s => s.prompt_template_version))).toEqual(new Set([PROMPT_TEMPLATE_VERSION]));
+    // REPLACED UNDER DIMA'S EXPLICIT AUTHORIZATION (2026-11-26, Phase 8 closeout). The old assertion required every stage
+    // to carry one global template version. That made a change to one stage's prompt look like a change to every
+    // stage, so a retry of an untouched stage was blocked. Stronger invariant: every persisted stage carries the
+    // template identity the compiler returns for that exact stage.
+    stagesOf(runId).forEach(s => expect(s.prompt_template_version).toBe(templateVersionOf(s.stage_key)));
   });
 
   it("only the compiler builds protocol prompts and only the runner requests the model call", () => {

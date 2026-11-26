@@ -10,7 +10,7 @@ import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
 import { completionOf, deriveQualification } from "@/lib/janus/qualification";
 import { loadRunView, updateRun } from "@/lib/janus/stageStore";
 import { runStage, continueStage, closeFromLastCall } from "@/lib/janus/stageRunner";
-import { compileStage, stageInputs, requiredInputs, PROMPT_TEMPLATE_VERSION } from "@/lib/janus/stageCompiler";
+import { compileStage, stageInputs, requiredInputs, templateVersionOf } from "@/lib/janus/stageCompiler";
 import { stageFailures, continuationOf, rerunOnly } from "@/lib/janus/executionState";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
 import { generateMarkdown } from "@/components/janus/promptUtils";
@@ -146,7 +146,7 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
 
 /**
  * IDENTITY CHECK before a revision is continued at its next attempt. A revision is one logical operation,
- * fixed by its dependency revision IDs, protocol version, prompt-template version and input fingerprint.
+ * fixed by its dependency revision IDs, protocol version, its own stage's prompt-template identity and input fingerprint.
  * The stage is rebuilt from the EXACT dependency revisions recorded on it, compiled, and fingerprinted; it is
  * continued only if every part still matches. Any difference fails closed: the old revision is not continued
  * silently, and a new revision needs the operator's explicit decision.
@@ -159,7 +159,9 @@ export async function verifyContinuation(view, stage) {
   const recorded = stage.depends_on || [];
   const deps = recorded.map(id => byId[id]);
   if (stage.protocol_version !== PROTOCOL.version) reasons.push(`protocol version changed (${stage.protocol_version} → ${PROTOCOL.version})`);
-  if (stage.prompt_template_version !== PROMPT_TEMPLATE_VERSION) reasons.push(`prompt template changed (${stage.prompt_template_version} → ${PROMPT_TEMPLATE_VERSION})`);
+  // The identity of THIS stage's prompt template. Another stage's prompt changing is not a change to this operation.
+  const template = templateVersionOf(key);
+  if (stage.prompt_template_version !== template) reasons.push(`prompt template changed (${stage.prompt_template_version} → ${template})`);
   if (deps.some(d => d?.status !== "succeeded")) reasons.push("a recorded dependency revision is no longer available");
   // The inputs the engine would read for this stage now must be exactly the revisions this one recorded.
   const now = stageInputs(key).map(k => view.stageInfo[k]?.active?.id).filter(Boolean);

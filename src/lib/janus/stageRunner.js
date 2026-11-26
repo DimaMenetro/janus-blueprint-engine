@@ -23,7 +23,7 @@ import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
 import { beginStage, openAttempt, settleAttempt, settleStage, readAttempt, voidAttempt, releaseSlot, runStatus, readRun } from "@/lib/janus/stageStore";
 import { classifyParseError, parseKeyOf, QUALIFICATION_KEY, STORAGE_MODEL } from "@/lib/janus/stageModel";
-import { QUALITY_CRITERIA, criterionApplies, retryDecision } from "@/lib/janus/lifecycleContract";
+import { QUALITY_CRITERIA, criterionApplies, retryDecision, finalSynthesisErrors } from "@/lib/janus/lifecycleContract";
 import { continuationOf, continuableFor } from "@/lib/janus/executionState";
 
 const STAGE_FUNCTION = "invokeJanusStage";
@@ -110,6 +110,10 @@ export function validateStageOutput(stageKey, output) {
     return { validator: "intersection-fields", valid: errors.length === 0, errors };
   }
   const { errors } = validateJanusOutput({ [stageKey]: output }, [stageKey]);
+  // FINAL SYNTHESIS (plan §14 steps 9–11): a returned Synthesis is not valid because it parses. It must hold the four
+  // formal patterns in full and the three synthesis-level outputs; otherwise it is invalid mandatory output
+  // (schema_failure, bounded retry) and nothing is built on it. Same definition as the completion manifest.
+  if (stageKey === "synthesis") errors.push(...finalSynthesisErrors(output));
   return { validator: "janusSchema", valid: errors.length === 0, errors };
 }
 

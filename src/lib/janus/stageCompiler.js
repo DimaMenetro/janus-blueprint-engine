@@ -10,7 +10,18 @@ import { intersectionKey, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/jan
 import { QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS } from "@/lib/janus/lifecycleContract";
 import { DATA_PLANE_LAW, PLANES, sealEvidence, renderEvidenceBlock, renderDataBlock, assertBoundaryIntegrity } from "@/lib/janus/evidenceBoundary";
 
-export const PROMPT_TEMPLATE_VERSION = "stage-compiler/2026-11-26.1";
+/**
+ * PROMPT-TEMPLATE IDENTITY IS PER STAGE. A stage's identity changes when, and only when, the prompt contract of THAT
+ * stage changes. A revision waiting for its retry is therefore blocked by a change to its own stage, never by a
+ * change to another stage's prompt (stageEngine.verifyContinuation). When a stage's prompt changes, give that stage
+ * a new identity here and leave the others alone.
+ *  - 2026-11-25.3: Refresh, the four domains, Blueprint, qualification (unchanged since Phase 5);
+ *  - 2026-11-26.1: the six pair intersections and the patterns stage (Phase 8: inputs read in full; the final
+ *    Synthesis requirements stated).
+ */
+const TEMPLATE_IDENTITY = { base: "stage-compiler/2026-11-25.3", synthesisPhase: "stage-compiler/2026-11-26.1" };
+export const templateVersionOf = (stageKey) =>
+  (stageKey === "synthesis" || PAIRS.some(p => intersectionKey(p.id) === stageKey) ? TEMPLATE_IDENTITY.synthesisPhase : TEMPLATE_IDENTITY.base);
 export const REFRESH_UNAVAILABLE_MESSAGE =
   "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
 
@@ -241,6 +252,8 @@ Also produce:
 - constraint_collisions: Where intersection findings genuinely CONFLICT with each other
 - limitation_foreground: The single most significant limitation of this entire analysis
 
+REQUIRED (checked by code): all four patterns with every field shown in the output contract; key_takeaways (not empty); constraint_collisions (always present: an empty list only when the analysis found no genuine collision, never omitted); limitation_foreground.
+
 CRITICAL: Every named pattern must produce EMERGENT insight — wisdom that transcends any single intersection pair. If it could come from one pair alone, it fails. Push past convention — novel problems require novel solutions.`,
     context: PAIRS.map(p => {
       const v = inp[intersectionKey(p.id)] || {};
@@ -349,7 +362,7 @@ export function compileStage({ stageKey, config, inputs = {}, evidence = [] }) {
   ].join("\n\n");
   assertBoundaryIntegrity(prompt, blocks.length);
   return {
-    stageKey, parseKey: spec.parseKey, prompt, templateVersion: PROMPT_TEMPLATE_VERSION,
+    stageKey, parseKey: spec.parseKey, prompt, templateVersion: templateVersionOf(stageKey),
     inputKeys: stageInputs(stageKey),
     sources: sealed.map(({ text: _text, ...meta }) => meta),
   };
