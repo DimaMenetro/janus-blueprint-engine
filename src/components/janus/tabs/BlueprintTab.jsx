@@ -5,6 +5,7 @@ import BlueprintDispositions from "@/components/janus/blueprint/BlueprintDisposi
 import BlueprintAcceptance from "@/components/janus/blueprint/BlueprintAcceptance";
 import BlueprintCritique from "@/components/janus/blueprint/BlueprintCritique";
 import BlueprintStepPlan from "@/components/janus/blueprint/BlueprintStepPlan";
+import BlueprintStepSpecifications from "@/components/janus/blueprint/BlueprintStepSpecifications";
 import { traceIndex } from "@/lib/janus/qualification";
 import BlueprintStepTrace from "@/components/janus/tabs/BlueprintStepTrace";
 import { CheckCircle2, Target, Lightbulb, AlertTriangle, Clock, Zap, CheckSquare, TestTube } from "lucide-react";
@@ -142,6 +143,7 @@ export default function BlueprintTab({ data, blueprintLevel, artifacts = {}, pip
                   )}
                 </div>
                 <BlueprintStepPlan step={step} />
+                <BlueprintStepSpecifications step={step} />
                 <BlueprintStepTrace step={step} index={traceIdx} />
 
                 <p className="text-slate-700 dark:text-slate-200 text-sm mb-3 pl-11">{step.instructions}</p>

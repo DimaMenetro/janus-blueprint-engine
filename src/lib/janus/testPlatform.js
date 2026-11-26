@@ -21,7 +21,21 @@ const step = (n, title, derived_from) => ({ step: n, title, purpose: `Purpose of
 // The final refiner: it returns the assembled draft word for word (the same pipeline fixtures the engine assembles),
 // restates the goal, and — where the pipeline has a self-critique (the modes with Actus) — repairs finding F1 by
 // stating step 1's interface. Both changes are declared, as the transactional rule requires.
+/** A derived data block of a compiled prompt, read back as the JSON the compiler put in it. */
+const blockOf = (prompt, label) => {
+  const m = prompt.match(new RegExp(`label=${label}>>>\\n([\\s\\S]*?)\\n<<<END_JANUS_DATA>>>`));
+  return m ? JSON.parse(m[1].split("\n").map(l => l.replace(/^│ ?/, "")).join("\n")) : null;
+};
+// A substantive refinement: the evaluated Blueprint returned word for word, with one declared addition answering
+// every deficiency it was given.
+const refinedFrom = (prompt) => {
+  const base = blockOf(prompt, "assembled_draft"), found = blockOf(prompt, "critique").findings;
+  return { ...base, success_criteria: [...base.success_criteria, `Refined in cycle ${prompt.match(/cycle (\d+) of/)[1]}`],
+    refinement: { dispositions: found.map(f => ({ finding: f.id, action: "resolved", change: "Added the missing success criterion" })),
+      changes: found.map(f => ({ path: "success_criteria", finding: f.id, what: "Added a criterion" })) } };
+};
 const blueprintFor = (prompt = "") => {
+  if (prompt.includes("SUBSTANTIVE REFINEMENT — cycle")) return refinedFrom(prompt);
   const draft = assembleBlueprint(Object.fromEntries(["brief", "candidates", "selection", "skeleton", "expansion", "criteria"].map(k => [`blueprint:${k}`, PIPELINE[`blueprint:${k}`](prompt)])));
   const critiqued = withActus(prompt);
   return {

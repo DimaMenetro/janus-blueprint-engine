@@ -5,6 +5,7 @@ import { deriveQualification } from "@/lib/janus/qualification";
 import QualificationCriterion from "@/components/janus/QualificationCriterion";
 import EvaluationControls from "@/components/janus/EvaluationControls";
 import EvaluatorFindings from "@/components/janus/EvaluatorFindings";
+import RefinementControls from "@/components/janus/RefinementControls";
 
 const PENDING = {
   in_progress: "The independent evaluation is running.",
@@ -37,9 +38,12 @@ export default function QualificationPanel({ view, t, isAdmin = false, onChanged
       {q.blocked && completion.complete && <p style={line(t)}>{q.blocked}</p>}
       {PENDING[q.pending] && <p style={line(t)}>{PENDING[q.pending]}</p>}
       {q.pending === "evaluation_failed" && <p style={line(t, true)}>The independent evaluation did not complete, so nothing is released: {q.evaluationError}</p>}
-      {failed.length > 0 && <p style={line(t, true)}>Not qualified: {failed.length} of {q.criteria.filter(c => c.applies).length} criteria failed. Refinement is required before release.</p>}
+      {failed.length > 0 && <p style={line(t, true)}>Not qualified: {failed.length} of {q.criteria.filter(c => c.applies).length} criteria failed. {q.state === "limitation_reported"
+        ? `All ${q.refinement.max} refinement cycles are used; it is not released, and its unresolved limitations are reported below.` : "Refinement is required before release."}</p>}
+      {q.limitations.map(l => <p key={l.criterion} style={line(t)}>Unresolved — {l.standard}{l.reasons.length ? `: ${l.reasons.join(" ")}` : ""}</p>)}
       {q.strongestObjection && <p style={line(t)}>Strongest objection: {q.strongestObjection}</p>}
       {isAdmin && <EvaluationControls q={q} runId={view.run.id} t={t} onChanged={onChanged} />}
+      {isAdmin && <RefinementControls q={q} runId={view.run.id} t={t} onChanged={onChanged} />}
 
       {!q.blocked && (
         <button onClick={() => setOpen(!open)} style={{ marginTop: 10, minHeight: 40, background: "none", border: "none", padding: 0, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: t.text }}>

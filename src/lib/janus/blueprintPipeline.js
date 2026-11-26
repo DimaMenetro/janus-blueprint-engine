@@ -309,7 +309,7 @@ const RULES = {
 // judged where they always were (qualification, completion).
 const KEPT_LISTS = ["assumptions", "invariants", "decision_points", "success_criteria", "risk_register", "acceptance", "phases"];
 const KEPT_PARTS = ["selected_strategy", "architecture", "scope", "outcome_interpretation"];
-const KEPT_STEP_LISTS = ["inputs", "outputs", "substeps", "checklist", "acceptance_tests", "interfaces", "components", "fulfils"];
+const KEPT_STEP_LISTS = ["inputs", "outputs", "substeps", "specifications", "checklist", "acceptance_tests", "interfaces", "components", "fulfils"];
 const KEPT_STEP_TEXTS = ["purpose", "instructions", "validation"];
 export function preservationErrors(final, draft) {
   const e = [];

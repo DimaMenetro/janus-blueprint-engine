@@ -7,7 +7,8 @@
 import { STAGE_ORDER, PROTOCOL } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, QUALIFICATION_KEY, CONFIG_INPUT, configOf, fingerprintInputs, revisionLabel } from "@/lib/janus/stageModel";
 import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
-import { completionOf, deriveQualification, recordedInputs, inputIntegrity, blueprintAudit, enforceStepConfidence } from "@/lib/janus/qualification";
+import { completionOf, deriveQualification, recordedInputs, inputIntegrity, blueprintAudit, enforceStepConfidence, refinementBasis } from "@/lib/janus/qualification";
+import { REFINE_INPUT } from "@/lib/janus/blueprintSpecs";
 import { loadRunView, updateRun, recordDeterministicStage } from "@/lib/janus/stageStore";
 import { runStage, continueStage, closeFromLastCall, validateStageOutput } from "@/lib/janus/stageRunner";
 import { BP, BLUEPRINT_PIPELINE_KEYS, isDeterministicStage, assembleBlueprint } from "@/lib/janus/blueprintPipeline";
@@ -42,7 +43,7 @@ const DETERMINISTIC = {
  * holds as active. Returns { record } | { failure } (both settled), { skipped } (a required input is absent),
  * { refused } (no call was made for the new revision) or { unresolved } (outcome unknown, nothing settled).
  */
-export async function executeStage({ view, stageKey, origin, evidence = [], onBegan }) {
+export async function executeStage({ view, stageKey, origin, evidence = [], onBegan, refine }) {
   const active = (k) => view.stageInfo[k]?.active;
   const staged = view.storage === STORAGE_MODEL.staged;
   // The mode's Synthesis-before-Blueprint rule binds staged runs (the engine's own plan). A historical Run is
@@ -57,7 +58,9 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
   if (unfit.length) return { skipped: { stageKey, missing: [], unfit } };
   const inputs = Object.fromEntries(inputKeys.map(k => [k, active(k).output]));
   const config = configOf(view.run);
-  const integrity = { ...inputs, [CONFIG_INPUT]: config };
+  // A substantive refinement is validated against the Blueprint it refines and the evaluation it answers.
+  const integrity = { ...inputs, [CONFIG_INPUT]: config, ...(refine ? refinementBasis(refine.base, refine.deficiencies) : {}) };
+  if (refine) inputs[REFINE_INPUT] = refine;
   if (isDeterministicStage(stageKey)) {
     // No prompt, no call, no attempt: the revision is computed, validated and recorded settled in one write.
     const output = DETERMINISTIC[stageKey](inputs, config);
@@ -75,7 +78,33 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
     templateVersion: compiled.templateVersion, sources: compiled.sources,
     prompt: compiled.prompt, parseKey: compiled.parseKey,
     staged: view.storage === STORAGE_MODEL.staged, // only a staged run has an execution slot
+    ...(refine ? { refines: { blueprint_stage_id: refine.blueprintStageId, evaluation_stage_id: refine.evaluationStageId, cycle: refine.cycle, deficiencies: refine.deficiencies } } : {}),
   });
+}
+
+/**
+ * ONE SUBSTANTIVE REFINEMENT CYCLE of a completed run whose Blueprint failed qualification (plan §7.3). Not a retry
+ * and not a re-run: the pipeline's reasoning is kept, and the final Blueprint is refined against the independent
+ * evaluation — a NEW `blueprint` revision built transactionally on the evaluated one, answering each failed
+ * criterion — and then evaluated once, independently, like any Blueprint. The evaluated revision stays in the
+ * lineage; if the new one is refused, it stays the active Blueprint. The run's lifecycle is not touched.
+ * The cycle is recorded on the revision (provenance.refines), which is what bounds it (MAX_REFINEMENT_CYCLES).
+ * Ends as { refined: <stage result>, evaluation: <stage result> | null }.
+ */
+export async function refineStage({ runId, origin = "refinement", onDurableChange = async () => {} }) {
+  const view = await loadRunView(runId);
+  const q = deriveQualification(view);
+  const refined = await executeStage({ view, stageKey: BP.final, origin, onBegan: () => onDurableChange(runId),
+    refine: { base: view.stageInfo[BP.final].active.output, blueprintStageId: q.blueprintStageId, evaluationStageId: q.evaluationStageId,
+      cycle: q.refinement.used + 1, max: q.refinement.max, deficiencies: q.refinement.deficiencies } });
+  let evaluation = null;
+  if (refined.record) {
+    await onDurableChange(runId);
+    evaluation = await executeStage({ view: await loadRunView(runId), stageKey: QUALIFICATION_KEY, origin, onBegan: () => onDurableChange(runId) });
+  }
+  if (!refined.unresolved && !evaluation?.unresolved) await reclose(runId);
+  await onDurableChange(runId);
+  return { refined, evaluation };
 }
 
 /**

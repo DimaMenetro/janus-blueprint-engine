@@ -6,7 +6,7 @@
  */
 import { PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, lowestConfidence } from "@/lib/janus/protocolRegistry";
 import { completionManifest, enforceConfidencePropagation, normalizeTag, qualify, releaseDecision,
-  QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS, stageIntegrity } from "@/lib/janus/lifecycleContract";
+  QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS, stageIntegrity, MAX_REFINEMENT_CYCLES } from "@/lib/janus/lifecycleContract";
 import { QUALIFICATION_KEY, STORAGE_MODEL, CONFIG_INPUT, configOf } from "@/lib/janus/stageModel";
 import { BP } from "@/lib/janus/blueprintPipeline";
 import { continuationOf, continuableFor, stagePlan } from "@/lib/janus/executionState";
@@ -22,8 +22,14 @@ export function contractArtifacts(artifacts) {
 export function recordedInputs(view, stage) {
   const byId = Object.fromEntries((view.lineage || []).map(s => [s.id, s]));
   // The run configuration travels with them: some integrity rules depend on it (Blueprint level, candidate count).
-  return { ...Object.fromEntries((stage?.depends_on || []).map(id => byId[id]).filter(Boolean).map(d => [d.stage_key, d.output])), [CONFIG_INPUT]: configOf(view.run) };
+  const inputs = { ...Object.fromEntries((stage?.depends_on || []).map(id => byId[id]).filter(Boolean).map(d => [d.stage_key, d.output])), [CONFIG_INPUT]: configOf(view.run) };
+  // A SUBSTANTIVE REFINEMENT revision was refined from an earlier final Blueprint against an evaluation, not from
+  // the assembled draft against the self-critique: it is held to what it owes THOSE (refinementBasis).
+  const refines = stage?.provenance?.refines;
+  return refines ? { ...inputs, ...refinementBasis(byId[refines.blueprint_stage_id]?.output, refines.deficiencies) } : inputs;
 }
+/** The base and the findings a refinement revision is validated against, in the shape the refinement rules read. */
+export const refinementBasis = (base, deficiencies) => ({ [BP.assembly]: { blueprint: base }, [BP.critique]: { findings: deficiencies || [] } });
 /** Today's stage-integrity findings on the ACTIVE revision of `key`, judged against the revisions it was built from. */
 export function inputIntegrity(view, key) {
   const rev = view.stageInfo[key]?.active;
@@ -250,6 +256,19 @@ export function deriveQualification(view, lifecycle = view.run.status) {
       verdict: applies ? src?.verdict ?? null : null, reasons: src?.reasons || (src?.reason ? [src.reason] : []) };
   });
   const result = blocked ? { state: "not_started", missing: [], failed: [], invalid: [], not_applicable: [] } : qualify(verdicts);
+  // BOUNDED SUBSTANTIVE REFINEMENT (plan §7.3, contract MAX_REFINEMENT_CYCLES). A Blueprint that fails qualification
+  // may be refined against the evaluation — a new Blueprint revision, then one new evaluation — at most this many
+  // times per assembled draft, each on the operator's decision. Distinct from a retry (same revision, malformed
+  // output). When the budget is spent and it still fails, the state is limitation_reported: never released, and the
+  // unresolved criteria are reported as they stand. Every cycle that started a revision counts, whatever it produced.
+  const assemblyId = stageInfo[BP.assembly]?.active?.id;
+  const cycles = (view.lineage || []).filter(s => s.stage_key === BP.final && s.provenance?.refines && s.error_class !== "not_started"
+    && (!assemblyId || (s.depends_on || []).includes(assemblyId))).length;
+  const unmet = criteria.filter(c => c.applies && c.verdict != null && c.verdict !== "pass");
+  const deficiencies = unmet.map((c, i) => ({ id: `E${i + 1}`, severity: "blocking", category: c.id, where: "the Blueprint as evaluated",
+    problem: c.reasons.join(" ") || `Failed: ${c.standard}`, required_change: `Change the Blueprint so that it meets this standard: ${c.standard}` }));
+  const exhausted = result.state === "refinement_required" && cycles >= MAX_REFINEMENT_CYCLES;
+  const state = exhausted ? "limitation_reported" : result.state;
   const live = q?.latest?.status === "running";
   // A running evaluation whose last call settled as a retryable failure with budget left waits for its next
   // attempt on the SAME revision (Phase 7 tranche 1); any other running evaluation is a call whose outcome is unknown.
@@ -263,14 +282,18 @@ export function deriveQualification(view, lifecycle = view.run.status) {
   const pending = blocked || evaluation ? null : live ? (waiting ? "awaiting_retry" : "in_progress") : q?.latest?.status === "failed" ? "evaluation_failed" : "awaiting_evaluation";
 
   return {
-    state: result.state, result, criteria, blocked, pending, completion,
+    state, result, criteria, blocked, pending, completion,
+    // What substantive refinement may still do, and what stays unresolved when it may do no more.
+    refinement: { used: cycles, max: MAX_REFINEMENT_CYCLES, remaining: Math.max(0, MAX_REFINEMENT_CYCLES - cycles), deficiencies,
+      available: state === "refinement_required" && !!evaluation && !live && view.storage === STORAGE_MODEL.staged && !!stageInfo[BP.assembly]?.active },
+    limitations: exhausted ? unmet.map(c => ({ criterion: c.id, standard: c.standard, reasons: c.reasons })) : [],
     evaluationError: pending === "evaluation_failed" ? q.latest.error_message : null,
     // continue | start | new_version | null — what the evaluation pathway may do now (adapter: evaluateJanus)
     evaluationAction, evaluationRetry: waiting ? { nextAttempt: waiting.nextAttempt, revision: q.latest.revision } : null,
     lastEvaluationError: spent ? last.error_message : null,
     // The engine starts an evaluation on its own only when this Blueprint version has never had one that made a call.
     needsEvaluation: evaluationAction === "start",
-    release: releaseDecision(lifecycle, result.state),
+    release: releaseDecision(lifecycle, state),
     blueprintStageId: bp?.active?.id || null,
     strongestObjection: evaluation?.output?.strongest_objection || null,
     // The evaluator's findings on what was submitted versus what came back, as recorded.

@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { FileText, Clock, RefreshCw } from "lucide-react";
+import { FileText, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { glassCard, glassSurface } from "@/components/ui/LiquidGlass";

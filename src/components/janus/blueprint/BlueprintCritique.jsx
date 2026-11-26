@@ -40,6 +40,8 @@ export default function BlueprintCritique({ critique, refinement }) {
       <BlueprintLine label="What the draft genuinely adds" value={critique?.genuine_additions} />
       <BlueprintLine label="What only restates the operator's material" value={critique?.input_restatement} />
       <BlueprintLine label="Scope changed in refinement" value={(refinement?.scope_changes || []).map(c => `${c.requirement ? `${c.requirement}: ` : ""}${c.what} — ${c.reason}`)} />
+      <BlueprintLine label="Changed in refinement" value={(refinement?.changes || []).map(c => `${c.path}: ${c.what}${c.finding ? ` (answers ${c.finding})` : c.reason ? ` — ${c.reason}` : ""}`)} />
+      <BlueprintLine label="Removed in refinement" value={(refinement?.removals || []).map(r => `${r.path} — ${r.reason}`)} />
       <BlueprintLine label="Refinement" value={refinement?.summary} />
     </BlueprintPanel>
   );

@@ -8,7 +8,7 @@ import { TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
 import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
 import { base44 } from "@/api/base44Client";
 import { createRun, updateRun, loadRunView, claimInitiation } from "@/lib/janus/stageStore";
-import { driveStages, finalizeRun, reclose, verifyContinuation, evaluateStage } from "@/lib/janus/stageEngine";
+import { driveStages, finalizeRun, reclose, verifyContinuation, evaluateStage, refineStage } from "@/lib/janus/stageEngine";
 import { recoverStage, closeFromLastCall } from "@/lib/janus/stageRunner";
 import { stagePlan, blueprintPlan, continuationOf, continuableFor, stageLabel } from "@/lib/janus/executionState";
 import { REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
@@ -210,6 +210,39 @@ export async function evaluateJanus(runId, { newVersion = false } = {}, hooks = 
     const after = await loadRunView(runId);
     return { runId, action, status: after.run.status, qualification: after.run.qualification_state || null,
       unresolved: res.unresolved || null, refused: res.refused || null, blocked: res.blocked || null, failure: res.failure || null };
+  } finally {
+    driving.delete(runId);
+  }
+}
+
+export const NO_REFINEMENT_MESSAGE = "Substantive refinement is not available for this run";
+/**
+ * ONE SUBSTANTIVE REFINEMENT CYCLE, on the operator's decision (stageEngine.refineStage). Only for a completed run
+ * whose current Blueprint was evaluated and failed, with cycles left; never beside an unresolved call; operator
+ * only; one initiation per durable state. It buys at most one refinement revision (with its own bounded attempts)
+ * and one evaluation. When the budget is spent the state is limitation_reported and this is refused.
+ */
+export async function refineJanus(runId, hooks = {}) {
+  const view = await loadRunView(runId);
+  if (!view) throw new Error("Run not found");
+  if (view.storage !== STORAGE_MODEL.staged) throw new Error("Historical runs are read-only");
+  const q = deriveQualification(view);
+  if (q.blocked) throw new Error(q.blocked);
+  if (liveStages(view).length) throw new Error("A call of this run has not settled: nothing is started beside it");
+  if (!q.refinement.available) throw new Error(q.state === "limitation_reported"
+    ? `${NO_REFINEMENT_MESSAGE}: its ${q.refinement.max} refinement cycles are used. The unresolved limitations are reported as they stand.`
+    : `${NO_REFINEMENT_MESSAGE}: it applies to a Blueprint that was evaluated and failed (state: ${q.state}).`);
+  if (driving.has(runId)) throw new Error("This run is already being executed in this session");
+  await assertOperator();
+  await claim(view);
+  driving.add(runId);
+  try {
+    if (hooks.onDurableChange) await hooks.onDurableChange(runId);
+    const res = await refineStage({ runId, onDurableChange: hooks.onDurableChange });
+    const after = await loadRunView(runId);
+    return { runId, cycle: q.refinement.used + 1, status: after.run.status, qualification: after.run.qualification_state || null,
+      failure: res.refined.failure || res.evaluation?.failure || null, refused: res.refined.refused || res.evaluation?.refused || null,
+      unresolved: res.refined.unresolved || res.evaluation?.unresolved || null };
   } finally {
     driving.delete(runId);
   }

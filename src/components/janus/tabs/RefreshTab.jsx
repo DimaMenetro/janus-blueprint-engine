@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, List } from "lucide-react";
 
 export default function RefreshTab({ data }) {

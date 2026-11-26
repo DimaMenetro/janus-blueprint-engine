@@ -32,11 +32,14 @@ function stepMarkdown(s) {
   if (Array.isArray(s.substeps) && s.substeps.length) {
     md += `**Substeps**\n${s.substeps.map(x => (x && typeof x === "object" ? `- ${text(x.substep)}${filled(x.details) ? ` — ${text(x.details)}` : ""}${rest(x, ["substep", "details"]).trim() ? ` (${rest(x, ["substep", "details"]).trim().replace(/\n+/g, " ")})` : ""}` : `- ${text(x)}`)).join("\n")}\n\n`;
   }
+  if (Array.isArray(s.specifications) && s.specifications.length) {
+    md += `**Specifications**\n\n${s.specifications.map(x => `*${text(x?.kind).replace(/_/g, " ")}${filled(x?.name) ? ` — ${text(x.name)}` : ""}*\n\n${text(x?.content)}`).join("\n\n")}\n\n`;
+  }
   md += bullets("Checklist", s.checklist, "- [ ]");
   md += line("Validation", s.validation);
   md += bullets("Acceptance tests", s.acceptance_tests);
   md += rest(s, ["step", "title", "purpose", "depends_on_steps", "confidence", "derived_from", "time_estimate", "effort_level", "instructions",
-    "inputs", "outputs", "substeps", "checklist", "validation", "acceptance_tests"]);
+    "inputs", "outputs", "substeps", "specifications", "checklist", "validation", "acceptance_tests"]);
   return md;
 }
 

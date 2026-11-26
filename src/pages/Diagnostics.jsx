@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { CheckCircle2, XCircle, AlertTriangle, Circle, ExternalLink, Copy, Play, FileJson, FileText } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Circle, ExternalLink, Copy, Play } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { light, dark, glassCard, glassSurface, glassBtn } from "@/components/ui/LiquidGlass";
 import { navigationLogger } from "@/components/diagnostics/NavigationLogger";

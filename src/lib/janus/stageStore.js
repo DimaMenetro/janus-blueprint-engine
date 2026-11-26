@@ -36,12 +36,14 @@ export async function findOpenStagedRun() {
   return run || null;
 }
 
-export async function beginStage({ runId, stageKey, revision, dependsOn, templateVersion, prompt, origin, sources = [] }) {
+export async function beginStage({ runId, stageKey, revision, dependsOn, templateVersion, prompt, origin, sources = [], refines }) {
   return base44.entities.RunStage.create({
     run_id: runId, stage_key: stageKey, revision, status: "running",
     protocol_version: PROTOCOL.version, engine_version: ENGINE_VERSION, prompt_template_version: templateVersion,
     depends_on: dependsOn, input_fingerprint: await fingerprintInputs({ stageKey, templateVersion, dependsOn, prompt }),
-    provenance: { origin, orchestrator: ORCHESTRATOR, model_policy: MODEL_POLICY.operational_model, ...(sources.length ? { sources } : {}) },
+    provenance: { origin, orchestrator: ORCHESTRATOR, model_policy: MODEL_POLICY.operational_model, ...(sources.length ? { sources } : {}),
+      // A substantive refinement: the exact Blueprint revision it refines, the evaluation it answers and its findings.
+      ...(refines ? { refines } : {}) },
     started_at: new Date().toISOString(),
   });
 }
