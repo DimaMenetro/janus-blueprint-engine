@@ -10,7 +10,7 @@ import { base44 } from "@/api/base44Client";
 import { createRun, updateRun, loadRunView, claimInitiation } from "@/lib/janus/stageStore";
 import { driveStages, finalizeRun, reclose, verifyContinuation, evaluateStage } from "@/lib/janus/stageEngine";
 import { recoverStage, closeFromLastCall } from "@/lib/janus/stageRunner";
-import { stagePlan, continuationOf, continuableFor, stageLabel } from "@/lib/janus/executionState";
+import { stagePlan, blueprintPlan, continuationOf, continuableFor, stageLabel } from "@/lib/janus/executionState";
 import { REFRESH_UNAVAILABLE_MESSAGE } from "@/lib/janus/stageCompiler";
 import { rerunImpact } from "@/lib/janus/rerunImpact";
 import { completionImpact } from "@/lib/janus/completionImpact";
@@ -158,18 +158,21 @@ export async function completeJanus(runId, { repair = false, expected } = {}, ho
   return { ...result, impact, success: result.stageErrors.length === 0 && !result.unresolved && !result.refused && !result.cancelled, errors: result.stageErrors };
 }
 
-async function rerun(runId, target, keys, hooks) {
+async function rerun(runId, target, keysOf, hooks) {
   const view = await loadRunView(runId);
   if (!view) throw new Error("Run not found");
   const missing = CORE_DOMAINS.filter(d => !view.artifacts[d]);
   if (missing.length > 0) throw new Error(`Cannot re-run ${target} — missing prerequisite domains: ${missing.join(", ")}`);
-  return rerunCore(runId, { targets: keys }, hooks, target);
+  return rerunCore(runId, { targets: keysOf(view) }, hooks, target);
 }
 
 /** New revisions of the six intersections and the four patterns. The dependent Blueprint becomes stale (derived). */
-export const rerunSynthesis = (runId, hooks) => rerun(runId, "synthesis", [...INTERSECTION_KEYS, "synthesis"], hooks);
-/** A new Blueprint revision from the currently active stages. */
-export const rerunBlueprint = (runId, hooks) => rerun(runId, "blueprint", ["blueprint"], hooks);
+export const rerunSynthesis = (runId, hooks) => rerun(runId, "synthesis", () => [...INTERSECTION_KEYS, "synthesis"], hooks);
+/**
+ * A new Blueprint from the currently active stages: new revisions of the whole Blueprint pipeline of the run's
+ * mode (brief → … → the final Blueprint). To regenerate a single pipeline stage, re-run it from Stage lineage.
+ */
+export const rerunBlueprint = (runId, hooks) => rerun(runId, "blueprint", (view) => blueprintPlan(view.run.execution_mode), hooks);
 
 /**
  * THE EVALUATION PATHWAY OF A COMPLETED RUN (Phase 7, first tranche). Ordinary Resume never reaches a completed

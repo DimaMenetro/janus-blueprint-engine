@@ -5,7 +5,8 @@
  */
 import { MODE_PROFILES, PAIRS, DOMAINS } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, STAGE_KEY_ORDER, QUALIFICATION_KEY, intersectionKey } from "@/lib/janus/stageModel";
-import { UI_STATES, TERMINAL_STATES, RETRY_POLICY, retryDecision } from "@/lib/janus/lifecycleContract";
+import { UI_STATES, TERMINAL_STATES, RETRY_POLICY, retryDecision, hasCritique } from "@/lib/janus/lifecycleContract";
+import { BP, BLUEPRINT_PIPELINE_KEYS, BLUEPRINT_STAGE_LABELS, isDeterministicStage } from "@/lib/janus/blueprintPipeline";
 
 /**
  * SAME-REVISION RETRY CONTINUATION (Phase 6) — read from the durable attempt ledger of ONE revision, never stored.
@@ -69,12 +70,21 @@ export function rerunOnly(stage, attempts = []) {
  */
 export function stagePlan(mode) {
   const stages = (MODE_PROFILES[mode] || MODE_PROFILES.standard).stages;
-  return stages.flatMap(s => (s === "synthesis" ? [...PAIRS.map(p => intersectionKey(p.id)), s] : [s]));
+  return stages.flatMap(s => (s === "synthesis" ? [...PAIRS.map(p => intersectionKey(p.id)), s] : s === "blueprint" ? blueprintPlan(mode) : [s]));
 }
+/**
+ * BLUEPRINT FINAL FORM (plan §15, Phase 9): the Blueprint is a pipeline of durable stages ending in `blueprint`,
+ * the final refinement. The self-critique stage belongs to the modes whose contract has adversarial critique
+ * (Standard, Full); Quick refines the assembled draft against the code audit alone.
+ */
+export const blueprintPlan = (mode) => BLUEPRINT_PIPELINE_KEYS.filter(k => k !== BP.critique || hasCritique(mode));
+/** The stages of a plan that make a model call (a deterministic stage is durable but calls nothing). */
+export const modelStagePlan = (mode) => stagePlan(mode).filter(k => !isDeterministicStage(k));
 
 export function stageLabel(key) {
   const pair = PAIRS.find(p => intersectionKey(p.id) === key);
   if (pair) return pair.domains.map(d => DOMAINS[d].label).join(" × ");
+  if (BLUEPRINT_STAGE_LABELS[key]) return BLUEPRINT_STAGE_LABELS[key];
   if (key === QUALIFICATION_KEY) return "Quality qualification";
   return DOMAINS[key]?.label || key.charAt(0).toUpperCase() + key.slice(1);
 }

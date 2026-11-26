@@ -46,6 +46,23 @@ export async function beginStage({ runId, stageKey, revision, dependsOn, templat
   });
 }
 
+/**
+ * A DETERMINISTIC stage revision (the Blueprint assembly): computed by code from validated artifacts, so it is
+ * recorded already settled, in ONE write. There is no running window to lose a session in, no model call and
+ * therefore no attempt record: an attempt is a model call, and none was made.
+ */
+export async function recordDeterministicStage({ runId, stageKey, revision, dependsOn, templateVersion, origin, output, validation }) {
+  const now = new Date().toISOString();
+  return base44.entities.RunStage.create({
+    run_id: runId, stage_key: stageKey, revision, status: validation.valid ? "succeeded" : "failed",
+    protocol_version: PROTOCOL.version, engine_version: ENGINE_VERSION, prompt_template_version: templateVersion,
+    depends_on: dependsOn, input_fingerprint: await fingerprintInputs({ stageKey, templateVersion, dependsOn, prompt: `deterministic:${stageKey}` }),
+    provenance: { origin, orchestrator: ORCHESTRATOR, method: "deterministic", model_policy: "none — computed by code, no model call" },
+    output, validation, started_at: now, completed_at: now,
+    ...(validation.valid ? {} : { error_class: "schema_failure", error_message: `${stageKey}: ${validation.errors.join("; ")}` }),
+  });
+}
+
 /** One attempt = at most one model call. It starts unclaimed; only the server can claim it, once. */
 export const openAttempt = (stage, attemptNumber) => base44.entities.RunAttempt.create({
   run_id: stage.run_id, stage_id: stage.id, stage_key: stage.stage_key, attempt_number: attemptNumber, orchestrator: ORCHESTRATOR,

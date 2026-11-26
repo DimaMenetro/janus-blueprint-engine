@@ -26,7 +26,48 @@ const blueprintFor = (prompt = "") => ({
     ...(prompt.includes("[pattern:") ? [step(3, "Scale", [PAIRS[0].id, `pattern:${PATTERNS[0].id}`])] : []),
   ],
   success_criteria: ["s"], risk_register: [{ risk: "r", impact: "med", mitigation: "m" }],
+  ...dispositions(prompt),
+  refinement: { dispositions: [{ finding: "F1", action: "resolved", change: "Step 1 now states its interface" }] },
 });
+// The Blueprint pipeline's sub-artifacts (Phase 9). Like the Blueprint above, the plan cites only what its prompt showed.
+const withActus = (prompt) => prompt.includes("ACTUS: Key Recommendations");
+const withPatterns = (prompt) => prompt.includes("[pattern:");
+function dispositions(prompt = "") {
+  return {
+    requirement_dispositions: [{ requirement: "Q1", disposition: "implemented", where: [1], reasoning: "Step 1 scopes the pilot" }],
+    ...(withActus(prompt) ? { recommendation_dispositions: [{ recommendation: "R1", disposition: "implemented", where: [2], reasoning: "Step 2 is the pilot" }] } : {}),
+  };
+}
+const planStep = (n, title, derived_from) => ({ step: n, title, purpose: `Purpose of ${title}`, phase: "P1", depends_on_steps: n > 1 ? [1] : [], fulfils: n === 1 ? ["Q1"] : [], derived_from, confidence: "Contested" });
+const planFor = (prompt) => [
+  planStep(1, "Scope", ["C1", "corpus:1"]),
+  ...(withActus(prompt) ? [planStep(2, "Pilot", ["R1", "animus:1"])] : []),
+  ...(withPatterns(prompt) ? [planStep(3, "Scale", [PAIRS[0].id, `pattern:${PATTERNS[0].id}`])] : []),
+];
+const candidate = (n) => ({ id: `K${n}`, name: `Approach ${n}`, thesis: `Thesis ${n}`, mechanism: `Mechanism ${n}: how approach ${n} works`, differs_by: `Axis ${n}`,
+  objective_fit: `Reaches the full objective by route ${n}`, epistemic_status: "Contested", strongest_case: `Case for ${n}`, weakest_point: `Weak point of ${n}` });
+const PIPELINE = {
+  "blueprint:brief": () => ({ objective: "A city-wide autonomous transit service", pathway: "Pilot one district, then scale on evidence",
+    requirements: [{ id: "Q1", text: "Run a bounded pilot before scaling", kind: "capability", priority: "must", basis: "the query" }],
+    ambition_guard: ["A feasibility study with no pilot"] }),
+  "blueprint:candidates": () => ({ problem_frame: "Trust has to be earned faster than the service scales", candidates: [1, 2, 3, 4].map(candidate) }),
+  "blueprint:selection": () => ({
+    comparison: [1, 2, 3, 4].map(n => ({ candidate: `K${n}`, assessment: { corpus: "c", cogito: "g", animus: "a", actus: "t", synthesis: "s", operator_requirements: "Meets Q1" },
+      strongest_attack: `Attack on ${n}`, survives: n === 1 ? "yes" : "weakened", conclusion: `Finding on ${n}` })),
+    decision: { mode: "selected", chosen: ["K1"], name: "Approach 1", architecture: "The architecture of approach 1", rationale: "It survives the attack",
+      attack_on_favorite: "Its pilot may not generalise", residual_weaknesses: ["Generalisation"] },
+    rejected: [2, 3, 4].map(n => ({ candidate: `K${n}`, reason: `Reason against ${n}` })),
+  }),
+  "blueprint:skeleton": (prompt) => ({ goal: "A city-wide autonomous transit service, reached through a district pilot", assumptions: ["a"],
+    phases: [{ id: "P1", name: "Pilot" }], steps: planFor(prompt), ...dispositions(prompt) }),
+  "blueprint:expansion": (prompt) => ({ steps: planFor(prompt).map(s => ({ step: s.step, instructions: "Do it", inputs: ["i"], outputs: ["o"], validation: "Check it",
+    substeps: [{ substep: `${s.step}a`, details: "d" }], acceptance_tests: ["t"] })) }),
+  "blueprint:criteria": () => ({ success_criteria: ["s"], acceptance: [{ id: "A1", criterion: "The pilot ran", verifies: ["Q1"], method: "Inspection", evidence: "Logs" }],
+    outcome_interpretation: { positive: "Scale", null: "Hold", contradictory: "Re-examine the frame", inconclusive: "Extend the pilot" },
+    risk_register: [{ risk: "r", impact: "med", mitigation: "m" }] }),
+  "blueprint:critique": () => ({ findings: [{ id: "F1", severity: "minor", category: "implementation_gap", where: "step 1", problem: "Its interface is not stated", required_change: "State the interface" }],
+    objective_check: { preserved: "yes", lost: [] }, input_restatement: [], genuine_additions: ["The staged trust mechanism"], summary: "Sound with one gap" }),
+};
 const OUT = {
   refresh: { mode: "tier0", attempted: false, limitations: "Training data only." },
   corpus: { constraints: ["Grid latency under 200 ms"], feasibility_notes: ["Feasible with edge nodes"], subdomains: subs("corpus") },
@@ -41,6 +82,8 @@ const evaluation = () => ({
   verdicts: Object.fromEntries(QUALITY_CRITERIA.filter(c => c.method === "critique" && c.hard)
     .map(c => [c.id, { verdict: llm.verdicts[c.id] || "pass", reason: `${c.id} evidence` }])),
   strongest_objection: "o",
+  intellectual_surplus: llm.findings.intellectual_surplus ?? ["A staged trust mechanism the query did not contain"], input_restatement: [],
+  objective_preservation: llm.findings.objective_preservation ?? { preserved: "yes", lost: [] }, substantive_errors: llm.findings.substantive_errors ?? [],
 });
 
 // Parsed but structurally invalid: what a model returns when it ignores the stage's output contract.
@@ -55,7 +98,7 @@ const FAIL_MESSAGE = "provider returned 500";
 
 const db = { Run: [], RunStage: [], RunAttempt: [] };
 const llm = { failOn: null, invalidOn: null, failTimes: {}, invalidTimes: {}, failMessage: FAIL_MESSAGE, transport: {}, pending: [],
-  override: {}, sequence: {}, verdicts: {}, calls: [], prompts: [], stages: [], gate: null };
+  override: {}, sequence: {}, verdicts: {}, findings: {}, calls: [], prompts: [], stages: [], gate: null };
 const session = { user: { ...OPERATOR } };
 let n = 0;
 
@@ -164,12 +207,13 @@ const model = async (prompt) => {
   if (llm.sequence[key]?.length) return { [key]: clone(llm.sequence[key].shift()) }; // one seeded output per call, in order
   if (llm.override[key]) return { [key]: clone(llm.override[key]) }; // structurally valid output a test wants to seed
   if (key === "blueprint") return { blueprint: blueprintFor(prompt) };
+  if (PIPELINE[key]) return { [key]: PIPELINE[key](prompt) };
   if (key === "qualification") return { qualification: evaluation() };
   return { [key]: OUT[key] || { insight: `${key} insight`, tension: `${key} tension`, resolution: `${key} resolution` } };
 };
 
 export const platform = {
-  db, llm, session, out: OUT, blueprintFor,
+  db, llm, session, out: OUT, blueprintFor, pipeline: PIPELINE,
   base44: {
     entities,
     functions: { invoke },
@@ -179,7 +223,7 @@ export const platform = {
     db.Run.length = 0; db.RunStage.length = 0; db.RunAttempt.length = 0;
     session.user = { ...OPERATOR };
     llm.failOn = null; llm.invalidOn = null; llm.failTimes = {}; llm.invalidTimes = {}; llm.failMessage = FAIL_MESSAGE; llm.transport = {}; llm.pending.length = 0;
-    llm.override = {}; llm.sequence = {}; llm.verdicts = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
+    llm.override = {}; llm.sequence = {}; llm.verdicts = {}; llm.findings = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
   },
   /** Hold the model call for one stage open until release() — an unresolved, live call. */
   gateOn(stageKey) {

@@ -7,7 +7,8 @@
 import { PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, lowestConfidence } from "@/lib/janus/protocolRegistry";
 import { completionManifest, enforceConfidencePropagation, normalizeTag, qualify, releaseDecision,
   QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS, stageIntegrity } from "@/lib/janus/lifecycleContract";
-import { QUALIFICATION_KEY, STORAGE_MODEL } from "@/lib/janus/stageModel";
+import { QUALIFICATION_KEY, STORAGE_MODEL, CONFIG_INPUT, configOf } from "@/lib/janus/stageModel";
+import { BP } from "@/lib/janus/blueprintPipeline";
 import { continuationOf, continuableFor, stagePlan } from "@/lib/janus/executionState";
 
 /** Durable artifacts in the shape the contract reads (six intersections and four patterns named apart). */
@@ -20,7 +21,8 @@ export function contractArtifacts(artifacts) {
 /** The outputs a revision was compiled from, by stage key — from the EXACT revisions it recorded. */
 export function recordedInputs(view, stage) {
   const byId = Object.fromEntries((view.lineage || []).map(s => [s.id, s]));
-  return Object.fromEntries((stage?.depends_on || []).map(id => byId[id]).filter(Boolean).map(d => [d.stage_key, d.output]));
+  // The run configuration travels with them: some integrity rules depend on it (Blueprint level, candidate count).
+  return { ...Object.fromEntries((stage?.depends_on || []).map(id => byId[id]).filter(Boolean).map(d => [d.stage_key, d.output])), [CONFIG_INPUT]: configOf(view.run) };
 }
 /** Today's stage-integrity findings on the ACTIVE revision of `key`, judged against the revisions it was built from. */
 export function inputIntegrity(view, key) {
@@ -73,8 +75,55 @@ export function stepTrace(step, idx) {
   return { refs, declared, effective, corrected: !!effective && effective !== declared };
 }
 
+/**
+ * INHERITANCE, decided by code (Phase 9). A Blueprint that records dispositions is held to them:
+ *  - requirements (the objective brief): every one has a disposition; one the plan carries names real steps; a
+ *    "must" requirement the plan carries is verified by an acceptance entry;
+ *  - Actus recommendations: every one has a disposition, and one marked implemented or integrated is cited in
+ *    derived_from by a step it names. A recommendation id pasted into a list is not inheritance.
+ * A historical Blueprint records no dispositions and is judged as before.
+ */
+export function inheritanceFindings(a, brief) {
+  const bp = a.blueprint || {}, steps = bp.steps || [];
+  const numbers = new Set(steps.map(s => s.step));
+  const carried = (d) => d === "implemented" || d === "integrated";
+  const requirements = [], recommendations = [];
+  if (brief && Array.isArray(bp.requirement_dispositions)) {
+    const byId = Object.fromEntries(bp.requirement_dispositions.map(d => [d.requirement, d]));
+    const verified = new Set((bp.acceptance || []).flatMap(x => x.verifies || []));
+    (brief.requirements || []).forEach(r => {
+      const d = byId[r.id];
+      if (!d) { requirements.push(`${r.id}: the operator's requirement has no disposition (${r.text})`); return; }
+      if (!carried(d.disposition)) { if (!d.reasoning) requirements.push(`${r.id}: ${d.disposition} without reasoning`); return; }
+      if (!(d.where || []).some(n => numbers.has(n))) requirements.push(`${r.id}: marked ${d.disposition}, but names no existing step`);
+      if (r.priority === "must" && Array.isArray(bp.acceptance) && !verified.has(r.id)) requirements.push(`${r.id}: a "must" requirement with no acceptance entry verifying it`);
+    });
+  }
+  if (Array.isArray(bp.recommendation_dispositions)) {
+    const byId = Object.fromEntries(bp.recommendation_dispositions.map(d => [d.recommendation, d]));
+    (a.actus?.recommendations || []).forEach(r => {
+      const d = byId[r.id];
+      if (!d) { recommendations.push(`${r.id}: the recommendation has no disposition`); return; }
+      if (!carried(d.disposition)) { if (!d.reasoning) recommendations.push(`${r.id}: ${d.disposition} without reasoning`); return; }
+      if (!steps.some(s => (d.where || []).includes(s.step) && (Array.isArray(s.derived_from) ? s.derived_from : []).includes(r.id))) recommendations.push(`${r.id}: marked ${d.disposition}, but no step it names cites it`);
+    });
+  }
+  return { requirements, recommendations };
+}
+
+/**
+ * THE CODE AUDIT of a Blueprint draft (Phase 9): exactly what the code-decided criteria would fail at qualification,
+ * computed on the assembled draft BEFORE the model critiques and refines it — so the critic and the refiner are
+ * told, and no defect code can see is left for the evaluation to discover.
+ */
+export function blueprintAudit(config, artifacts, brief) {
+  const verdicts = codeVerdicts({ mode: config.executionMode, blueprintLevel: config.blueprintLevel }, artifacts, brief);
+  return { findings: Object.entries(verdicts).flatMap(([criterion, v]) => (v.verdict === "fail" ? v.reasons.map(detail => ({ criterion, detail })) : [])) };
+}
+
 /** The five criteria decided by code: two deterministic, three by traceability over recorded links. */
-export function codeVerdicts({ mode, blueprintLevel = "L2" }, a) {
+export function codeVerdicts({ mode, blueprintLevel = "L2" }, a, brief) {
+  const inherited = inheritanceFindings(a, brief);
   const idx = traceIndex(a);
   const steps = a.blueprint?.steps || [];
   const name = (i) => `step ${steps[i].step ?? i + 1}`;
@@ -100,12 +149,14 @@ export function codeVerdicts({ mode, blueprintLevel = "L2" }, a) {
   });
   if (!filled(a.blueprint?.success_criteria)) depth.push("no success criteria");
   (a.blueprint?.risk_register || []).filter(r => !r.mitigation).forEach(r => depth.push(`risk without mitigation: ${r.risk}`));
+  depth.push(...inherited.requirements);
 
   const cross = [];
   refs.forEach((r, i) => {
     if (!r.some(x => x.hit)) cross.push(`${name(i)}: traces to no upstream artifact`);
     r.filter(x => !x.hit).forEach(x => cross.push(`${name(i)}: cites ${x.id}, which does not exist`));
   });
+  cross.push(...inherited.recommendations);
   const used = new Set(refs.flatMap(r => [...domainsOf(r)]));
   if (used.size < 2) cross.push(`the Blueprint traces to ${used.size} domain${used.size === 1 ? "" : "s"}; at least two are required`);
 
@@ -134,6 +185,26 @@ export function codeVerdicts({ mode, blueprintLevel = "L2" }, a) {
 }
 
 /**
+ * EVALUATOR CONSISTENCY (Phase 9). The independent evaluator records what the Blueprint adds beyond the operator's
+ * own material, whether the operator's objective is preserved, and the errors of substance it found. A criterion
+ * cannot pass against those findings: praise for restated input is not novelty, a reduced objective is
+ * domestication, and a blocking error is not robustness. Returns criterion id → why a "pass" is not accepted.
+ * An evaluation recorded before these findings existed carries none and is read as it was.
+ */
+export function evaluatorConsistency(output) {
+  const held = {};
+  if (!output) return held;
+  if (Array.isArray(output.intellectual_surplus) && !output.intellectual_surplus.some(s => typeof s === "string" && /[\p{L}\p{N}]/u.test(s)))
+    held.non_obviousness = "The evaluator identified nothing the Blueprint adds beyond the operator's own material, so it cannot pass as non-obvious.";
+  const kept = output.objective_preservation?.preserved;
+  if (kept && kept !== "yes")
+    held.feasibility_without_domestication = `The evaluator found the operator's objective ${kept === "no" ? "replaced" : "only partly preserved"}${output.objective_preservation.lost?.length ? ` (lost: ${output.objective_preservation.lost.join("; ")})` : ""}.`;
+  const blocking = (output.substantive_errors || []).filter(x => x?.severity === "blocking").map(x => x.error);
+  if (blocking.length) held.adversarial_robustness = `The evaluator recorded blocking errors of substance: ${blocking.join("; ")}.`;
+  return held;
+}
+
+/**
  * Completion, qualification and release for one run view. `lifecycle` is the run status to judge against
  * (the engine passes the status it is about to persist). Qualification is only attempted for a completed,
  * protocol-complete run whose Blueprint is not stale; the critique verdicts only count when they were
@@ -147,13 +218,16 @@ export function deriveQualification(view, lifecycle = view.run.status) {
     : lifecycle !== "completed" ? "Qualification begins only once the run has completed."
     : bp?.stale ? `The Blueprint is stale (${bp.stale}). Re-run it before it can be qualified.` : null;
   const evaluation = !blocked && q?.active && !q.stale && (q.active.depends_on || []).includes(bp?.active?.id) ? q.active : null;
-  const code = blocked ? {} : codeVerdicts({ mode: run.execution_mode, blueprintLevel: run.blueprint_level }, artifacts);
+  const code = blocked ? {} : codeVerdicts({ mode: run.execution_mode, blueprintLevel: run.blueprint_level }, artifacts, view.pipeline?.[BP.brief]);
   const critique = evaluation?.output?.verdicts || {};
+  const held = evaluatorConsistency(evaluation?.output);
 
   const verdicts = {};
   const criteria = QUALITY_CRITERIA.map(c => {
     const applies = criterionApplies(c);
-    const src = c.method === "critique" ? critique[c.id] : code[c.id];
+    let src = c.method === "critique" ? critique[c.id] : code[c.id];
+    // The evaluator stays the judge; code only refuses a "pass" its own recorded findings contradict.
+    if (c.method === "critique" && src?.verdict === "pass" && held[c.id]) src = { verdict: "fail", reasons: [held[c.id], `The evaluator's own answer was "pass": ${src.reason}`] };
     if (src?.verdict != null) verdicts[c.id] = src.verdict;
     return { id: c.id, method: c.method, standard: c.standard, applies, rule: c.applies_when || null,
       verdict: applies ? src?.verdict ?? null : null, reasons: src?.reasons || (src?.reason ? [src.reason] : []) };
@@ -182,5 +256,9 @@ export function deriveQualification(view, lifecycle = view.run.status) {
     release: releaseDecision(lifecycle, result.state),
     blueprintStageId: bp?.active?.id || null,
     strongestObjection: evaluation?.output?.strongest_objection || null,
+    // The evaluator's findings on what was submitted versus what came back, as recorded.
+    findings: evaluation ? { intellectual_surplus: evaluation.output.intellectual_surplus || null, input_restatement: evaluation.output.input_restatement || null,
+      objective_preservation: evaluation.output.objective_preservation || null, substantive_errors: evaluation.output.substantive_errors || null } : null,
+    evaluationStageId: evaluation?.id || null,
   };
 }

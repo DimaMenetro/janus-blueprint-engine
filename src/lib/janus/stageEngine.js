@@ -5,11 +5,13 @@
  * to ask for; they never build prompts, call the model or decide what counts as completed.
  */
 import { STAGE_ORDER, PROTOCOL } from "@/lib/janus/protocolRegistry";
-import { STORAGE_MODEL, QUALIFICATION_KEY, fingerprintInputs, revisionLabel } from "@/lib/janus/stageModel";
+import { STORAGE_MODEL, QUALIFICATION_KEY, CONFIG_INPUT, configOf, fingerprintInputs, revisionLabel } from "@/lib/janus/stageModel";
 import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
-import { completionOf, deriveQualification, recordedInputs, inputIntegrity } from "@/lib/janus/qualification";
-import { loadRunView, updateRun } from "@/lib/janus/stageStore";
-import { runStage, continueStage, closeFromLastCall } from "@/lib/janus/stageRunner";
+import { completionOf, deriveQualification, recordedInputs, inputIntegrity, blueprintAudit } from "@/lib/janus/qualification";
+import { loadRunView, updateRun, recordDeterministicStage } from "@/lib/janus/stageStore";
+import { runStage, continueStage, closeFromLastCall, validateStageOutput } from "@/lib/janus/stageRunner";
+import { BP, isDeterministicStage, assembleBlueprint } from "@/lib/janus/blueprintPipeline";
+import { composeArtifacts } from "@/lib/janus/runView";
 import { compileStage, stageInputs, requiredInputs, templateVersionOf } from "@/lib/janus/stageCompiler";
 import { stageFailures, continuationOf, rerunOnly } from "@/lib/janus/executionState";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
@@ -19,14 +21,20 @@ const MAX_RAW_JSON_LENGTH = 200000;
 const MAX_MD_LENGTH = 60000;
 const cap = (s, max) => (s.length <= max ? s : `${s.slice(0, max)}\n\n[TRUNCATED — original was ${s.length} chars]`);
 
-export const configOf = (run) => ({
-  queryText: run.query_text,
-  executionMode: run.execution_mode,
-  outputMode: run.output_mode,
-  blueprintLevel: run.blueprint_level || "L2",
-  noveltyDial: run.novelty_dial || "medium",
-  refreshEnabled: !!run.refresh_enabled,
-});
+export { configOf };
+
+/**
+ * DETERMINISTIC STAGES (plan §15.4 step 4). Computed by code from the validated artifacts a stage declares as its
+ * inputs; no model is called. The Blueprint assembly merges the pipeline's sub-artifacts into one draft and audits
+ * it with the same code that decides the code-judged quality criteria.
+ */
+const DETERMINISTIC = {
+  [BP.assembly]: (inputs, config) => {
+    const blueprint = assembleBlueprint(inputs);
+    const artifacts = composeArtifacts(Object.fromEntries(Object.entries(inputs).map(([k, output]) => [k, { output }])));
+    return { blueprint, audit: blueprintAudit(config, { ...artifacts, blueprint }, inputs[BP.brief]) };
+  },
+};
 
 /**
  * Execute one stage against the durable view. Inputs and exact dependency revisions are whatever the view
@@ -47,9 +55,20 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
   const unfit = staged ? inputKeys.map(k => ({ key: k, revision: active(k).revision, errors: inputIntegrity(view, k) })).filter(x => x.errors.length) : [];
   if (unfit.length) return { skipped: { stageKey, missing: [], unfit } };
   const inputs = Object.fromEntries(inputKeys.map(k => [k, active(k).output]));
-  const compiled = compileStage({ stageKey, config: configOf(view.run), evidence, inputs });
+  const config = configOf(view.run);
+  const integrity = { ...inputs, [CONFIG_INPUT]: config };
+  if (isDeterministicStage(stageKey)) {
+    // No prompt, no call, no attempt: the revision is computed, validated and recorded settled in one write.
+    const output = DETERMINISTIC[stageKey](inputs, config);
+    const validation = validateStageOutput(stageKey, output, { inputs: integrity });
+    const record = await recordDeterministicStage({ runId: view.run.id, stageKey, origin, output, validation,
+      revision: (view.stageInfo[stageKey]?.max_revision || 0) + 1, dependsOn: inputKeys.map(k => active(k).id), templateVersion: templateVersionOf(stageKey) });
+    if (onBegan) await onBegan(record);
+    return validation.valid ? { record } : { failure: { evidence: "schema_failure", message: record.error_message, attempts: 0 } };
+  }
+  const compiled = compileStage({ stageKey, config, evidence, inputs });
   return runStage({
-    runId: view.run.id, stageKey, origin, onBegan, integrity: inputs,
+    runId: view.run.id, stageKey, origin, onBegan, integrity,
     revision: (view.stageInfo[stageKey]?.max_revision || 0) + 1,
     dependsOn: inputKeys.map(k => active(k).id),
     templateVersion: compiled.templateVersion, sources: compiled.sources,

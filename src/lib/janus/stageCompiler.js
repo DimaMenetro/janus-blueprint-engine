@@ -383,22 +383,33 @@ SPECS[QUALIFICATION_KEY] = (config, inp) => {
   const critique = QUALITY_CRITERIA.filter(c => c.method === "critique" && criterionApplies(c));
   const expect = MODE_EXPECTATIONS[config.executionMode] || {};
   const matrix = Object.fromEntries(PAIRS.filter(p => inp[intersectionKey(p.id)]).map(p => [p.id, inp[intersectionKey(p.id)]]));
+  const brief = inp[BP.brief];
   return {
     parseKey: QUALIFICATION_KEY, title: "QUALITY QUALIFICATION — INDEPENDENT EVALUATION", untruncated: true,
     instructions: `You are the Janus Quality Evaluator. You did NOT write the Blueprint in the data block and you owe it nothing.
-Your task is to decide whether it deserves release, by trying to find where it fails. A Blueprint that is merely well-formed, generic, safe or plausible FAILS. Do not reward length or confident wording.
+Your task is to decide whether it deserves release, by trying to find where it fails. A Blueprint that is merely well-formed, generic, safe or plausible FAILS. Do not reward length, confident wording or scientific-sounding language: a term is worth only the mechanism behind it.
 
-Judge each criterion below separately, against the Blueprint and the upstream material it was built from. For each one answer exactly "pass" or "fail" and state the specific evidence. There is no "not applicable" and no partial credit: when in doubt, fail.
+READ THE OPERATOR'S QUERY FIRST (data block "query"). It is what was submitted; the Blueprint is what came back. Judge the difference between the two and record it:
+- intellectual_surplus: what the Blueprint contributes that is NOT already in the operator's query — a mechanism, a resolved tension, a structure, a risk, a sequence. A sophisticated restatement of the input is not novelty and not insight: if the operator already wrote it, it is not surplus. An empty list is a valid answer.
+- input_restatement: the parts of the Blueprint that only restate the operator's own material.
+- objective_preservation: does the Blueprint pursue the operator's objective at its full ambition ("yes"), a reduced or renamed version of it ("partly"), or a different objective ("no")? lost lists every requirement, interface, mode, gate or control of the query that the Blueprint neither builds nor defers with a real reason.${brief ? " The requirement list in operator_objective is there to check against; the query itself is the authority." : ""}
+- substantive_errors: errors of substance — a named construct with no operational mechanism, a claim stronger than its support, validation logic that can only come out one way or that treats the absence of an effect as proof, an internal contradiction, an alternative that was never a serious rival. Mark each "blocking" when the Blueprint cannot be trusted until it is repaired, otherwise "minor".
+
+Then judge each criterion below separately, against the Blueprint, the operator's query and the upstream material it was built from. For each one answer exactly "pass" or "fail" and state the specific evidence. There is no "not applicable" and no partial credit: when in doubt, fail. Your answers must agree with what you recorded above (code enforces it): non_obviousness cannot pass with nothing in intellectual_surplus, feasibility_without_domestication cannot pass unless the objective is preserved, and adversarial_robustness cannot pass over a blocking error.
 Mode: ${config.executionMode || "unspecified"} — expected at least ${expect.min_alternatives ?? 0} serious alternative(s) and ${expect.min_non_obvious_insights ?? 1} non-obvious insight(s).
 
 CRITERIA:
 ${critique.map((c, i) => `${i + 1}. ${c.id} — ${c.standard}`).join("\n")}`,
     context: JSON.stringify({
-      blueprint: inp.blueprint, corpus_constraints: inp.corpus?.constraints, cogito_claims: inp.cogito?.claims,
+      blueprint: inp.blueprint, ...(brief ? { operator_objective: brief } : {}),
+      ...(inp[BP.candidates] ? { candidates_considered: inp[BP.candidates] } : {}),
+      ...(inp[BP.selection] ? { comparison_and_decision: inp[BP.selection] } : {}),
+      ...(inp[BP.critique] ? { self_critique_before_refinement: inp[BP.critique] } : {}),
+      corpus_constraints: inp.corpus?.constraints, cogito_claims: inp.cogito?.claims,
       animus: inp.animus && { boundary_checks: inp.animus.boundary_checks, disallowed_moves: inp.animus.disallowed_moves, ethical_stance: inp.animus.ethical_stance },
       actus_recommendations: inp.actus?.recommendations, intersections: matrix, synthesis: inp.synthesis,
     }, null, 1),
-    contract: `Output ONLY valid JSON: { "${QUALIFICATION_KEY}": { "verdicts": { ${critique.map(c => `"${c.id}": {"verdict":"pass or fail","reason":"specific evidence"}`).join(", ")} }, "strongest_objection": "the best argument against releasing this Blueprint" } }`,
+    contract: `Output ONLY valid JSON: { "${QUALIFICATION_KEY}": { "intellectual_surplus": ["..."], "input_restatement": ["..."], "objective_preservation": {"preserved":"yes or partly or no","lost":["..."]}, "substantive_errors": [{"error":"...","severity":"blocking or minor"}], "verdicts": { ${critique.map(c => `"${c.id}": {"verdict":"pass or fail","reason":"specific evidence"}`).join(", ")} }, "strongest_objection": "the best argument against releasing this Blueprint" } }`,
   };
 };
 

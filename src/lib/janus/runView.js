@@ -10,6 +10,7 @@ import {
   LEGACY_ID_PREFIX, intersectionKey, revisionLabel,
 } from "@/lib/janus/stageModel";
 import { stageInputs } from "@/lib/janus/stageCompiler";
+import { BLUEPRINT_SUBSTAGE_KEYS } from "@/lib/janus/blueprintPipeline";
 
 /** The inputs the canonical compiler declares for a stage key (a key it does not know declares none). */
 export const declaredInputs = (key) => (STAGE_KEY_ORDER.includes(key) ? stageInputs(key) : []);
@@ -119,7 +120,11 @@ export function composeRunView(run, records = [], attempts = []) {
   // Attempts per stage revision, in order — telemetry, and the evidence a lost session's call is resolved from.
   const byStage = {};
   [...attempts].sort((a, b) => a.attempt_number - b.attempt_number).forEach(a => { (byStage[a.stage_id] ||= []).push(a); });
-  return { run, storage, artifacts: composeArtifacts(graph.active), stageInfo: graph.info, lineage: graph.lineage, attempts: byStage };
+  // The Blueprint pipeline's sub-artifacts (brief, candidates, decision, …, critique): the reasoning behind the
+  // Blueprint, read by the Blueprint surface, the qualification and the export. Kept apart from `artifacts`, which
+  // stays the set of protocol artifacts completion is counted in.
+  const pipeline = Object.fromEntries(BLUEPRINT_SUBSTAGE_KEYS.filter(k => graph.active[k]).map(k => [k, graph.active[k].output]));
+  return { run, storage, artifacts: composeArtifacts(graph.active), pipeline, stageInfo: graph.info, lineage: graph.lineage, attempts: byStage };
 }
 
 /** Rerun needs from durable state: missing, failed or invalid revisions, and stale dependents. */

@@ -108,6 +108,10 @@ export function validateStageOutput(stageKey, output, { inputs } = {}) {
       const v = output?.verdicts?.[c.id];
       return typeof v?.verdict === "string" && v.reason ? [] : [`qualification.verdicts.${c.id}: verdict and reason required`];
     });
+    // The evaluator's findings on the difference between what was submitted and what came back (Phase 9). The code
+    // holds its criterion answers to them (qualification.deriveQualification), so they are mandatory output.
+    ["intellectual_surplus", "input_restatement", "substantive_errors"].filter(f => !Array.isArray(output?.[f])).forEach(f => errors.push(`qualification.${f}: a list is required (it may be empty)`));
+    if (!["yes", "partly", "no"].includes(output?.objective_preservation?.preserved)) errors.push('qualification.objective_preservation.preserved: exactly one of "yes" | "partly" | "no" is required');
     return { validator: "qualification-verdicts", valid: errors.length === 0, errors };
   }
   if (stageKey.startsWith("intersection:")) {
@@ -134,13 +138,24 @@ export function resolveTransport(stageKey, t, integrity) {
   let parsed;
   try { parsed = parseLLMResponse(t.result, parseKey); } catch (e) { return { outcome: "parse_failure", message: `Parse error — ${e.message}` }; }
   if (parsed.error) return { outcome: classifyParseError(parsed.error), message: parsed.error.replace(`${parseKey}: `, "") };
-  const validation = validateStageOutput(stageKey, parsed.data, { inputs: integrity });
+  // ONE REPRESENTATION (Phase 9). The artifact that is validated is the artifact that is stored: the schema's
+  // documented normalizations (a step number or dependency written as "2" → 2, "medium" → "med", "Probable" →
+  // "Contested") are applied once, here. Before, validation ran on the normalized copy and the raw one was stored,
+  // so a dependency the validator accepted as step 2 was later read as the string "2" and reported unresolved.
+  // The model's exact response stays on the attempt (response_text).
+  const data = normalizeStageOutput(stageKey, parsed.data);
+  const validation = validateStageOutput(stageKey, data, { inputs: integrity });
   // Parsed but invalid is settled failure evidence (plan §12.2), never successful cognition.
   if (!validation.valid) {
     const shown = validation.errors.slice(0, 5).join("; ") + (validation.errors.length > 5 ? ` (+${validation.errors.length - 5} more)` : "");
-    return { outcome: "schema_failure", message: `Output failed mandatory validation — ${shown}`, output: parsed.data, validation };
+    return { outcome: "schema_failure", message: `Output failed mandatory validation — ${shown}`, output: data, validation };
   }
-  return { outcome: "succeeded", output: parsed.data, validation };
+  return { outcome: "succeeded", output: data, validation };
+}
+/** The schema's normalized form of a stage output; a stage the schema does not describe is returned as it is. */
+export function normalizeStageOutput(stageKey, output) {
+  if (stageKey === QUALIFICATION_KEY || stageKey.startsWith("intersection:") || !output || typeof output !== "object") return output;
+  return validateJanusOutput({ [stageKey]: output }, [stageKey]).normalized[stageKey];
 }
 
 /** Settle the revision from an attempt's actual outcome. `attempts` = how many attempts made a call. */
