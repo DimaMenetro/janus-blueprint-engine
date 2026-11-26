@@ -111,7 +111,6 @@ describe("completion is a validated contract, not a returned process", () => {
 
   it.each([
     ["a missing subdomain", "cogito", () => { const c = clone(h.out.cogito); delete c.subdomains[subdomainIds("cogito")[0]]; return c; }, /cogito subdomain missing/],
-    ["fewer than three alternatives", "blueprint", () => ({ ...h.blueprintFor("ACTUS: Key Recommendations [pattern:"), alternative_approaches: [{ name: "only one" }] }), /alternative approaches/],
     ["an unanchored recommendation", "actus", () => ({ ...clone(h.out.actus), recommendations: [{ id: "R1", text: "r", depends_on_claims: [], inherited_confidence: "Established", probability: "high" }] }), /no resolvable Cogito dependency/],
   ])("a structurally valid Full run with %s cannot become completed", async (_name, key, seed, blocking) => {
     h.llm.override[key] = seed();
@@ -125,6 +124,40 @@ describe("completion is a validated contract, not a returned process", () => {
     expect(record).toMatchObject({ qualification_state: "not_started", released_blueprint_stage_id: "" });
     expect(qOf(result.runId).release).toMatchObject({ released: false, status: "incomplete" });
     expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "partial", resumable: false });
+  });
+
+  // REPLACED 2026-11-26 under DIMA's narrow authorization (consolidated directive §8, item 1). The inherited case
+  // "fewer than three alternatives" seeded the loss through the final Blueprint and expected that Blueprint to SETTLE
+  // and be rejected only at completion. The final refinement now refuses to drop alternatives its draft held, so the
+  // detection boundary is earlier. The guarantee is kept and strengthened: insufficient alternatives cannot produce a
+  // completed, qualified or released Full Blueprint; the rejected transformation leaves every earlier artifact valid;
+  // and the completion boundary itself still rejects such a Blueprint if one is ever recorded.
+  it("a Full run whose final Blueprint returns fewer than three alternatives cannot become completed", async () => {
+    h.llm.override.blueprint = { ...h.blueprintFor("ACTUS: Key Recommendations [pattern:"), alternative_approaches: [{ name: "only one" }] };
+    const result = await run("full");
+    const record = h.db.Run[0];
+    const bp = stagesOf(result.runId).filter(s => s.stage_key === "blueprint");
+    expect(bp.map(s => [s.revision, s.status, s.error_class])).toEqual([[1, "failed", "schema_failure"]]); // refused at the stage
+    expect(bp[0].validation.errors.some(e => /^alternative_approaches: the base holds 3 and the refinement returned 1/.test(e))).toBe(true);
+    expect(h.db.RunAttempt.filter(a => a.stage_id === bp[0].id).map(a => [a.attempt_number, a.outcome, a.retry_decision]))
+      .toEqual([[1, "schema_failure", "retry_scheduled"], [2, "schema_failure", "retry_scheduled"], [3, "schema_failure", "exhausted"]]); // the normal bounded retry
+    expect(stagesOf(result.runId).filter(s => s.status === "succeeded")).toHaveLength(20); // every stage before it is preserved, the assembled draft included
+    expect(viewOf(result.runId).artifacts.blueprint).toBeUndefined(); // the rejected Blueprint is never the active one
+    expect(result.status).toBe("partial");
+    expect(record.completion_manifest.complete).toBe(false);
+    expect(h.llm.stages).not.toContain("qualification"); // nothing to qualify, no evaluation purchased
+    expect(record).toMatchObject({ qualification_state: "not_started", released_blueprint_stage_id: "" });
+    expect(qOf(result.runId).release).toMatchObject({ released: false, status: "incomplete" });
+    expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "partial", resumable: false });
+
+    // The completion boundary is retained: a recorded Blueprint with one alternative still cannot complete a Full run.
+    h.reset();
+    const ok = await run("full");
+    h.db.RunStage.find(s => s.stage_key === "blueprint").output.alternative_approaches = [{ name: "only one" }];
+    const q = qOf(ok.runId);
+    expect(q.completion.complete).toBe(false);
+    expect(q.completion.blocking.some(e => /alternative approaches/.test(e))).toBe(true);
+    expect(q.release.released).toBe(false);
   });
 
   it("a run with no valid artifact ends failed; one with some ends partial with them preserved", async () => {
@@ -174,15 +207,39 @@ describe("structurally valid mediocrity is not released", () => {
     expect(criterion(q, "emergence").reasons).toEqual(["no step is traced to an intersection", "no step is traced to a formal emergent pattern"]);
   });
 
+  // REPLACED 2026-11-26 under DIMA's narrow authorization (consolidated directive §8, item 2). The inherited test
+  // expected an inflated confidence label to survive final settlement and be rejected at qualification. The Confidence
+  // Propagation Law is now enforced on the final Blueprint against the exact claims it was compiled from, so the
+  // inflated label is refused when the stage settles. Kept and strengthened: an invented trace handle is never
+  // accepted as support (unchanged, first block); inflated confidence cannot reach an active, qualified or released
+  // artifact (second block); and the independent release boundary still catches it if one is ever recorded (third).
   it("invented trace handles and inflated confidence are caught", async () => {
-    const bp = h.blueprintFor("ACTUS: Key Recommendations [pattern:");
-    bp.steps[0].derived_from.push("C99");
-    bp.steps[1].confidence = "Established"; // rests on R1, which inherits Contested
-    h.llm.override.blueprint = bp;
-    const { runId } = await run("full");
-    const q = unreleased(runId, "refinement_required");
+    const invented = h.blueprintFor("ACTUS: Key Recommendations [pattern:");
+    invented.steps[0].derived_from.push("C99");
+    h.llm.override.blueprint = invented;
+    const first = await run("full");
+    const q = unreleased(first.runId, "refinement_required");
     expect(criterion(q, "cross_domain_necessity").reasons).toEqual(["step 1: cites C99, which does not exist"]);
-    expect(criterion(q, "intellectual_honesty").reasons).toEqual(["step 2: labelled Established but rests on Contested material"]);
+
+    h.reset();
+    const inflated = h.blueprintFor("ACTUS: Key Recommendations [pattern:");
+    inflated.steps[1].confidence = "Established"; // rests on R1, which inherits Contested
+    h.llm.override.blueprint = inflated;
+    const second = await run("full");
+    const bp = stagesOf(second.runId).filter(s => s.stage_key === "blueprint");
+    expect(bp.map(s => [s.status, s.error_class])).toEqual([["failed", "schema_failure"]]);
+    expect(bp[0].validation.errors).toEqual([expect.stringMatching(/^step 2: labelled Established but rests on Contested material/)]);
+    expect(viewOf(second.runId).artifacts.blueprint).toBeUndefined();
+    expect(stagesOf(second.runId).filter(s => s.status === "succeeded")).toHaveLength(20); // earlier cognition preserved
+    expect(h.llm.stages).not.toContain("qualification");
+    expect(h.db.Run[0]).toMatchObject({ status: "partial", qualification_state: "not_started", released_blueprint_stage_id: "" });
+
+    h.reset();
+    const third = await run("full");
+    h.db.RunStage.find(s => s.stage_key === "blueprint").output.steps[1].confidence = "Established";
+    const late = qOf(third.runId);
+    expect(criterion(late, "intellectual_honesty").reasons).toEqual(["step 2: labelled Established but rests on Contested material"]);
+    expect(late.release.released).toBe(false);
   });
 
   it("the evaluator cannot skip a criterion: any verdict other than pass or fail counts as a failure", async () => {

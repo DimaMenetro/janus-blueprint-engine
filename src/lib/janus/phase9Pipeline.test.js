@@ -179,11 +179,21 @@ describe("each stage is held to what it owes the stages it read", () => {
     const draft = assembleBlueprint({ "blueprint:brief": brief, "blueprint:candidates": candidates, "blueprint:selection": out("blueprint:selection"),
       "blueprint:skeleton": skeleton, "blueprint:expansion": out("blueprint:expansion"), "blueprint:criteria": out("blueprint:criteria") });
     const inputs = { "blueprint:assembly": { blueprint: draft }, "blueprint:critique": out("blueprint:critique") };
-    const answered = { dispositions: [{ finding: "F1", action: "resolved", change: "Step 1 now states its interface" }] };
-    expect(refinementErrors({ ...draft, refinement: answered }, inputs)).toEqual([]);
-    expect(refinementErrors({ ...draft, steps: draft.steps.slice(0, 2), refinement: answered }, inputs))
+    // UPDATED 2026-11-26 (cognitive restoration directive §8: "validate actual repairs rather than accepting the model's
+    // declaration"). This Phase 9 test accepted "resolved" on a Blueprint identical to its draft. A resolution is now a
+    // declared change that can be pointed to, so the repaired Blueprint here actually states step 1's interface. Every
+    // other expectation of this test is unchanged.
+    const answered = { dispositions: [{ finding: "F1", action: "resolved", change: "Step 1 now states its interface" }],
+      changes: [{ path: "steps[1].interfaces", finding: "F1", what: "Added the operator console API" }] };
+    const repaired = { ...draft, steps: draft.steps.map(s => (s.step === 1 ? { ...s, interfaces: ["Operator console API"] } : s)) };
+    expect(refinementErrors({ ...repaired, refinement: answered }, inputs)).toEqual([]);
+    expect(refinementErrors({ ...draft, refinement: { dispositions: answered.dispositions } }, inputs))
+      .toEqual(["F1: marked resolved, but no entry of refinement.changes cites F1: a resolution is a change that can be pointed to"]);
+    expect(refinementErrors({ ...draft, refinement: answered }, inputs))
+      .toEqual(["refinement.changes names steps[1].interfaces, but nothing there differs from the base: a declared repair must be an actual change"]);
+    expect(refinementErrors({ ...repaired, steps: repaired.steps.slice(0, 2), refinement: answered }, inputs))
       .toEqual(['step 3 ("Scale") of the assembled draft was dropped: refinement adds and repairs, it does not remove']);
-    const weakened = { ...draft, refinement: answered, requirement_dispositions: [{ requirement: "Q1", disposition: "deferred", reasoning: "later" }] };
+    const weakened = { ...repaired, refinement: answered, requirement_dispositions: [{ requirement: "Q1", disposition: "deferred", reasoning: "later" }] };
     expect(refinementErrors(weakened, inputs)).toEqual(["requirement Q1 went from implemented to deferred without an entry in refinement.scope_changes giving the reason"]);
     weakened.refinement = { ...answered, scope_changes: [{ requirement: "Q1", what: "deferred", reason: "The pilot site is not available" }] };
     expect(refinementErrors(weakened, inputs)).toEqual([]); // a declared, reasoned change of scope is allowed
