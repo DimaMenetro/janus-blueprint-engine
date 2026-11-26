@@ -12,7 +12,7 @@
  *   - the exact sub-artifacts it builds on (candidates, decision, skeleton, …) as structured records.
  * What a stage reads is decided by what it declares (stageCompiler.stageInputs), by meaning. Ids carry the thread.
  */
-import { BP } from "@/lib/janus/blueprintPipeline";
+import { BP, sourceOutline } from "@/lib/janus/blueprintPipeline";
 
 export const DOCTRINE = `STANDING DOCTRINE (binds every Blueprint stage):
 1. OBJECTIVE FIDELITY. The objective in the data block "operator_objective" is the objective. Evidence and feasibility decide the PATH and its gates; they never replace the destination with a narrower, easier or more conventional one. A staged path that still arrives at the full objective is fidelity. Building something smaller under the same name is failure. The ambition_guard entries are reformulations already ruled out.
@@ -30,7 +30,10 @@ const NOVELTY = {
 const LEVEL = {
   L1: "LEVEL L1: for every step give instructions, inputs, outputs and validation.",
   L2: "LEVEL L2: for every step give instructions, inputs, outputs, validation, time_estimate, effort_level (low, medium or high) and substeps.",
-  L3: "LEVEL L3 (bridges architecture and execution): for every step give instructions, inputs, outputs, validation, time_estimate, effort_level, substeps, interfaces, a checklist and acceptance_tests. Each acceptance test is an observable pass/fail statement.",
+  L3: `LEVEL L3 (bridges architecture and execution): for every step give instructions, inputs, outputs, validation, time_estimate, effort_level, substeps, interfaces, a checklist and acceptance_tests. Each acceptance test is an observable pass/fail statement.
+SPECIFICATIONS (L3). Wherever a step contains something a builder would otherwise have to invent, write it out in specifications — one entry each, with its kind, a name and the full content:
+  algorithm (inputs, steps, outputs, complexity or convergence where it matters) · formula (the expression, its variables and units, the conditions under which it holds) · data_structure (fields, types, invariants) · state_machine (states, transitions, guards, what is illegal) · interface_contract (operations, payloads, errors, ordering and idempotency guarantees) · procedure (the exact operating sequence) · tolerance (the quantity, its bound and how it is measured) · experiment (hypothesis, manipulation, controls, measurement, analysis, and what each outcome would mean) · failure_handling (the fault, its detection, the response, the recovery) · physical_mechanism (the physical relationship relied on, and its limits).
+The central mechanisms of the selected strategy and every mechanism the ledger supplies (Corpus mechanisms, Cogito formal models and hypotheses, intersection mechanisms, pattern consequences) must appear as specifications in the steps that realise them. Where a mechanism depends on something not yet known, specify the experiment or derivation that would establish it. "Implement the compiler" is not a specification; the grammar, the passes and the refusal conditions are.`,
 };
 const json = (v) => JSON.stringify(v, null, 1);
 const briefBlock = (b) => (b ? [{ label: "operator_objective", text: json(b) }] : []);
@@ -45,8 +48,13 @@ export const BLUEPRINT_SPECS = {
 - objective: the end state the operator wants, at its full ambition, including the long-term target when the operator distinguishes it from a first deliverable. Do not soften it, hedge it or swap it for the first milestone.
 - pathway: how the operator intends to get there, where they say so (stages, gates, sequencing, evidence conditions). Empty text when the query states none.
 - requirements: EVERY material requirement the query states or plainly entails, one entry per distinct obligation: capabilities, interfaces and views, modes of operation, gates and sequences, controls and authorization rules, evidence requirements, acceptance conditions, constraints and explicit non-goals. Preserve the operative meaning, not the wording. Never merge distinct obligations into one vague entry, and never drop one because it is hard. A long specification yields a long list; a one-line query still yields what must be true for it to be answered. Number them Q1, Q2, … "must" when the operator states it as required or as a rule; "should" otherwise. basis: where in the operator's material it comes from (section, heading or phrase).
-- ambition_guard: the narrower reformulations of this objective that would be easier to deliver and would NOT satisfy the operator. Name at least one. Later stages are forbidden from sliding into them.`,
-    contract: `Output ONLY valid JSON: { "${BP.brief}": { "objective": "...", "pathway": "...", "requirements": [{"id":"Q1","text":"...","kind":"capability","priority":"must","basis":"..."}], "ambition_guard": ["..."] } }
+- end_state: what exists and is true when the operator's objective has been fully achieved, in concrete terms.
+- implied_necessities: what must be true or must exist for the stated requirements to work, although the operator did not write it down (a dependency, an enabling capability, a missing interface). These are requirements too: give each its own Q entry and name it here.
+- relationships: the dependencies and couplings between requirements that a builder must respect (what gates what, what must stay separate, what must agree).
+- ambition_guard: the narrower reformulations of this objective that would be easier to deliver and would NOT satisfy the operator. Name at least one. Later stages are forbidden from sliding into them.
+${sourceOutline(config.queryText).length ? `- coverage (checked by code): the data block "source_outline" lists the sections of the operator's material, S1, S2, … Account for EVERY one: disposition "requirements" with the requirement ids drawn from that section, or "context" with a note saying why it holds no obligation (a title, a status line, a reference list). A section that holds obligations and is marked context is the failure this exists to prevent.` : ""}`,
+    blocks: sourceOutline(config.queryText).length ? [{ label: "source_outline", text: sourceOutline(config.queryText).map(s => `${s.id} — ${s.title}`).join("\n") }] : [],
+    contract: `Output ONLY valid JSON: { "${BP.brief}": { "objective": "...", "pathway": "...", "end_state": "...", "requirements": [{"id":"Q1","text":"...","kind":"capability","priority":"must","basis":"..."}], "implied_necessities": ["..."], "relationships": ["..."], "coverage": [{"section":"S1","disposition":"requirements","requirements":["Q1"],"note":"..."}], "ambition_guard": ["..."] } }
 
 ${h.typeLegend(BP.brief)}`,
   }),
@@ -106,7 +114,8 @@ ${DOCTRINE}
 - assumptions, invariants (what must stay true throughout) and decision_points (choices that must be made, and on what evidence).
 - architecture: summary, the components (id M1, M2, …, name, responsibility, interfaces) and their relationships.
 - phases (id P1, P2, …) and scope: what is in, what is deferred (with the reason and what reopens it) and what is out.
-- steps: as many as the real complexity of the objective needs. Number them from 1. Each has a title, a purpose, its phase, the components it touches, depends_on_steps (the NUMBERS of other steps, as numbers), fulfils (requirement ids), derived_from (handles) and confidence: the LOWEST confidence among the claims and recommendations it rests on.
+- Every component is built by at least one step and every phase has steps (checked by code). A requirement is carried by the step that actually builds it, not by a step whose title merely mentions it.
+- steps: as many as the real complexity of the objective needs. A step is one buildable unit of work with one main output; a step that fulfils many unrelated requirements is several steps. Number them from 1. Each has a title, a purpose, its phase, the components it touches, depends_on_steps (the NUMBERS of other steps, as numbers), fulfils (requirement ids), derived_from (handles) and confidence: the LOWEST confidence among the claims and recommendations it rests on.
 
 REQUIREMENT INHERITANCE (checked by code). requirement_dispositions has one entry for EVERY requirement id in "operator_objective":
   implemented — steps build it (name them in "where");
@@ -133,7 +142,7 @@ ${LEVEL[config.blueprintLevel] || LEVEL.L2}
 
 DEPTH. Write each step so that a competent engineer or implementation agent can execute it without having to reinvent the design: what is built, with which structures, interfaces, data, algorithms, parameters and tolerances, in what order, and what decides the open choices. Depth follows the complexity of the step, not a count: a step that carries several requirements needs correspondingly more substeps and tests. inputs and outputs are concrete artifacts. validation says how to verify this step did what it should. Do not repeat the skeleton's purpose as the instructions, and do not answer a hard part with "implement X".`,
     context: h.ledger, blocks: [...briefBlock(inp[BP.brief]), ...record("decision", inp[BP.selection]?.decision), ...record("skeleton", inp[BP.skeleton])],
-    contract: `Output ONLY valid JSON: { "${BP.expansion}": { "steps": [{"step":1,"instructions":"...","inputs":["..."],"outputs":["..."],"validation":"..."${config.blueprintLevel !== "L1" ? ',"time_estimate":"...","effort_level":"medium","substeps":[{"substep":"1a","details":"..."}]' : ""}${config.blueprintLevel === "L3" ? ',"interfaces":["..."],"checklist":["..."],"acceptance_tests":["..."]' : ""}}] } }
+    contract: `Output ONLY valid JSON: { "${BP.expansion}": { "steps": [{"step":1,"instructions":"...","inputs":["..."],"outputs":["..."],"validation":"..."${config.blueprintLevel !== "L1" ? ',"time_estimate":"...","effort_level":"medium","substeps":[{"substep":"1a","details":"..."}]' : ""}${config.blueprintLevel === "L3" ? ',"interfaces":["..."],"checklist":["..."],"acceptance_tests":["..."],"specifications":[{"kind":"algorithm","name":"...","content":"..."}]' : ""}}] } }
 
 ${h.typeLegend(BP.expansion)}`,
   }),
@@ -189,6 +198,7 @@ REFINEMENT RULES (checked by code):
 1. Repair every item in the data block "code_audit". ${inp[BP.critique] ? 'Answer EVERY finding in the data block "critique" in refinement.dispositions: "resolved" with the change you made and where, or "declined" with the reason.' : ""}
 2. Never drop a step of the draft. Add steps where a requirement or a finding needs them, and deepen thin ones.
 2a. PRESERVE SUBSTANCE (checked by code). Every part of the draft you were not asked to change is returned in full, word for word: every substep, checklist item, input, output, interface, acceptance test, acceptance entry, risk, assumption, invariant, phase, component and alternative. A list may grow or be rewritten better; it never comes back with fewer entries, and a detailed entry is never replaced by a shorter paraphrase of itself. If an entry is genuinely wrong and must go, name its path (for example "steps[2].checklist") in refinement.removals with the reason.
+2c. REFINEMENT IS A TRANSACTION (checked by code, word for word). Whatever you do change — rewrite, deepen, reorganise, replace — you declare in refinement.changes: the path (for example "goal", "steps[3].instructions", "steps[2].substeps[2b]", "architecture", "acceptance[A2]"), what you did, and the finding id it answers or your reason. Anything that differs from the draft and is not declared rejects the output; a declared path where nothing differs rejects it too. A finding you mark "resolved" must be the finding of at least one declared change. You are free to make large improvements: add mechanisms, restructure the architecture, revise an assumption, add steps. Declare them. A change must leave the Blueprint saying MORE that is true and buildable, never less.
 2b. A step's confidence in the draft was set by code to the weakest confidence of the material it cites. Do not raise it. It changes only if what the step cites in derived_from changes.
 3. Never weaken a requirement silently. A requirement the draft implements or integrates stays carried, unless refinement.scope_changes names it and gives the reason.
 4. Repair by supplying what is missing: the mechanism, the test, the interface, the step. Do not repair by making the plan smaller, safer or more conventional, and do not remove an idea whose only fault is that it is new.
@@ -200,7 +210,7 @@ REFINEMENT RULES (checked by code):
     blocks: [...briefBlock(inp[BP.brief]), ...record("assembled_draft", inp[BP.assembly]?.blueprint), ...record("code_audit", inp[BP.assembly]?.audit), ...record("critique", inp[BP.critique])],
     untrusted: h.untrusted,
     contract: `Output ONLY valid JSON with the "blueprint" key. Carry forward every field of the assembled draft (goal, objective, pathway, assumptions, selected_strategy, alternative_approaches, architecture, phases, scope, invariants, decision_points, steps, success_criteria, acceptance, outcome_interpretation, risk_register, requirement_dispositions, recommendation_dispositions) and add "refinement":
-{ "blueprint": { "goal": "...", "assumptions": ["..."], "alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], "steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[],"derived_from":["C1","corpus:1"],"confidence":"Contested"}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}], "refinement": {"dispositions":[{"finding":"F1","action":"resolved","change":"...","reason":"..."}],"scope_changes":[{"requirement":"Q1","what":"...","reason":"..."}],"removals":[],"summary":"..."} } }
+{ "blueprint": { "goal": "...", "assumptions": ["..."], "alternative_approaches": [{"name":"...","pros":["..."],"cons":["..."],"why_not_chosen":"..."}], "steps": [{"step":1,"title":"...","instructions":"...","inputs":["..."],"outputs":["..."],"validation":"...","depends_on_steps":[],"derived_from":["C1","corpus:1"],"confidence":"Contested"}], "success_criteria": ["..."], "risk_register": [{"risk":"...","impact":"med","mitigation":"..."}], "refinement": {"dispositions":[{"finding":"F1","action":"resolved","change":"...","reason":"..."}],"scope_changes":[{"requirement":"Q1","what":"...","reason":"..."}],"removals":[],"changes":[{"path":"steps[1].instructions","finding":"F1","what":"...","reason":"..."}],"summary":"..."} } }
 
 ${h.typeLegend(BP.final)}`,
   }),

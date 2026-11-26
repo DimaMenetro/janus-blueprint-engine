@@ -8,7 +8,7 @@ vi.mock("@/api/base44Client", async () => ({ base44: (await import("@/lib/janus/
 import { platform as h } from "@/lib/janus/testPlatform";
 import { executeJanus, rerunSynthesis, rerunBlueprint } from "@/lib/janus/browserAdapter";
 import { composeRunView } from "@/lib/janus/runView";
-import { deriveQualification, stepTrace, traceIndex } from "@/lib/janus/qualification";
+import { deriveQualification, stepTrace, traceIndex, codeVerdicts } from "@/lib/janus/qualification";
 import { compileStage } from "@/lib/janus/stageCompiler";
 
 const src = (rel) => fs.readFileSync(path.resolve(process.cwd(), "src", rel), "utf8");
@@ -238,8 +238,12 @@ describe("structurally valid mediocrity is not released", () => {
     const third = await run("full");
     h.db.RunStage.find(s => s.stage_key === "blueprint").output.steps[1].confidence = "Established";
     const late = qOf(third.runId);
-    expect(criterion(late, "intellectual_honesty").reasons).toEqual(["step 2: labelled Established but rests on Contested material"]);
+    // Completion re-applies the same stage integrity, so such a record is not even a candidate…
+    expect(late.completion.blocking).toEqual([expect.stringMatching(/^blueprint: step 2: labelled Established but rests on Contested material/)]);
     expect(late.release.released).toBe(false);
+    // …and the release boundary's own code verdict, asked directly, still fails it.
+    const verdicts = codeVerdicts({ mode: "full", blueprintLevel: "L2" }, viewOf(third.runId).artifacts);
+    expect(verdicts.intellectual_honesty).toEqual({ verdict: "fail", reasons: ["step 2: labelled Established but rests on Contested material"] });
   });
 
   it("the evaluator cannot skip a criterion: any verdict other than pass or fail counts as a failure", async () => {

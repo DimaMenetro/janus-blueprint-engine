@@ -36,6 +36,22 @@ export const BLUEPRINT_STAGE_LABELS = {
   [BP.assembly]: "Blueprint · Assembly", [BP.critique]: "Blueprint · Self-critique", [BP.final]: "Blueprint",
 };
 
+/**
+ * THE OPERATOR'S MATERIAL, SECTION BY SECTION (pure). The live CCT brief turned a twelve-section specification into
+ * eight requirements, and nothing downstream could know what had been passed over. The headings the operator wrote
+ * are read by code (markdown headings, bold-only lines, short numbered or lettered titles) and numbered S1…Sn; the
+ * brief must account for each one: requirements drawn from it, or context with the reason. Understanding stays the
+ * model's; code only makes silence about a section impossible. Fewer than three headings is not a sectioned document.
+ */
+export function sourceOutline(queryText = "") {
+  const raw = String(queryText);
+  const lines = (raw.includes("\n") ? raw.split("\n") : raw.split("\\n")).map(l => l.trim()).filter(Boolean);
+  const heading = (l) => l.length <= 110 && (/^#{1,6}\s+\S/.test(l) || /^\*\*[^*]+\*\*\s*:?$/.test(l)
+    || (/^(\d+(\.\d+)*\s*[·.)]?|PART\s+[IVX\d]+|Appendix\s+\w+\s*[·.:]?|Section\s+[\dIVX]+[.:]?)(\s+\S|$)/i.test(l) && l.split(/\s+/).length <= 9 && !/[.;,?!]$/.test(l)));
+  const titles = [...new Set(lines.filter(heading).map(l => l.replace(/^#{1,6}\s+/, "").replace(/\*\*/g, "").replace(/:$/, "").trim()))];
+  return titles.length >= 3 ? titles.map((title, i) => ({ id: `S${i + 1}`, title })) : [];
+}
+
 // ── Schemas ────────────────────────────────────────────────────────
 const str = { type: "string" };
 const strs = { type: "array", items: str };
@@ -49,9 +65,12 @@ export const REQUIREMENT_DISPOSITIONS = ["implemented", "integrated", "deferred"
 export const RECOMMENDATION_DISPOSITIONS = ["implemented", "integrated", "deferred", "rejected"];
 const CARRIED = ["implemented", "integrated"]; // the two dispositions that put a requirement into the plan
 
+export const SPECIFICATION_KINDS = ["algorithm", "formula", "data_structure", "state_machine", "interface_contract", "procedure", "tolerance", "experiment", "failure_handling", "physical_mechanism"];
 const STEP_PLAN = { step: { type: "number" }, title: str, purpose: str, phase: str, depends_on_steps: nums, components: strs, fulfils: strs, derived_from: strs, confidence: str };
 const STEP_DETAIL = { instructions: str, inputs: strs, outputs: strs, validation: str, time_estimate: str, effort_level: str, interfaces: strs,
-  substeps: list({ substep: str, details: str }), checklist: strs, acceptance_tests: strs };
+  substeps: list({ substep: str, details: str }), checklist: strs, acceptance_tests: strs,
+  // What a builder would otherwise have to invent: the algorithm, the formula, the structure, the contract, the test.
+  specifications: list({ kind: { type: "string", enum: SPECIFICATION_KINDS }, name: str, content: str }, ["kind", "content"]) };
 const ARCHITECTURE = obj({ summary: str, components: list({ id: str, name: str, responsibility: str, interfaces: strs }, ["id", "name", "responsibility"]), relationships: strs });
 const SCOPE = obj({ in: strs, deferred: list({ item: str, reason: str, revisit_when: str }, ["item", "reason"]), out: strs });
 const ACCEPTANCE = list({ id: str, criterion: str, verifies: strs, method: str, evidence: str }, ["id", "criterion", "method"]);
@@ -83,6 +102,8 @@ export const PIPELINE_SCHEMAS = {
     objective: str, pathway: str,
     requirements: list({ id: str, text: str, kind: { type: "string", enum: ["capability", "interface", "constraint", "control", "evidence", "acceptance", "non_goal"] },
       priority: { type: "string", enum: ["must", "should"] }, basis: str }, ["id", "text", "kind", "priority"]),
+    end_state: str, implied_necessities: strs, relationships: strs,
+    coverage: list({ section: str, disposition: { type: "string", enum: ["requirements", "context"] }, requirements: strs, note: str }, ["section", "disposition"]),
     ambition_guard: strs,
   }, ["objective", "requirements", "ambition_guard"]),
   [BP.candidates]: obj({
@@ -153,13 +174,22 @@ function dispositionErrors(dispositions, subject, ids, carried, steps, e, { cite
 }
 
 const RULES = {
-  [BP.brief]: (a) => {
+  [BP.brief]: (a, _inputs, ctx = {}) => {
     const e = [];
     need(a, ["objective"], "brief", e);
     if (!arr(a?.requirements).length) e.push("brief.requirements empty");
     idRule(arr(a?.requirements), /^Q\d+$/, "Q1", "requirements", e);
     arr(a?.requirements).forEach(r => { if (!said(r?.text)) e.push(`${r?.id}: text missing`); });
     if (!arr(a?.ambition_guard).some(said)) e.push("brief.ambition_guard empty: name at least one narrower reformulation that would not satisfy the operator's objective");
+    // Every section of the operator's material is accounted for (sourceOutline), so none is passed over in silence.
+    const ids = new Set(arr(a?.requirements).map(r => r?.id));
+    const covered = Object.fromEntries(arr(a?.coverage).map(c => [c?.section, c]));
+    sourceOutline(ctx.config?.queryText).forEach(s => {
+      const c = covered[s.id];
+      if (!c) e.push(`coverage: section ${s.id} ("${s.title}") of the operator's material is not accounted for — give the requirements drawn from it, or mark it context and say why`);
+      else if (c.disposition === "requirements" && !arr(c.requirements).some(id => ids.has(id))) e.push(`coverage ${s.id}: marked requirements, but names no requirement id of this brief`);
+      else if (c.disposition === "context" && !said(c.note)) e.push(`coverage ${s.id}: marked context, but gives no reason it holds no requirement`);
+    });
     return e;
   },
   [BP.candidates]: (a, inputs, ctx) => {
@@ -210,6 +240,10 @@ const RULES = {
     }
     const recs = arr(inputs?.actus?.recommendations).map(r => r.id);
     if (recs.length) dispositionErrors(a?.recommendation_dispositions, "recommendation", recs, CARRIED, steps, e, { cite: true });
+    // The plan builds the architecture it declares: no component and no phase without a step that realises it.
+    const touched = new Set(steps.flatMap(s => arr(s.components))), phased = new Set(steps.map(s => s.phase));
+    arr(a?.architecture?.components).filter(c => c?.id && !touched.has(c.id)).forEach(c => e.push(`component ${c.id} ("${c.name}") is declared in the architecture but no step builds it (steps[].components)`));
+    arr(a?.phases).filter(p => p?.id && !phased.has(p.id)).forEach(p => e.push(`phase ${p.id} ("${p.name}") has no step`));
     return e;
   },
   [BP.expansion]: (a, inputs, ctx) => {
@@ -256,6 +290,9 @@ const RULES = {
     idRule(a.findings, /^F\d+$/, "F1", "findings", e);
     a.findings.forEach(f => need(f, ["problem", "required_change"], f?.id || "finding", e));
     if (!Array.isArray(a?.objective_check?.lost)) e.push("objective_check.lost missing");
+    // Something the critic found lost is a finding with a required change, so the refinement must answer it.
+    else if (a.objective_check.lost.some(said) && !a.findings.some(f => ["objective_preservation", "omission", "domestication"].includes(f?.category)))
+      e.push("objective_check.lost names what the draft lost, but no finding (objective_preservation, omission or domestication) requires its restoration");
     return e;
   },
 };
