@@ -9,7 +9,7 @@ import RerunImpactPreview from "@/components/janus/RerunImpactPreview";
 
 const TARGETS = { synthesis: [...INTERSECTION_KEYS, "synthesis"], blueprint: ["blueprint"] };
 
-export default function RerunControls({ view, t, isDark, onRerunComplete }) {
+export default function RerunControls({ view, t, isDark, onRerunComplete, isAdmin = false }) {
   const [preview, setPreview] = useState(null); // "synthesis" | "blueprint" | null — its impact is shown before anything runs
   const { busy } = useExecution();
 
@@ -23,7 +23,8 @@ export default function RerunControls({ view, t, isDark, onRerunComplete }) {
   const showSynthesisRerun = needs.synthesis && inPlan("synthesis");
   const showBlueprintRerun = needs.blueprint;
 
-  if (!needs.core || (!showSynthesisRerun && !showBlueprintRerun)) return null;
+  // Re-runs are operator controls: not shown to anyone else.
+  if (!isAdmin || !needs.core || (!showSynthesisRerun && !showBlueprintRerun)) return null;
 
   const button = (target, Icon, label, color) => (
     <motion.button

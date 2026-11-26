@@ -10,6 +10,8 @@ import {
 import { protocolLabel } from "@/lib/janus/protocolRegistry";
 import { executeJanus } from "@/lib/janus/browserAdapter";
 import { useExecution } from "@/components/janus/ExecutionContext";
+import { useAuth } from "@/lib/AuthContext";
+import { isOperator } from "@/lib/janus/operatorAccess";
 import QueryForm from "@/components/janus/QueryForm";
 import ExecutionModeSelector from "@/components/janus/ExecutionModeSelector";
 import ParameterGrid from "@/components/janus/ParameterGrid";
@@ -28,6 +30,8 @@ export default function NewQuery() {
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const { drive } = useExecution();
+  // Execution is operator-only (containment). The control follows the signed-in role; the engine enforces it.
+  const operator = isOperator(useAuth().user);
 
   const handleExecute = async () => {
     if (!queryText.trim()) return;
@@ -89,19 +93,24 @@ export default function NewQuery() {
           paddingTop: 16, borderTop: `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.5)"}`,
           flexWrap: "wrap", gap: 12,
         }}>
+          {!operator && (
+            <span style={{ fontSize: 12, color: t.subtitle, flex: "1 1 200px" }}>
+              View only. Executing Janus needs the admin account: use the account button at the top to switch.
+            </span>
+          )}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={handleExecute}
-            disabled={!queryText.trim() || status === "running" || status === "validating"}
+            disabled={!operator || !queryText.trim() || status === "running" || status === "validating"}
             style={{
               ...glassBtn(t),
               padding: "0 24px",
               height: 44,
               display: "flex", alignItems: "center", gap: 8,
               fontSize: 14,
-              opacity: (!queryText.trim() || status === "running" || status === "validating") ? 0.5 : 1,
-              cursor: (!queryText.trim() || status === "running" || status === "validating") ? "not-allowed" : "pointer",
+              opacity: (!operator || !queryText.trim() || status === "running" || status === "validating") ? 0.5 : 1,
+              cursor: (!operator || !queryText.trim() || status === "running" || status === "validating") ? "not-allowed" : "pointer",
             }}
           >
             <Play style={{ width: 16, height: 16 }} />

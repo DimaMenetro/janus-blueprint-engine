@@ -167,13 +167,13 @@ export default function Results() {
       )}
 
       {/* Durable execution state + operator controls */}
-      <ExecutionStatePanel state={state} runId={run.id} t={t} onChanged={reload} />
+      <ExecutionStatePanel state={state} runId={run.id} t={t} onChanged={reload} isAdmin={isAdmin} />
 
       {/* Completion + quality qualification (derived from the same stage records) */}
       <QualificationPanel view={view} t={t} isAdmin={isAdmin} onChanged={reload} />
 
       {/* Domain re-run controls — show when synthesis or blueprint missing/errored */}
-      <RerunControls view={view} t={t} isDark={isDark} onRerunComplete={reload} />
+      <RerunControls view={view} t={t} isDark={isDark} onRerunComplete={reload} isAdmin={isAdmin} />
 
       {/* Durable stage lineage */}
       <StageLineagePanel view={view} t={t} isAdmin={isAdmin} onChanged={reload} />

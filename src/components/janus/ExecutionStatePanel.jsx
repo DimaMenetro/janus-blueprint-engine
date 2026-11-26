@@ -9,7 +9,7 @@ const DOT = { completed: "#22c55e", live: "#3b82f6", awaiting: "#f59e0b", failed
 const btn = (t) => ({ ...glassBtn(t), minHeight: 40, padding: "0 16px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" });
 
 // Durable execution state for one run: what is saved, what is in flight, what failed, and the operator's controls.
-export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
+export default function ExecutionStatePanel({ state, runId, t, onChanged, isAdmin = false }) {
   const { drive, observe, busy } = useExecution();
   const [error, setError] = useState(null);
   const [blocked, setBlocked] = useState(null);
@@ -76,7 +76,10 @@ export default function ExecutionStatePanel({ state, runId, t, onChanged }) {
         </p>
       )}
 
-      {(state.resumable || state.cancellable || state.unresolved) && (
+      {!isAdmin && (state.resumable || state.cancellable || state.unresolved) && (
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: t.subtitle }}>View only. The controls for this run need the admin account.</p>
+      )}
+      {isAdmin && (state.resumable || state.cancellable || state.unresolved) && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
           {state.unresolved && <button onClick={reconcile} disabled={busy} style={{ ...btn(t), opacity: busy ? 0.5 : 1 }}><SearchCheck style={{ width: 14, height: 14 }} />Check recorded outcome</button>}
           {state.resumable && <button onClick={resume} disabled={busy} style={{ ...btn(t), opacity: busy ? 0.5 : 1 }}><Play style={{ width: 14, height: 14 }} />Resume from saved stages</button>}

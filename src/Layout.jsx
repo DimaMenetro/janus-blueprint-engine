@@ -6,6 +6,7 @@ import { light, dark } from "@/components/ui/LiquidGlass";
 import AmbientOrbs from "@/components/ui/AmbientOrbs";
 import GlassTabBar from "@/components/ui/GlassTabBar";
 import ThemeToggle from "@/components/theme/ThemeToggle";
+import AccountControl from "@/components/janus/AccountControl";
 import { Zap } from "lucide-react";
 import { protocolShortLabel } from "@/lib/janus/protocolRegistry";
 
@@ -59,7 +60,10 @@ function LayoutInner({ children }) {
             {protocolShortLabel()}
           </span>
         </div>
-        <ThemeToggle />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <AccountControl />
+          <ThemeToggle />
+        </div>
       </header>
 
       {/* ─── PAGE CONTENT ─── */}
