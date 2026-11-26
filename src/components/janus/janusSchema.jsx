@@ -3,6 +3,15 @@ import { subdomainIds, MODE_PROFILES, PAIRS, PATTERNS } from "@/lib/janus/protoc
 import { BLUEPRINT_SCHEMA, PIPELINE_SCHEMAS } from "@/lib/janus/blueprintPipeline";
 // Schema, constants, validation, and normalization
 
+// What each formal emergent pattern DOES (CP-002 §5.1–5.4), given a structure it can be expressed in.
+const rows = (properties) => ({ type: "array", items: { type: "object", properties: Object.fromEntries(properties.map(k => [k, { type: "string" }])) } });
+const PATTERN_DEPTH = {
+  quantum_foresight: { futures: rows(["future", "conditions", "likelihood", "leading_indicators", "strategic_response"]) },
+  governed_cogito: { method_audit: rows(["method", "what_it_can_establish", "what_it_cannot", "ethical_condition"]) },
+  narrative_loop: { operator_intent: { type: "string" }, communication_design: { type: "string" } },
+  empathy_driven_strategy: { actors: rows(["actor", "motivation", "non_rational_drivers", "predicted_behavior", "strategy_response"]) },
+};
+
 export const JANUS_SCHEMA = {
   type: "object",
   properties: {
@@ -27,6 +36,12 @@ export const JANUS_SCHEMA = {
         // Legacy fields (v1.5 compat)
         constraints: { type: "array", items: { type: "string" } },
         feasibility_notes: { type: "array", items: { type: "string" } },
+        // Final Form — the faculty's own reasoning, not only its limits: how things work, the system as a whole,
+        // and what must exist or be discovered for the objective to be reachable.
+        mechanisms: { type: "array", items: { type: "object", properties: {
+          name: { type: "string" }, operation: { type: "string" }, relationships: { type: "string" }, limits: { type: "string" } } } },
+        system_model: { type: "string" },
+        enabling_dependencies: { type: "array", items: { type: "string" } },
         // v2.0 — Subdomain Perspectives
         subdomains: {
           type: "object",
@@ -58,6 +73,7 @@ export const JANUS_SCHEMA = {
               text: { type: "string" },
               depends_on: { type: "array", items: { type: "string" } }, // logical: ids of other claims in this list
               sources: { type: "array", items: { type: "string" } },    // provenance: named documents / evidence
+              implications: { type: "string" },                         // what follows for the design if the claim holds
               why_believed: { type: "string" },
               falsifiable_by: { type: "string" },
               verify_later: { type: "string" }
@@ -75,11 +91,21 @@ export const JANUS_SCHEMA = {
             properties: {
               cause: { type: "string" },
               effect: { type: "string" },
+              mechanism: { type: "string" },
               confidence: { type: "string", enum: ["Established", "Contested", "Speculative"] }
             }
           }
         },
-        neuro_symbolic_insights: { type: "array", items: { type: "string" } }
+        neuro_symbolic_insights: { type: "array", items: { type: "string" } },
+        // Final Form — theory, formal structure and associative reach, each with its honest status.
+        hypotheses: { type: "array", items: { type: "object", properties: {
+          id: { type: "string" }, statement: { type: "string" }, rationale: { type: "string" }, test: { type: "string" },
+          status: { type: "string", enum: ["Established", "Contested", "Speculative"] } } } },
+        formal_models: { type: "array", items: { type: "object", properties: {
+          name: { type: "string" }, variables: { type: "string" }, relations: { type: "string" }, predicts: { type: "string" } } } },
+        associative_leaps: { type: "array", items: { type: "object", properties: {
+          from: { type: "string" }, to: { type: "string" }, bridge: { type: "string" }, payoff: { type: "string" } } } },
+        open_questions: { type: "array", items: { type: "string" } }
       }
     },
 
@@ -103,7 +129,14 @@ export const JANUS_SCHEMA = {
             self_determination_factors: { type: "array", items: { type: "string" } },
             misalignment_risks: { type: "array", items: { type: "string" } }
           }
-        }
+        },
+        // Final Form — conscience as reasoning: what is really wanted, how the moral question resolves, and what
+        // the objective is right to pursue (not only what it must not do).
+        intent_model: { type: "object", properties: { stated_goal: { type: "string" }, true_goal: { type: "string" }, divergence: { type: "string" } } },
+        moral_reasoning: { type: "array", items: { type: "object", properties: {
+          question: { type: "string" }, rules_view: { type: "string" }, outcomes_view: { type: "string" }, virtue_view: { type: "string" }, verdict: { type: "string" } } } },
+        affirmed_pursuits: { type: "array", items: { type: "string" } },
+        stakeholders: { type: "array", items: { type: "object", properties: { who: { type: "string" }, stake: { type: "string" }, autonomy_risk: { type: "string" } } } }
       }
     },
 
@@ -124,7 +157,10 @@ export const JANUS_SCHEMA = {
               inherited_confidence: { type: "string", enum: ["Established", "Contested", "Speculative"] },
               probability: { type: "string", enum: ["low", "medium", "high"] },
               failure_modes: { type: "array", items: { type: "string" } },
-              next_actions: { type: "array", items: { type: "string" } }
+              next_actions: { type: "array", items: { type: "string" } },
+              rationale: { type: "string" },
+              mechanism: { type: "string" },
+              expected_effect: { type: "string" }
             },
             required: ["id", "text", "depends_on_claims", "inherited_confidence", "probability"]
           }
@@ -144,7 +180,8 @@ export const JANUS_SCHEMA = {
             game_board: { type: "string" },
             nash_equilibrium: { type: "string" },
             zero_sum_assessment: { type: "string" },
-            coalition_dynamics: { type: "array", items: { type: "string" } }
+            coalition_dynamics: { type: "array", items: { type: "string" } },
+            players: { type: "array", items: { type: "object", properties: { player: { type: "string" }, incentives: { type: "string" }, likely_moves: { type: "string" } } } }
           }
         },
         technical_summary: { type: "string" }, // Technical Writing — lossless compression
@@ -163,7 +200,10 @@ export const JANUS_SCHEMA = {
             value_stream: { type: "string" },
             adaptation_triggers: { type: "array", items: { type: "string" } }
           }
-        }
+        },
+        // Final Form — branching strategy and the work that makes the objective reachable.
+        strategic_branches: { type: "array", items: { type: "object", properties: { branch: { type: "string" }, trigger: { type: "string" }, response: { type: "string" } } } },
+        enabling_work: { type: "array", items: { type: "string" } }
       }
     },
 
@@ -187,8 +227,13 @@ export const JANUS_SCHEMA = {
         // 4 formal emergent patterns — derived from registry PATTERNS
         ...Object.fromEntries(PATTERNS.map(p => [p.id, {
           type: "object",
-          properties: Object.fromEntries(p.fields.map(f => [f,
-            f === "probability_wave" ? { type: "array", items: { type: "string" } } : { type: "string" }]))
+          // The registry's fields are the required contract. The depth fields are what makes a pattern operative: its
+          // mechanism, what it changes in the design, how its effect would be evaluated, and its honest status.
+          properties: { ...Object.fromEntries(p.fields.map(f => [f,
+            f === "probability_wave" ? { type: "array", items: { type: "string" } } : { type: "string" }])),
+            mechanism: { type: "string" }, design_consequence: { type: "string" }, evaluation: { type: "string" },
+            epistemic_status: { type: "string", enum: ["Established", "Contested", "Speculative"] },
+            ...(PATTERN_DEPTH[p.id] || {}) }
         }])),
         // Backward compat: keep alignment_engine as alias
         alignment_engine: {

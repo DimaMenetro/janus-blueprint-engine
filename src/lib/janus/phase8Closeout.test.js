@@ -166,10 +166,12 @@ describe("continuation identity is the stage's own", () => {
     // UPDATED 2026-11-26 (Phase 9 corrective tranche, same rule II.4): the final Blueprint's contract gained the
     // substance-preservation rules and the assembly's output gained code-set step confidence, so exactly those two
     // moved to .4. Every other stage's contract is untouched and keeps .3.
-    const changed = ["corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis", "qualification",
+    // UPDATED AGAIN 2026-11-26 (cognitive restoration, same rule II.4): the contract of every reasoning stage changed
+    // again (depth and novelty clauses, full inheritance of upstream cognition, richer contracts, transactional
+    // refinement), so each moved to .5. Refresh, whose contract did not change, still did not.
+    const changed = ["corpus", "cogito", "animus", "actus", ...INTERSECTION_KEYS, "synthesis", "qualification", "blueprint", "blueprint:assembly",
       "blueprint:brief", "blueprint:candidates", "blueprint:selection", "blueprint:skeleton", "blueprint:expansion", "blueprint:criteria", "blueprint:critique"];
-    expect(new Set(changed.map(id))).toEqual(new Set(["stage-compiler/2026-11-26.3"]));
-    expect(["blueprint", "blueprint:assembly"].map(id)).toEqual(["stage-compiler/2026-11-26.4", "stage-compiler/2026-11-26.4"]);
+    expect(new Set(changed.map(id))).toEqual(new Set(["stage-compiler/2026-11-26.5"]));
   });
 
   it.each([

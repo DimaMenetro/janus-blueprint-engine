@@ -12,6 +12,7 @@ import { BP, BLUEPRINT_PIPELINE_KEYS, isDeterministicStage } from "@/lib/janus/b
 import { BLUEPRINT_SPECS } from "@/lib/janus/blueprintSpecs";
 import { DATA_PLANE_LAW, PLANES, sealEvidence, renderEvidenceBlock, renderDataBlock, assertBoundaryIntegrity } from "@/lib/janus/evidenceBoundary";
 import { JANUS_SCHEMA } from "@/components/janus/janusSchema";
+import { domainContext, pairLines } from "@/lib/janus/stageContext";
 
 /**
  * PROMPT-TEMPLATE IDENTITY IS PER STAGE. A stage's identity changes when, and only when, the prompt contract of THAT
@@ -32,12 +33,14 @@ import { JANUS_SCHEMA } from "@/components/janus/janusSchema";
  * Refresh is unchanged since Phase 5 and keeps 2026-11-25.3.
  */
 const UNCHANGED_SINCE_PHASE5 = "stage-compiler/2026-11-25.3";
-const PHASE9_PIPELINE = "stage-compiler/2026-11-26.3";
+// 2026-11-26.5 (cognitive restoration): every reasoning stage. The four domains and the Nexus gained the depth and
+// novelty clauses and richer contracts; every stage that reads earlier cognition now reads it in full
+// (stageContext); the patterns stage reads each pair's mechanism; the Blueprint stages gained specifications,
+// source coverage and transactional refinement. Refresh alone is unchanged.
+const PHASE9_PIPELINE = "stage-compiler/2026-11-26.5";
 // 2026-11-26.4: the final Blueprint (refinement must preserve the draft's substance; confidence is code-set) and the
 // assembly (its draft leaves with code-set step confidence and records the corrections). No other stage changed.
-const PHASE9_PRESERVATION = "stage-compiler/2026-11-26.4";
-export const templateVersionOf = (stageKey) => (stageKey === "refresh" ? UNCHANGED_SINCE_PHASE5
-  : stageKey === BP.final || stageKey === BP.assembly ? PHASE9_PRESERVATION : PHASE9_PIPELINE);
+export const templateVersionOf = (stageKey) => (stageKey === "refresh" ? UNCHANGED_SINCE_PHASE5 : PHASE9_PIPELINE);
 export const REFRESH_UNAVAILABLE_MESSAGE =
   "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
 
@@ -151,97 +154,25 @@ function refreshEvidence(refresh, target) {
   return records;
 }
 
-// ── Derived context from earlier stages ──
-const numbered = (items) => items.map((x, i) => `  ${i + 1}. ${x}`);
-const claimLines = (claims) => claims.map(c => `  ${c.id} [${c.tag}]: ${c.text}`);
+// ── Derived context from earlier stages: stageContext.domainContext (every declared input, in full) ──
 
-function domainContext(target, inp) {
-  const parts = [];
-  const constraints = inp.corpus?.constraints?.length ? ["CORPUS CONSTRAINTS", ...numbered(inp.corpus.constraints)] : [];
-
-  if (target === "cogito" && inp.corpus) {
-    const c = inp.corpus;
-    parts.push("PRIOR DOMAIN CONTEXT: CORPUS (What I Am Made Of)");
-    if (c.constraints?.length) parts.push("Hard Constraints:", ...numbered(c.constraints));
-    if (c.feasibility_notes?.length) parts.push("Feasibility Notes:", ...c.feasibility_notes.map(x => `  • ${x}`));
-    if (c.subdomains) {
-      parts.push("Subdomain Expert Perspectives:");
-      Object.entries(c.subdomains).forEach(([key, sub]) => {
-        if (sub?.perspective) parts.push(`  ${key}: ${sub.perspective}`);
-        (sub?.key_findings || []).forEach(f => parts.push(`    → ${f}`));
-      });
-    }
-  }
-  if (target === "animus") {
-    parts.push(...constraints);
-    if (inp.cogito) {
-      parts.push("COGITO CLAIMS (for ethical review)", ...claimLines(inp.cogito.claims || []));
-      if (inp.cogito.causal_chains?.length) parts.push("Causal Chains:", ...inp.cogito.causal_chains.map(cc => `  ${cc.cause} → ${cc.effect} [${cc.confidence}]`));
-    }
-  }
-  if (target === "actus") {
-    if (inp.cogito?.claims?.length) parts.push("COGITO CLAIMS (for confidence propagation)", ...claimLines(inp.cogito.claims));
-    if (inp.animus) {
-      const a = inp.animus;
-      parts.push("ANIMUS BOUNDARIES");
-      if (a.ethical_stance) parts.push(`  Ethical Stance: ${a.ethical_stance}`);
-      (a.boundary_checks || []).forEach(b => parts.push(`  Boundary: ${b}`));
-      (a.disallowed_moves || []).forEach(d => parts.push(`  DISALLOWED: ${d}`));
-    }
-    parts.push(...constraints);
-  }
-  if (target === "blueprint") {
-    // Every item below is shown with the handle a step cites in derived_from.
-    const pairs = PAIRS.filter(p => inp[intersectionKey(p.id)]);
-    if (pairs.length) {
-      parts.push("CROSS-DOMAIN SYNTHESIS INSIGHTS (The Nexus) — emergent wisdom from domain intersections, full fidelity:");
-      pairs.forEach(p => {
-        const data = inp[intersectionKey(p.id)];
-        parts.push(`  ▸ [${p.id}] ${pairLabel(p)}`);
-        if (data.insight) parts.push(`    Insight: ${data.insight}`);
-        if (data.tension) parts.push(`    Tension: ${data.tension}`);
-        if (data.resolution) parts.push(`    Resolution: ${data.resolution}`);
-        if (data.mechanism) parts.push(`    Mechanism: ${data.mechanism}`);
-      });
-    }
-    const syn = inp.synthesis;
-    if (syn?.key_takeaways?.length) parts.push("SYNTHESIS: Key Takeaways", ...syn.key_takeaways.map(x => `  • ${x}`));
-    if (syn?.constraint_collisions?.length) parts.push("SYNTHESIS: Constraint Collisions (conflicts between findings that remain open)", ...syn.constraint_collisions.map(x => `  • ${x}`));
-    if (syn?.limitation_foreground) parts.push(`SYNTHESIS: Foreground Limitation — ${syn.limitation_foreground}`);
-    if (inp.actus?.recommendations?.length) {
-      parts.push("ACTUS: Key Recommendations (confidence-propagated)", ...inp.actus.recommendations.flatMap(r => [
-        `  ${r.id} [${r.inherited_confidence}/${r.probability}]: ${r.text}`,
-        ...(r.depends_on_claims?.length ? [`    rests on: ${r.depends_on_claims.join(", ")}`] : []),
-        ...(r.failure_modes?.length ? [`    failure modes: ${r.failure_modes.join(" | ")}`] : []),
-        ...(r.next_actions?.length ? [`    next actions: ${r.next_actions.join(" | ")}`] : []),
-      ]));
-    }
-    const sp = inp.actus?.strategic_plan;
-    if (sp?.immediate_horizon) parts.push(`  Immediate Horizon: ${sp.immediate_horizon}`);
-    if (sp?.long_term_horizon) parts.push(`  Long-term Horizon: ${sp.long_term_horizon}`);
-    const patterns = PATTERNS.filter(p => inp.synthesis?.[p.id]);
-    if (patterns.length) {
-      parts.push("FORMAL EMERGENT PATTERNS");
-      patterns.forEach(p => parts.push(`  ▸ [pattern:${p.id}] ${p.name}`, ...p.fields.filter(f => inp.synthesis[p.id][f]).map(f => `    ${f}: ${[].concat(inp.synthesis[p.id][f]).join(" | ")}`)));
-    }
-    if (sp?.key_decision_points?.length) parts.push(`  Decision Points: ${sp.key_decision_points.join(" | ")}`);
-    if (inp.actus?.integration_contracts?.length) parts.push("ACTUS: Integration Contracts", ...inp.actus.integration_contracts.map(x => `  • ${x}`));
-    if (inp.cogito?.claims?.length) parts.push("COGITO: Claims (handle = claim id)", ...inp.cogito.claims.flatMap(c => [
-      `  ${c.id} [${c.tag}]: ${c.text}`,
-      ...(c.depends_on?.length ? [`    rests on: ${c.depends_on.join(", ")}`] : []),
-      ...(c.falsifiable_by ? [`    falsifiable by: ${c.falsifiable_by}`] : []),
-    ]));
-    if (inp.cogito?.causal_chains?.length) parts.push("COGITO: Causal Chains", ...inp.cogito.causal_chains.map(cc => `  ${cc.cause} → ${cc.effect} [${cc.confidence}]`));
-    if (inp.corpus?.constraints?.length) parts.push("CORPUS: Hard Constraints (non-negotiable)", ...inp.corpus.constraints.map((x, i) => `  corpus:${i + 1} — ${x}`));
-    if (inp.corpus?.feasibility_notes?.length) parts.push("CORPUS: Feasibility Notes", ...inp.corpus.feasibility_notes.map(x => `  • ${x}`));
-    if (inp.animus?.ethical_stance) parts.push("ANIMUS: Ethical Stance", `  ${inp.animus.ethical_stance}`);
-    if (inp.animus?.boundary_checks?.length) parts.push("ANIMUS: Boundaries", ...inp.animus.boundary_checks.map((x, i) => `  animus:${i + 1} — ${x}`));
-    if (inp.animus?.disallowed_moves?.length) parts.push("ANIMUS: Disallowed Moves", ...inp.animus.disallowed_moves.map(x => `  ✕ ${x}`));
-    const misalignment = inp.animus?.risk_analysis?.misalignment_risks;
-    if (misalignment?.length) parts.push("ANIMUS: Misalignment Risks", ...misalignment.map(x => `  • ${x}`));
-  }
-  return parts.join("\n");
-}
+/**
+ * HOW DEEP, HOW WIDE (stated to every primary domain and to the Nexus). Depth is a property of the problem, never a
+ * count: the output-contract examples show the SHAPE of one entry, not how many entries there are. The novelty dial
+ * sets the search strategy of the whole run (plan §15.5), so the faculties that feed the Blueprint search as widely
+ * as the Blueprint is asked to.
+ */
+const NOVELTY_SEARCH = {
+  low: "NOVELTY DIAL — LOW: reason first from established methods and settled results. Raise a novel mechanism only where it clearly improves the outcome, and say why.",
+  medium: "NOVELTY DIAL — MEDIUM: generate hypotheses broadly and transfer at least one mechanism from another discipline where it does real work.",
+  high: "NOVELTY DIAL — HIGH: widen the search. Reframe the problem's assumptions from first principles, transfer mechanisms from distant disciplines, look for a unifying principle, and follow an unconventional line of reasoning as far as it holds. This licenses exploration, not unsupported assertion: every such idea carries its mechanism and its honest status.",
+};
+const depthClause = (config) => `DEPTH FOLLOWS THE PROBLEM. This run produces a ${config.outputMode} at level ${config.blueprintLevel || "L2"}; everything built later can only be as deep as what you establish here.
+- Work through the operator's material in full: every section, mechanism, interface, gate, constraint and stated intention is in scope. Material you pass over in silence is lost to every later stage.
+- The JSON examples in the output contract show the shape of ONE entry. The number of entries is whatever the problem needs: every load-bearing proposition, mechanism, risk, decision and dependency gets its own entry. One entry where the problem holds ten is a failed analysis, and ten padded entries where it holds one is no better.
+- Go below the surface of each point: state how it works, which quantities or relationships govern it (formally where a formal statement exists), what it depends on, where it stops holding, and what it changes in the design.
+- Where the objective depends on something not yet known or not yet built, do not shrink the objective: name the investigation, derivation or capability that would close the gap.
+${NOVELTY_SEARCH[config.noveltyDial] || NOVELTY_SEARCH.medium}`;
 
 // ── Output contracts ──
 // Output density scales with the mode; the expertise does not. The SME identity (all subdomains, in full) is
@@ -287,12 +218,12 @@ const domainContract = (domain, mode) => {
   const subs = (d) => (isFull(mode) ? `, "subdomains": { ${subdomainsJson(d)} }` : "");
   const rules = [typeLegend(domain), REFERENCE_RULES[domain]].filter(Boolean).join("\n\n");
   const contracts = {
-  corpus: `Output ONLY valid JSON with the "corpus" key: { "corpus": { "constraints": ["hard reality constraints from your expert assessment"], "feasibility_notes": ["practical viability notes"]${subs("corpus")} } }`,
-  cogito: `Output ONLY valid JSON with the "cogito" key: { "cogito": { "claims": [{"id":"C1","tag":"Established","text":"your epistemic finding","depends_on":[],"sources":["a document, material or body of evidence this claim draws on, by name"],"why_believed":"justified basis","falsifiable_by":"what would disprove this","verify_later":"what to check"}], "reasoning_map": ["logical chain step 1", "step 2", "..."], "graphrag_connections": ["concept A ↔ concept B: relationship"], "causal_chains": [{"cause":"...","effect":"...","confidence":"Established"}], "neuro_symbolic_insights": ["insights from bridging symbolic and connectionist reasoning"]${subs("cogito")} } }`,
-  animus: `Output ONLY valid JSON with the "animus" key: { "animus": { "boundary_checks": ["what the user should/should not do"], "disallowed_moves": ["explicitly forbidden approaches"], "safety_notes": ["safety considerations"], "consciousness_boundary": "where agency and autonomy limits lie", "attractor_states": ["natural equilibrium points the system tends toward"], "ethical_stance": "your integrated moral assessment", "risk_analysis": {"cognitive_sync_assessment": "how well-aligned are the goals", "self_determination_factors": ["factors affecting autonomy"], "misalignment_risks": ["where intent and outcome may diverge"]}${subs("animus")} } }`,
+  corpus: `Output ONLY valid JSON with the "corpus" key: { "corpus": { "constraints": ["hard reality constraints from your expert assessment"], "feasibility_notes": ["practical viability notes"], "mechanisms": [{"name":"a mechanism the objective relies on or is limited by","operation":"what it takes in, what it does, what it yields","relationships":"the quantities and relations that govern it, stated formally where a formal statement exists","limits":"where it stops holding"}], "system_model": "the system as a whole: components, flows, feedback loops and the behaviour that emerges from their interaction", "enabling_dependencies": ["what must exist, be measured or be discovered for the objective to be reachable"]${subs("corpus")} } }`,
+  cogito: `Output ONLY valid JSON with the "cogito" key: { "cogito": { "claims": [{"id":"C1","tag":"Established","text":"your epistemic finding","depends_on":[],"sources":["a document, material or body of evidence this claim draws on, by name"],"why_believed":"justified basis","falsifiable_by":"what would disprove this","verify_later":"what to check","implications":"what follows for the design if this holds"}], "reasoning_map": ["logical chain step 1", "step 2", "..."], "graphrag_connections": ["concept A ↔ concept B: relationship"], "causal_chains": [{"cause":"...","effect":"...","mechanism":"how the cause produces the effect","confidence":"Established"}], "neuro_symbolic_insights": ["insights from bridging symbolic and connectionist reasoning"], "hypotheses": [{"id":"H1","statement":"a conjecture worth pursuing","rationale":"why it may hold","test":"how it would be tested, and what a positive, null or contradictory result would mean","status":"Speculative"}], "formal_models": [{"name":"...","variables":"...","relations":"the relations between them","predicts":"what the model predicts that could be checked"}], "associative_leaps": [{"from":"a concept in this problem","to":"a concept in a distant field","bridge":"the functional relationship they share","payoff":"what the connection makes possible"}], "open_questions": ["what remains unknown and matters"]${subs("cogito")} } }`,
+  animus: `Output ONLY valid JSON with the "animus" key: { "animus": { "boundary_checks": ["what the user should/should not do"], "disallowed_moves": ["explicitly forbidden approaches"], "safety_notes": ["safety considerations"], "consciousness_boundary": "where agency and autonomy limits lie", "attractor_states": ["natural equilibrium points the system tends toward"], "ethical_stance": "your integrated moral assessment", "risk_analysis": {"cognitive_sync_assessment": "how well-aligned are the goals", "self_determination_factors": ["factors affecting autonomy"], "misalignment_risks": ["where intent and outcome may diverge"]}, "intent_model": {"stated_goal":"what was literally asked","true_goal":"what the operator is actually trying to bring about","divergence":"where the two could come apart"}, "moral_reasoning": [{"question":"a moral question this objective raises","rules_view":"what duty and principle say","outcomes_view":"what the consequences say","virtue_view":"what a person of good character would do","verdict":"your integrated judgment"}], "affirmed_pursuits": ["what this objective is right to pursue, and why — conscience affirms as well as forbids"], "stakeholders": [{"who":"...","stake":"...","autonomy_risk":"..."}]${subs("animus")} } }`,
   actus: `CONFIDENCE PROPAGATION LAW (NON-NEGOTIABLE): Every recommendation MUST inherit the LOWEST confidence tag of the Cogito claims it depends on. A recommendation depending on a "Speculative" claim CANNOT be marked "Established".
 
-Output ONLY valid JSON with the "actus" key: { "actus": { "recommendations": [{"id":"R1","text":"actionable recommendation","depends_on_claims":["C1"],"inherited_confidence":"Established","probability":"high","failure_modes":["what could go wrong"],"next_actions":["immediate next step"]}], "strategic_plan": {"immediate_horizon":"next 1-4 weeks","long_term_horizon":"3-12 months","key_decision_points":["decisions that must be made"]}, "game_theory_analysis": {"game_board":"who are the players and what are the stakes","nash_equilibrium":"stable outcome if all act rationally","zero_sum_assessment":"is this zero-sum or positive-sum","coalition_dynamics":["potential alliances and conflicts"]}, "technical_summary": "lossless compression of the entire analysis into one paragraph", "behavioral_factors": {"irrational_actors":["who might act irrationally and why"],"identity_economics":"how identity shapes economic decisions here","bias_mitigations":["specific debiasing strategies"]}, "integration_contracts": ["API/interface agreements needed"], "iteration_model": {"value_stream":"how value flows through the system","adaptation_triggers":["signals that should trigger strategy change"]}${subs("actus")} } }`,
+Output ONLY valid JSON with the "actus" key: { "actus": { "recommendations": [{"id":"R1","text":"actionable recommendation","depends_on_claims":["C1"],"inherited_confidence":"Established","probability":"high","failure_modes":["what could go wrong"],"next_actions":["immediate next step"],"rationale":"why this, and why now","mechanism":"how it produces its effect","expected_effect":"what changes if it is done, and how that would be observed"}], "strategic_plan": {"immediate_horizon":"next 1-4 weeks","long_term_horizon":"3-12 months","key_decision_points":["decisions that must be made"]}, "game_theory_analysis": {"game_board":"who are the players and what are the stakes","nash_equilibrium":"stable outcome if all act rationally","zero_sum_assessment":"is this zero-sum or positive-sum","coalition_dynamics":["potential alliances and conflicts"],"players":[{"player":"...","incentives":"...","likely_moves":"..."}]}, "technical_summary": "lossless compression of the entire analysis into one paragraph", "behavioral_factors": {"irrational_actors":["who might act irrationally and why"],"identity_economics":"how identity shapes economic decisions here","bias_mitigations":["specific debiasing strategies"]}, "integration_contracts": ["API/interface agreements needed"], "iteration_model": {"value_stream":"how value flows through the system","adaptation_triggers":["signals that should trigger strategy change"]}, "strategic_branches": [{"branch":"a way events may unfold","trigger":"what shows it is happening","response":"the prepared move"}], "enabling_work": ["an investigation, derivation or capability that must be delivered for the objective to be reached"]${subs("actus")} } }`,
   };
   const contract = `${contracts[domain]}\n\n${rules}`;
   return isFull(mode) ? contract : `${DENSITY_NOTE[mode] || DENSITY_NOTE.standard}\n\n${contract}`;
@@ -311,6 +242,8 @@ const domainSpec = (domain) => (config, inp) => ({
   instructions: `${smeIdentity(domain)}
 
 Analyze the operator's query (data block "query") through your unified expert perspective. Think FROM INSIDE your expertise — do not summarize textbook knowledge, produce findings that reflect genuine mastery. Push beyond conventional wisdom. If the physics and math support a novel approach, precedent is irrelevant.
+
+${depthClause(config)}
 
 ${COGNITIVE_DISCIPLINE}`,
   context: domainContext(domain, inp),
@@ -361,15 +294,26 @@ REQUIRED (checked by code): all four patterns with every field shown in the outp
 
 CRITICAL: Every named pattern must produce EMERGENT insight — wisdom that transcends any single intersection pair. If it could come from one pair alone, it fails. Push past convention — novel problems require novel solutions.
 
+WHAT EACH PATTERN DOES (it is a working model, not a caption):
+- Quantum Foresight explores the branching futures of this objective. futures lists the materially different ways it can unfold: the conditions that produce each, how likely it is and why, the leading indicators that tell which branch is being entered, and the strategic response prepared for it. probability_wave names those branches; it is never a list of abstract nouns.
+- Governed Cogito examines the truth-finding itself. method_audit takes each method this analysis relies on and states what it can establish, what it cannot, and the ethical condition under which using it is sound.
+- Narrative Loop decodes what the operator is actually trying to bring about (operator_intent) and designs how the result must be communicated and structured to be usable by them (communication_design).
+- Empathy-Driven Strategy models the people involved. actors gives each one's motivation, the non-rational drivers that will move them (identity, fear, status, sunk cost), their predicted behaviour and the strategy that works with it.
+For every pattern also give: mechanism (how it operates on this problem: what it takes in, what it does, what it yields), design_consequence (what the Blueprint must do differently because of it — a pattern with no consequence is decoration), evaluation (how its effect would be observed) and epistemic_status.
+
+${depthClause(config)}
+
 ${COGNITIVE_DISCIPLINE}`,
-    context: PAIRS.map(p => {
-      const v = inp[intersectionKey(p.id)] || {};
-      return `${p.id.toUpperCase()} — ${p.resolution_label}\nInsight: ${v.insight || "(not computed)"}\nTension: ${v.tension || "(not computed)"}\nResolution: ${v.resolution || "(not computed)"}`;
-    }).join("\n\n"),
+    // Each pair in full: its insight, tension and resolution AND the mechanism, consequence and formal statement it
+    // produced. The patterns are built from how the pairs work, not from their headlines.
+    context: PAIRS.map(p => `${p.id.toUpperCase()} — ${p.resolution_label}\n${pairLines(p, inp[intersectionKey(p.id)] || {}).join("\n")}`).join("\n\n"),
     contract: `Output ONLY valid JSON: { "synthesis": {
   "key_takeaways": ["..."], "constraint_collisions": ["..."], "limitation_foreground": "...",
 ${patternJsonTemplate()}
 } }
+Each pattern object above also carries "mechanism", "design_consequence", "evaluation", "epistemic_status" and its working structure: quantum_foresight "futures": [{"future":"...","conditions":"...","likelihood":"...","leading_indicators":"...","strategic_response":"..."}]; governed_cogito "method_audit": [{"method":"...","what_it_can_establish":"...","what_it_cannot":"...","ethical_condition":"..."}]; narrative_loop "operator_intent" and "communication_design"; empathy_driven_strategy "actors": [{"actor":"...","motivation":"...","non_rational_drivers":"...","predicted_behavior":"...","strategy_response":"..."}].
+
+${typeLegend("synthesis")}
 
 IMPORTANT: Do NOT include an intersection_matrix field — the pre-computed pairs are already stored separately.`,
   }),
@@ -419,7 +363,7 @@ ${critique.map((c, i) => `${i + 1}. ${c.id} — ${c.standard}`).join("\n")}`,
   };
 };
 
-function intersectionSpec(pair, inp) {
+function intersectionSpec(pair, inp, config) {
   const [a, b] = pair.domains;
   const side = (tag, d) => `DOMAIN ${tag}: ${DOMAINS[d].title} (Section ${DOMAINS[d].section})\nExpert Output:\n${JSON.stringify(inp[d])}`;
   return {
@@ -437,9 +381,13 @@ CRITICAL INSTRUCTION: The insight you produce MUST be EMERGENT — something tha
 
 If the physics and math check out, precedent doesn't matter. Novel problems require novel solutions. Push past conventional thinking — if there's a non-obvious path that has higher probability of achieving the goal, NAME IT even if it's unheard of.
 
+AN EMERGENT INSIGHT HAS A CONSEQUENCE. State what follows from it: an explanatory, mathematical, computational, scientific, strategic or architectural consequence that changes what should be built or how it should be tested. Where the relationship you found can be stated formally (variables, the relation between them, the condition under which it holds), state it. Where you borrow from another field, say which mechanism you take, how it maps here and where the analogy stops. Read both expert outputs in full, including their mechanisms, models, hypotheses and subdomain findings: the collision is usually between two specifics, not two summaries.
+
+${NOVELTY_SEARCH[config?.noveltyDial] || NOVELTY_SEARCH.medium}
+
 ${COGNITIVE_DISCIPLINE}`,
     context: `${side("A", a)}\n\n${side("B", b)}`,
-    contract: `Output ONLY valid JSON: { "${pair.id}": { "insight": "the emergent wisdom that lives at this intersection", "tension": "where these two domains pull in different directions", "resolution": "how the tension resolves into something greater than either domain", "mechanism": "one text value, required whenever the resolution names a construct or principle: how it works operationally — what it takes in, what it does, what it yields, and how its effect would be evaluated" } }`,
+    contract: `Output ONLY valid JSON: { "${pair.id}": { "insight": "the emergent wisdom that lives at this intersection", "tension": "where these two domains pull in different directions", "resolution": "how the tension resolves into something greater than either domain", "mechanism": "one text value: how the resolution works operationally — what it takes in, what it does, what it yields, and how its effect would be evaluated", "consequence": "one text value: what this changes in the design, the strategy or the test plan", "formalization": "one text value, where a formal statement exists: the variables, the relation and the condition under which it holds; otherwise leave it out", "epistemic_status": "Established or Contested or Speculative" } }`,
   };
 }
 
@@ -469,7 +417,7 @@ export function compileStage({ stageKey, config, inputs = {}, evidence = [] }) {
   const pair = pairOf(stageKey);
   if (isDeterministicStage(stageKey)) throw new Error(`${stageKey} is computed by code from validated artifacts: it has no prompt`);
   if (!pair && !SPECS[stageKey]) throw new Error(`Unknown stage key: ${stageKey}`);
-  const spec = pair ? intersectionSpec(pair, inputs) : SPECS[stageKey](config, inputs, evidence);
+  const spec = pair ? intersectionSpec(pair, inputs, config) : SPECS[stageKey](config, inputs, evidence);
   const sealed = sealEvidence(spec.untrusted || []);
   const blocks = [
     ...(sealed.length ? [renderEvidenceBlock(sealed, spec.untrustedLabel || "refresh_derived_evidence")] : []),
