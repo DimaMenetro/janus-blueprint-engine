@@ -42,6 +42,25 @@ export function continuationOf(stage, attempts = []) {
 export const continuableFor = (run, stageKey) => run?.storage_model === STORAGE_MODEL.staged
   && run.status === (stageKey === QUALIFICATION_KEY ? "completed" : "running");
 
+/**
+ * RESUME IS NOT REGENERATION (Phase 7). Resume is execution continuity; a retry is another attempt of the SAME
+ * revision; only an explicit re-run creates a new revision. A revision that settled as failed with its operation
+ * spent — its attempt limit used up, or a failure the policy never retries — is therefore never replaced by Resume:
+ * an uninterrupted session would not have run it again either. It comes back only through an explicit re-run.
+ *
+ * The one failed revision Resume may follow with a new one is a revision whose limit was NOT spent: on an open run
+ * that record exists only because the operator explicitly closed a waiting revision that could no longer be
+ * continued (browserAdapter.closeBlockedRevision — "close this version to start a new one"). That decision is the
+ * explicit one; it is read from the attempt ledger, recomputed with the same bounded policy, never stored.
+ * A failed revision with no recorded call is treated as spent.
+ */
+export function rerunOnly(stage, attempts = []) {
+  if (stage?.status !== "failed") return false;
+  const called = attempts.filter(a => a.outcome !== "not_started" && a.outcome !== "in_flight");
+  const last = called[called.length - 1];
+  return !(last && retryDecision(last.outcome, called.length) === "retry_scheduled");
+}
+
 const laterDomain = (pair) => pair.domains.reduce((a, b) => (DOMAIN_ORDER.indexOf(a) > DOMAIN_ORDER.indexOf(b) ? a : b));
 
 /** Ordered stage keys a mode executes. A pair becomes available once its later domain has settled. */
@@ -63,7 +82,9 @@ export const stageFailures = (view) => STAGE_KEY_ORDER
   .map(k => view.stageInfo[k]?.latest)
   .filter(s => s?.status === "failed")
   .map(s => ({ key: s.stage_key, evidence: s.error_class || "provider_error", message: s.error_message || `${s.stage_key}: failed`,
-    attempts: attemptsMade(view, s), superseded: !!view.stageInfo[s.stage_key].active }));
+    attempts: attemptsMade(view, s), superseded: !!view.stageInfo[s.stage_key].active,
+    // Resume never runs this stage again; only an explicit re-run gives it a new version.
+    rerunOnly: rerunOnly(s, view.attempts?.[s.id]) }));
 /** Attempts that actually made (or are making) a model call for a revision — retry telemetry. */
 function attemptsMade(view, stage) {
   return (view.attempts?.[stage?.id] || []).filter(a => a.outcome !== "not_started").length;
@@ -94,7 +115,8 @@ export function deriveExecutionState(view, { driving = false } = {}) {
     const waiting = running && continuableFor(run, key) ? continuationOf(info.latest, view.attempts?.[info.latest.id]) : null;
     const state = waiting ? "awaiting" : running ? "live" : info?.active ? "completed" : info?.latest?.status === "failed" ? "failed" : "pending";
     return { key, label: stageLabel(key), state, revision: info?.active?.revision ?? null, attempts: attemptsMade(view, info?.latest),
-      ...(waiting ? { nextAttempt: waiting.nextAttempt, lastEvidence: waiting.after.outcome } : {}) };
+      ...(waiting ? { nextAttempt: waiting.nextAttempt, lastEvidence: waiting.after.outcome } : {}),
+      ...(state === "failed" && rerunOnly(info.latest, view.attempts?.[info.latest.id]) ? { rerunOnly: true } : {}) };
   });
   const live = rows.find(r => r.state === "live") || null;
   // A waiting evaluation belongs to a completed run: it is continued from the qualification controls, never by Resume.
@@ -116,10 +138,12 @@ export function deriveExecutionState(view, { driving = false } = {}) {
     staged, status, label, rows, live, awaiting, qualificationAwaiting,
     completed: rows.filter(r => r.state === "completed").length,
     total: rows.length,
-    next: live ? null : remaining[0] || null,
+    // What Resume would work on next. A failed stage that only a re-run can replace is never it.
+    next: live ? null : remaining.find(r => !r.rerunOnly) || null,
     failures: stageFailures(view),
     // Ordinary resume exists only for an open, interrupted run. A terminal run is never resumed: what it
-    // lacks can only come from an explicit re-run, which produces a new revision.
+    // lacks can only come from an explicit re-run, which produces a new revision. On an open run whose only
+    // unfinished stages are failed ones, Resume starts no call for them: it closes the run as it stands.
     resumable: staged && !ended && !driving && !live && remaining.length > 0 && run.status !== "cancel_requested",
     endedIncomplete: ended && !driving && remaining.length > 0,
     cancellable: staged && run.status === "running",

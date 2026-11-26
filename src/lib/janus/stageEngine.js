@@ -11,7 +11,7 @@ import { completionOf, deriveQualification } from "@/lib/janus/qualification";
 import { loadRunView, updateRun } from "@/lib/janus/stageStore";
 import { runStage, continueStage, closeFromLastCall } from "@/lib/janus/stageRunner";
 import { compileStage, stageInputs, requiredInputs, PROMPT_TEMPLATE_VERSION } from "@/lib/janus/stageCompiler";
-import { stageFailures, continuationOf } from "@/lib/janus/executionState";
+import { stageFailures, continuationOf, rerunOnly } from "@/lib/janus/executionState";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
 import { generateMarkdown } from "@/components/janus/promptUtils";
 
@@ -55,6 +55,8 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
 /**
  * Advance through `keys` in order, reading durable state before every stage.
  *  - a stage that already has a valid revision is not regenerated (unless `force`: an explicit rerun);
+ *  - a stage whose newest revision settled as failed with its operation spent is not regenerated either (unless
+ *    `force`): Resume never creates a revision to escape a failure (executionState.rerunOnly);
  *  - while ANY stage of the run has a revision still running, its call is unresolved (outcome unknown):
  *    nothing is started over it or beside it, for a resume or a rerun, and the drive stops;
  *  - the one exception is a revision WAITING for its retry (its last call settled as a retryable failure with
@@ -76,6 +78,10 @@ export async function driveStages({ runId, keys, origin, force = false, onDurabl
   const errors = [];
   const regenerate = (view, key) => {
     const info = view.stageInfo[key];
+    // Resume is not regeneration: without an explicit re-run, a stage whose newest revision settled as failed with
+    // its operation spent (exhausted or non-retryable) gets no new revision. The drive goes on without it, exactly
+    // as the session that produced the failure would have.
+    if (!force && info && !info.active && rerunOnly(info.latest, view.attempts[info.latest.id])) return false;
     if (!info?.active || force === true) return true;
     return Array.isArray(force?.dependents) && (!force.dependents.includes(key) || !!info.stale);
   };

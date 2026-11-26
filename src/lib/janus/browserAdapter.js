@@ -74,6 +74,9 @@ export async function executeJanus(params, hooks) {
  * Continue an OPEN staged run (interrupted before its lifecycle ended) from its durable stages. Valid stages
  * are never regenerated. A terminal run (completed, failed, partial, cancelled) is never moved back to running
  * here: recovery after a terminal state is an explicit revision-producing re-run (formalized in Phase 7).
+ * Resume is execution continuity only: it runs what has not run, continues a revision waiting for its retry, and
+ * closes the run. It never gives a stage a new revision because its last one failed for good (exhausted or
+ * non-retryable): that stage is left failed and comes back only through an explicit re-run.
  */
 export async function resumeJanus(runId, hooks) {
   const view = await loadRunView(runId);

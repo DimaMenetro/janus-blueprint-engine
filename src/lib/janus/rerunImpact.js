@@ -43,6 +43,10 @@ function refusalsFor(view, wanted, plan) {
     const how = running.stage_key === QUALIFICATION_KEY ? "Continue the evaluation" : "Resume the run";
     out.push(waiting ? `${running.stage_key} is waiting for its retry (attempt ${waiting.nextAttempt}). ${how} to continue it first.`
       : `a call for ${running.stage_key} has not settled and its outcome is unknown`);
+  } else if (staged && run.status === "running") {
+    // A re-run closes the run when it ends. On a run that is still open, that would end it before the stages it
+    // has not executed yet were ever run. Execution continuity comes first; regeneration follows it.
+    out.push("this run has not finished. Resume it first; a re-run then replaces what it left failed or stale");
   }
   for (const k of plan) {
     const absent = requiredInputs(k).filter(r => !stageInfo[r]?.active && !plan.slice(0, plan.indexOf(k)).includes(r));

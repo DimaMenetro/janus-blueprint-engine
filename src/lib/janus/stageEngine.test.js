@@ -235,7 +235,13 @@ describe("truthful settlement: parsed but invalid output is a failure", () => {
     expect(viewOf(runId).artifacts.synthesis.intersection_matrix[PAIRS[0].id]).toBeUndefined();
   });
 
-  it("resume does not treat the invalid revision as completed: the stage runs again", async () => {
+  // REPLACED UNDER DIMA'S EXPLICIT AUTHORIZATION (2026-11-26, Phase 7). The only inherited test changed since 239319f.
+  // Its old expectation — "the stage runs again": plain Resume gave the exhausted Cogito a revision 2 with a fresh
+  // attempt limit — is no longer authoritative. Resume is execution continuity; a retry is another attempt of the
+  // same revision; only an explicit re-run creates a new revision. So an interruption must not buy three new calls.
+  // The original legitimate guarantee is kept and made stronger: the invalid revision never counts as completed —
+  // not before Resume, not after it, and not in the run's lifecycle — and it is replaced only by an explicit re-run.
+  it("resume does not treat the invalid revision as completed, and does not replace it: only an explicit re-run does", async () => {
     const run = await stagedRun("quick", "running", ["corpus"]);
     h.llm.invalidOn = "cogito";
     await driveStages({ runId: run.id, keys: ["cogito"], origin: "execution" }); // the session ended here, before the run closed
@@ -244,9 +250,21 @@ describe("truthful settlement: parsed but invalid output is a failure", () => {
     expect(deriveExecutionState(viewOf(run.id))).toMatchObject({ status: "interrupted", completed: 1, resumable: true });
 
     await resumeJanus(run.id);
-    expect(h.llm.stages).toEqual(["cogito", "blueprint", "qualification"]);
-    expect(viewOf(run.id).stageInfo.cogito.active).toMatchObject({ revision: 2, status: "succeeded" });
-    expect(viewOf(run.id).stageInfo.corpus.revisions).toBe(1);
+    expect(h.llm.stages).toEqual(["blueprint"]); // exactly what the uninterrupted session would have gone on to run
+    const resumed = viewOf(run.id);
+    expect(stagesOf(run.id).filter(s => s.stage_key === "cogito")).toEqual([expect.objectContaining({ revision: 1, status: "failed", error_class: "schema_failure" })]);
+    expect(resumed.stageInfo.cogito.active).toBeNull(); // never completed
+    expect(resumed.artifacts.cogito).toBeUndefined();
+    expect(deriveExecutionState(resumed).rows.find(r => r.key === "cogito").state).toBe("failed");
+    expect(h.db.Run[0]).toMatchObject({ status: "partial", released_blueprint_stage_id: "" }); // the run is not completed either
+    expect(resumed.stageInfo.corpus.revisions).toBe(1);
+
+    await adapter.rerunStages(run.id, { targets: ["cogito"], cascade: true }); // explicit, revision-producing
+    const after = viewOf(run.id);
+    expect(after.stageInfo.cogito.active).toMatchObject({ revision: 2, status: "succeeded", provenance: expect.objectContaining({ origin: "rerun" }) });
+    expect(after.lineage.find(s => s.stage_key === "cogito" && s.revision === 1)).toMatchObject({ status: "failed", lineage_state: "failed" });
+    expect(after.stageInfo.blueprint.active.depends_on).toContain(after.stageInfo.cogito.active.id);
+    expect(h.db.Run[0].status).toBe("completed");
   });
 
   it("a prior valid revision stays active when a newer revision is invalid", async () => {

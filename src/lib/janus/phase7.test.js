@@ -1,13 +1,15 @@
 // Phase 7 — versioned re-run and dependency invalidation, plus its first tranche: the evaluation pathway of a
-// completed run. Additions only: the six inherited test files are the behavioural oracle and are not edited here.
+// completed run. Additions only: the inherited test files are the behavioural oracle and are not edited here. (One
+// inherited test, in stageEngine.test.js, was replaced under DIMA's explicit authorization; it is marked there.)
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 vi.mock("@/api/base44Client", async () => ({ base44: (await import("@/lib/janus/testPlatform")).platform.base44 }));
 
 import { platform as h } from "@/lib/janus/testPlatform";
-import { executeJanus, rerunStages, previewRerun, rerunSynthesis, rerunBlueprint, requestCancel, reconcileJanus, evaluateJanus,
+import { executeJanus, resumeJanus, rerunStages, previewRerun, rerunSynthesis, rerunBlueprint, requestCancel, reconcileJanus, evaluateJanus,
   closeBlockedRevision, STALE_PREVIEW_MESSAGE, INITIATION_LOST_MESSAGE, OPERATOR_ONLY_MESSAGE } from "@/lib/janus/browserAdapter";
-import { claimInitiation } from "@/lib/janus/stageStore";
+import { claimInitiation, beginStage, openAttempt, voidAttempt, settleStage } from "@/lib/janus/stageStore";
+import { callLLM } from "@/lib/janus/stageRunner";
 import { composeRunView } from "@/lib/janus/runView";
 import { deriveExecutionState } from "@/lib/janus/executionState";
 import { deriveQualification } from "@/lib/janus/qualification";
@@ -213,6 +215,104 @@ describe("re-run safety: stale previews, concurrency, unresolved calls, cancella
     const blueprint = viewOf("legacy-7").stageInfo.blueprint.active;
     expect(blueprint).toMatchObject({ revision: 1, status: "succeeded", depends_on: expect.arrayContaining(["legacy:corpus", "legacy:actus"]) });
     expect(blueprint.legacy).toBeUndefined(); // a real revision beside the historical artifacts
+  });
+});
+
+describe("Resume is continuity, retry is the same revision, only a re-run makes a new revision", () => {
+  const cogito = () => stagesOf("cogito").map(s => [s.revision, s.status, s.error_class, s.provenance?.origin]);
+  /** An open Quick run whose session vanished during Cogito's last allowed call, which then failed on the server. */
+  const interruptedAtLastCall = async (message) => {
+    h.llm.failOn = "cogito";
+    if (message) h.llm.failMessage = message;
+    h.llm.transport.cogito = message ? "late" : [null, null, "late"];
+    const { runId } = await executeJanus(params("quick"));
+    h.llm.transport = {};
+    await h.finishPending();
+    h.llm.failOn = null;
+    expect(await reconcileJanus(runId)).toEqual({ settled: true, unresolved: null }); // recovery settles; it creates nothing
+    return runId;
+  };
+
+  it.each([
+    ["an exhausted revision", undefined, "provider_error", 3],
+    ["a non-retryable failure", "Integration credits quota exceeded", "quota_failure", 1],
+  ])("Resume after %s creates no new revision and buys no call for that stage, however often it is asked", async (_name, message, evidence, calls) => {
+    const runId = await interruptedAtLastCall(message);
+    expect(cogito()).toEqual([[1, "failed", evidence, "execution"]]);
+    const state = deriveExecutionState(viewOf(runId));
+    expect(state).toMatchObject({ status: "interrupted", resumable: true, next: { key: "blueprint" } });
+    expect(state.failures).toEqual([expect.objectContaining({ key: "cogito", rerunOnly: true, attempts: calls })]);
+
+    const result = await resumeJanus(runId);
+    expect(result.status).toBe("partial");
+    expect(cogito()).toEqual([[1, "failed", evidence, "execution"]]);
+    expect(modelCalls("cogito")).toBe(calls);
+    expect(attemptsOf("cogito")).toHaveLength(calls);
+    expect(modelCalls("blueprint")).toBe(1); // the unfinished part of the plan did run
+    await expect(resumeJanus(runId)).rejects.toThrow(/has ended/);
+    expect(modelCalls("cogito")).toBe(calls);
+  });
+
+  it("an open run whose only unfinished stage failed for good is closed by Resume without any call", async () => {
+    h.llm.failOn = "blueprint";
+    h.llm.transport.blueprint = [null, null, "late"];
+    const { runId } = await executeJanus(params("quick"));
+    h.llm.transport = {};
+    await h.finishPending();
+    await reconcileJanus(runId);
+    h.llm.failOn = null;
+    expect(h.db.Run[0].status).toBe("running");
+    const calls = h.llm.stages.length;
+    expect((await resumeJanus(runId)).status).toBe("partial");
+    expect(h.llm.stages.length).toBe(calls);
+    expect(stagesOf("blueprint").map(s => [s.revision, s.status])).toEqual([[1, "failed"]]);
+  });
+
+  it("the explicit re-run is what replaces it: revision n+1, the failed revision kept, dependents rebuilt from the new revision", async () => {
+    const runId = await interruptedAtLastCall();
+    // Regeneration follows continuity: while the run is still open, the re-run is refused and nothing is written.
+    const before = everything();
+    expect((await previewRerun(runId, { targets: ["cogito"] })).refusals).toEqual([expect.stringMatching(/has not finished\. Resume it first/)]);
+    await expect(rerunStages(runId, { targets: ["cogito"] })).rejects.toThrow(/Resume it first/);
+    expect(everything()).toEqual(before);
+
+    await resumeJanus(runId);
+    const failed = snapshot(stageOf("cogito"));
+    const impact = await previewRerun(runId, { targets: ["cogito"], cascade: true });
+    expect(impact.plan).toEqual(["cogito", "blueprint"]);
+    await rerunStages(runId, { targets: ["cogito"], cascade: true, expected: impact.token });
+    expect(cogito()).toEqual([[1, "failed", "provider_error", "execution"], [2, "succeeded", undefined, "rerun"]]);
+    expect(h.db.RunStage.find(s => s.id === failed.id)).toEqual(failed); // the failed revision is preserved as it was
+    expect(attemptsOf("cogito").filter(a => a.stage_id === stageOf("cogito").id)).toHaveLength(1); // its own attempts, its own limit
+    const view = viewOf(runId);
+    expect(view.stageInfo.blueprint.active).toMatchObject({ revision: 2, depends_on: expect.arrayContaining([view.stageInfo.cogito.active.id]) });
+    expect(staleIds(view).size).toBe(0);
+    expect(h.db.Run[0]).toMatchObject({ status: "completed", qualification_state: "qualified" });
+  });
+
+  it("a second session cannot create a conflicting active revision: its call is refused, and the one valid revision stays active", async () => {
+    const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1", active_attempt_id: "" });
+    for (const key of ["corpus", "cogito"]) await h.base44.entities.RunStage.create({ run_id: run.id, stage_key: key, revision: 1, status: "succeeded", depends_on: [], output: h.out[key] });
+    const gate = h.gateOn("blueprint");
+    const pending = resumeJanus(run.id);
+    await gate.reached;
+    // Another tab, with no shared memory, read the same state and begins the same revision number.
+    const rival = await beginStage({ runId: run.id, stageKey: "blueprint", revision: 1, dependsOn: [], templateVersion: "t", prompt: "STAGE KEY: blueprint", origin: "resume" });
+    const attempt = await openAttempt(rival, 1);
+    const refused = await callLLM(rival.id, "STAGE KEY: blueprint").then(() => null, e => e);
+    expect(refused).toMatchObject({ evidence: "not_started", reason: "run_busy" });
+    expect(await voidAttempt(attempt.id, { settledBy: "session" })).toBe(true); // what that tab then does: no call was made
+    await settleStage(rival, { notStarted: "blueprint: no model call was made for this revision" });
+    gate.release();
+    expect((await pending).status).toBe("completed");
+
+    expect(modelCalls("blueprint")).toBe(1);
+    const succeeded = stagesOf("blueprint").filter(s => s.status === "succeeded");
+    expect(succeeded).toHaveLength(1);
+    const view = viewOf(run.id);
+    expect(view.stageInfo.blueprint.active.id).toBe(succeeded[0].id);
+    expect(stageOf("qualification").depends_on).toEqual([succeeded[0].id]);
+    expect(h.db.Run[0].released_blueprint_stage_id).toBe(succeeded[0].id);
   });
 });
 
