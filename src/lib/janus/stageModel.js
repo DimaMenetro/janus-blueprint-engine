@@ -4,9 +4,10 @@
  * classification shared by the engine, the legacy adapter and the frontend view model.
  */
 import { PAIRS, PROTOCOL, STAGE_ORDER } from "@/lib/janus/protocolRegistry";
+import { BLUEPRINT_PIPELINE_KEYS } from "@/lib/janus/blueprintPipeline";
 
 export const STORAGE_MODEL = { legacy: "legacy_monolithic", staged: "staged_v1" };
-export const ENGINE_VERSION = `janus-engine/${PROTOCOL.version}-phase8`;
+export const ENGINE_VERSION = `janus-engine/${PROTOCOL.version}-phase9`;
 export const ORCHESTRATOR = "browser"; // transitional owner (plan §18.1); production target is server-owned
 
 export const intersectionKey = (pairId) => `intersection:${pairId}`;
@@ -20,9 +21,20 @@ export const STAGE_KEY_ORDER = [
   ...STAGE_ORDER.filter(k => k !== "synthesis" && k !== "blueprint"),
   ...INTERSECTION_KEYS,
   "synthesis",
-  "blueprint",
+  ...BLUEPRINT_PIPELINE_KEYS, // the Blueprint sub-stages, ending with `blueprint` itself (Phase 9)
   QUALIFICATION_KEY,
 ];
+/** The run configuration every stage is compiled and validated with. */
+export const configOf = (run) => ({
+  queryText: run.query_text,
+  executionMode: run.execution_mode,
+  outputMode: run.output_mode,
+  blueprintLevel: run.blueprint_level || "L2",
+  noveltyDial: run.novelty_dial || "medium",
+  refreshEnabled: !!run.refresh_enabled,
+});
+/** Key under which a revision's inputs carry the run configuration to the stage integrity rules. */
+export const CONFIG_INPUT = "@config";
 
 export const LEGACY_ID_PREFIX = "legacy:";
 export const revisionLabel = (stage) => (!stage ? "—" : stage.legacy ? "legacy" : `r${stage.revision}`);

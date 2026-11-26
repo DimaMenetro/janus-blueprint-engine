@@ -1,5 +1,6 @@
 // Janus output schema — protocol identity & roster from @/lib/janus/protocolRegistry
 import { subdomainIds, MODE_PROFILES, PAIRS, PATTERNS } from "@/lib/janus/protocolRegistry";
+import { BLUEPRINT_SCHEMA, PIPELINE_SCHEMAS } from "@/lib/janus/blueprintPipeline";
 // Schema, constants, validation, and normalization
 
 export const JANUS_SCHEMA = {
@@ -202,68 +203,10 @@ export const JANUS_SCHEMA = {
     },
 
     // ── BLUEPRINT ────────────────────────────────────────────────
-    blueprint: {
-      type: "object",
-      properties: {
-        goal: { type: "string" },
-        assumptions: { type: "array", items: { type: "string" } },
-        alternative_approaches: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              name: { type: "string" },
-              pros: { type: "array", items: { type: "string" } },
-              cons: { type: "array", items: { type: "string" } },
-              why_not_chosen: { type: "string" }
-            }
-          }
-        },
-        steps: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              step: { type: "number" },
-              title: { type: "string" },
-              instructions: { type: "string" },
-              inputs: { type: "array", items: { type: "string" } },
-              outputs: { type: "array", items: { type: "string" } },
-              validation: { type: "string" },
-              depends_on_steps: { type: "array", items: { type: "number" } },
-              time_estimate: { type: "string" },
-              effort_level: { type: "string" },
-              substeps: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    substep: { type: "string" },
-                    details: { type: "string" }
-                  }
-                }
-              },
-              checklist: { type: "array", items: { type: "string" } },
-              acceptance_tests: { type: "array", items: { type: "string" } }
-            },
-            required: ["step", "title", "instructions"]
-          }
-        },
-        success_criteria: { type: "array", items: { type: "string" } },
-        risk_register: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              risk: { type: "string" },
-              impact: { type: "string", enum: ["low", "med", "high"] },
-              mitigation: { type: "string" }
-            },
-            required: ["risk", "impact", "mitigation"]
-          }
-        }
-      }
-    }
+    // The final Blueprint and every durable stage of the Blueprint pipeline (Phase 9): one schema source, in
+    // @/lib/janus/blueprintPipeline, read here by the validator, the normalizer and the compiler's type legend.
+    blueprint: BLUEPRINT_SCHEMA,
+    ...PIPELINE_SCHEMAS
   }
 };
 

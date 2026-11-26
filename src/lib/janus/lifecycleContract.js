@@ -6,6 +6,7 @@
  */
 import { MODE_PROFILES, PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, CONFIDENCE_NORMALIZATION,
   lowestConfidence, subdomainIds, DOMAIN_ORDER } from "@/lib/janus/protocolRegistry";
+import { pipelineIntegrity, refinementErrors } from "@/lib/janus/blueprintPipeline";
 
 // ── 1. LIFECYCLE (persisted run status) ────────────────────────────
 export const LIFECYCLE_STATES = ["queued", "running", "validating", "completed", "failed", "partial", "cancel_requested", "cancelled"];
@@ -172,9 +173,21 @@ const INTEGRITY = {
   },
 };
 const PAIR_FIELDS = ["insight", "tension", "resolution"];
+/** Serious alternatives the mode and novelty setting require beside the selected approach (plan §7.4, §15.5). */
+export const minAlternatives = (mode, novelty) => Math.max(MODE_EXPECTATIONS[mode]?.min_alternatives ?? 0, novelty === "high" ? 3 : 0);
+/** Whether the mode's Blueprint pipeline has the self-critique stage (plan §7.4). A historical Run of unknown mode has it. */
+export const hasCritique = (mode) => MODE_EXPECTATIONS[mode]?.adversarial_critique !== false;
+/**
+ * `inputs` maps stage key → the output this artifact was built from, and may carry the run configuration under
+ * "@config" (stageModel.CONFIG_INPUT) for the rules that depend on it (Blueprint level, candidate count).
+ */
 export function stageIntegrity(stageKey, output, { inputs } = {}) {
   if (String(stageKey).startsWith("intersection:")) return PAIR_FIELDS.filter(f => !output?.[f]).map(f => `${stageKey}.${f}: missing`);
-  return INTEGRITY[stageKey] ? INTEGRITY[stageKey](output, inputs) : [];
+  const config = inputs?.["@config"];
+  // The final Blueprint: its own mandatory parts, plus what it owes the draft and the critique it was refined from.
+  if (stageKey === "blueprint") return [...INTEGRITY.blueprint(output), ...refinementErrors(output, inputs)];
+  if (INTEGRITY[stageKey]) return INTEGRITY[stageKey](output, inputs);
+  return pipelineIntegrity(stageKey, output, inputs, { config, minCandidates: config ? minAlternatives(config.executionMode, config.noveltyDial) + 1 : 0 });
 }
 
 export const STAGE_VALIDATORS = {
