@@ -3,7 +3,7 @@
  * The engine uses it to decide what still has to run; Results and the BottomAccessory use it to show
  * progress. Nothing here is stored and nothing here comes from a callback or a timer.
  */
-import { MODE_PROFILES, PAIRS, DOMAINS, DOMAIN_ORDER } from "@/lib/janus/protocolRegistry";
+import { MODE_PROFILES, PAIRS, DOMAINS } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, STAGE_KEY_ORDER, QUALIFICATION_KEY, intersectionKey } from "@/lib/janus/stageModel";
 import { UI_STATES, TERMINAL_STATES, RETRY_POLICY, retryDecision } from "@/lib/janus/lifecycleContract";
 
@@ -61,13 +61,15 @@ export function rerunOnly(stage, attempts = []) {
   return !(last && retryDecision(last.outcome, called.length) === "retry_scheduled");
 }
 
-const laterDomain = (pair) => pair.domains.reduce((a, b) => (DOMAIN_ORDER.indexOf(a) > DOMAIN_ORDER.indexOf(b) ? a : b));
-
-/** Ordered stage keys a mode executes. A pair becomes available once its later domain has settled. */
+/**
+ * Ordered stage keys a mode executes. SYNTHESIS FINAL FORM (plan §5.3, §14; Phase 8): the four primary domains
+ * are completed first; Synthesis is then entered as one phase — the six pair intersections, then the stage that
+ * produces the four formal patterns — and the Blueprint follows it. A pair is no longer started in between the
+ * domains. What a pair reads is unchanged (its two domains), so its cognition is the same; only its place is.
+ */
 export function stagePlan(mode) {
   const stages = (MODE_PROFILES[mode] || MODE_PROFILES.standard).stages;
-  const withPairs = stages.includes("synthesis");
-  return stages.flatMap(s => [s, ...(withPairs ? PAIRS.filter(p => laterDomain(p) === s).map(p => intersectionKey(p.id)) : [])]);
+  return stages.flatMap(s => (s === "synthesis" ? [...PAIRS.map(p => intersectionKey(p.id)), s] : [s]));
 }
 
 export function stageLabel(key) {

@@ -78,7 +78,7 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 - Pending evidence, not a defect: the deployed function's slot/claim/record path (to be verified in a later approved integration test; no probe Run). The five-minute transport ceiling stays fail-safe (unresolved) until the durable server/workflow work.
 - Flagged for DIMA in record §8.3: a retry that could not start in a live session also leaves the revision waiting; four Phase 6 tests were changed for the directive.
 
-## Phase 7 (2026-11-26) — IMPLEMENTED, NOT CLOSED — record `JANUS_PHASE7_VERSIONED_RERUN_2026-11-26.md`
+## Phase 7 (2026-11-26) — CLOSED 2026-11-26 (record §7: live data-binding check; §6.5 still open for DIMA) — record `JANUS_PHASE7_VERSIONED_RERUN_2026-11-26.md`
 - 177/177 (104 inherited byte-identical to `239319f`, 52 Phase 6 with 1 changed under DIMA's directive item 2, 21 Phase 7). Build passes. 69 historical Runs and DIMA's reference run `6b0780183aba68f84ea10cfc` untouched.
 - Evaluation pathway of a completed run (`evaluateJanus`, `evaluateStage`): continue (same revision and budget, identity proven), start, or explicit `newVersion`. No hidden re-evaluation (`needsEvaluation` only when this Blueprint version never had a paid evaluation).
 - Re-run: `rerunImpact.js` (exact recorded IDs + compiler-declared inputs), `previewRerun`, `rerunStages` (`cascade`, preview token fail-closed, `Run.graph_epoch` initiation claim). New staleness rule: a revision compiled without a declared input is stale once that input exists.
@@ -88,5 +88,13 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 - Retained and flagged (record §6.5): after the operator's explicit `closeBlockedRevision`, Resume still starts the new revision (Phase 6 test pins it); `not_started` and `artifact_not_recorded` revisions are not failures and Resume still runs those stages.
 - Open staged run `6b07cabc0e1fd52012766c16` (Full, started by the operator 2026-11-26) was seen live and not touched.
 
+## Phase 8 (2026-11-26) — IMPLEMENTED, NOT CLOSED — record `JANUS_PHASE8_SYNTHESIS_REALIGNMENT_2026-11-26.md`
+- 198/198 (104 inherited, 52 Phase 6, 26 Phase 7, 8 Phase 8 in `phase8.test.jsx`, 8 in `operatorAccess.test.jsx`). No existing test edited. Build passes.
+- Plan order: four domains, then the six pairs, then `synthesis` (patterns), then Blueprint (`stagePlan`). `requiredInputs(stageKey, mode)`: patterns need 6/6 pairs; a Full Blueprint needs `synthesis` (staged runs only; historical re-runs unchanged). Pair and patterns prompts are untruncated. Template `stage-compiler/2026-11-26.1`, engine label `phase8`.
+- Synthesis tab: `SynthesisStructure.jsx` (six pairs vs four patterns, counts, provenance on demand).
+- **Awaiting DIMA (record §3):** validating the four patterns at the stage conflicts with the inherited test "a structurally valid Full run with a missing formal pattern cannot become completed" (it expects 13 succeeded stages, Blueprint included). Not implemented; proposed replacement is in the record.
+- **Open run `6b07cabc0e1fd52012766c16`:** Actus r1 attempt 2 has a recorded response that reads as `schema_failure`; after "Check recorded outcome" it waits for attempt 3. Under a build with Phase 8 the template differs, so it is `blocked` and needs "Close this version to start a new one". Not touched.
+- **Operator account control** (header): identity, role, Sign out, Switch account, through `AuthContext` unchanged (`operatorAccess.js`). Non-admins are view only. The real round trip in the installed app is unverified until DIMA publishes.
+
 ## Next action
-Phase 7 exit criteria are met in automated evidence; DIMA closes it (and rules on record §6.5 if desired). Then Phase 8 (Synthesis Realignment). Not started. Do not publish. Do not make a paid call.
+DIMA: rule on Phase 8 record §3, then Phase 8 can close. Then Phase 9 (Blueprint Cognition + Presentation). Not started. Publishing is DIMA's. Do not make a paid call.

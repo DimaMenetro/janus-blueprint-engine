@@ -15,7 +15,7 @@ export default function AccountControl() {
   const account = accountView(auth);
 
   // The return from "Switch account": continue into the normal sign-in flow.
-  useEffect(() => { completeSwitch(auth); }, [auth.isAuthenticated, auth.isLoadingAuth, auth.isLoadingPublicSettings]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { completeSwitch(auth); }, [auth.isAuthenticated, auth.isLoadingAuth, auth.isLoadingPublicSettings]);
 
   const Icon = account.operator ? ShieldCheck : User;
   return (

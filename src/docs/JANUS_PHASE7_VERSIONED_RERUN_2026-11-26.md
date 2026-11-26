@@ -1,7 +1,7 @@
 # JANUS PHASE 7 — Versioned Rerun & Dependency Invalidation (2026-11-26)
 - Document type: phase record (Kytheion, Scribe-Particle-4). Governing plan: `JANUS_FINAL_FORM_ARCHITECTURE_IMPLEMENTATION_PLAN_v1.2_2026-09-29.md`, Phase 7.
 - Authorization: DIMA, via Daionae (IC-001), 2026-11-25. Builder development only: no paid Janus execution, no probe Run, no retrieval provider, no historical mutation, no republication.
-- Status: **EXIT CRITERIA MET IN AUTOMATED EVIDENCE (§6); AWAITING DIMA'S CLOSE.** §2.1 was adjudicated by DIMA on 2026-11-26 and is implemented (§6). 182/182 tests, build passes. No manual pass with real staged data.
+- Status: **CLOSED 2026-11-26 on the plan's five exit tests (§6.7) plus the live data-binding check (§7), under DIMA's instruction to close it if the criteria genuinely pass.** §2.1 was adjudicated by DIMA and is implemented (§6). §6.5 remains open for DIMA's ruling if desired. Limit: no pixel-level check of the screens with real data (§7).
 
 ## 0. Baseline confirmed before editing
 - HEAD `0eb24d5`, 156/156, the six inherited test files byte-identical to `239319f` (104 tests), Phase 6 tests 52.
@@ -129,3 +129,9 @@ No new mechanism. Re-run initiation: the epoch claim (§3.3). Resume from two se
 ### 6.8 Live data observed (read-only)
 - 69 historical Runs unchanged. Reference run `6b0780183aba68f84ea10cfc` unchanged.
 - A second staged run exists that this work did not create: `6b07cabc0e1fd52012766c16`, Full, created 2026-11-26 05:59 UTC, open, with an Actus call in flight at attempt 2 after a `schema_failure` on attempt 1 when read. It was not written, reconciled or resumed from here.
+
+## 7. Live data-binding check (2026-11-26, read-only, before any Phase 8 edit)
+Method: a read-only copy of both real staged runs (Run, RunStage, RunAttempt) was put through the real view model (`composeRunView`, `deriveExecutionState`, `deriveQualification`, `rerunImpact`) and the real panels (`ExecutionStatePanel`, `QualificationPanel`, `StageLineagePanel`, rendered to markup). The script was temporary and is removed. Nothing was written.
+- Reference run `6b0780183aba68f84ea10cfc`: Protocol-complete, 14/14 stages, 14 active revisions, nothing stale, six pairs; qualification `refinement_required`, 12 of 13 criteria, not released, strongest objection shown. Re-run previews: Animus alone makes exactly 8 revisions stale and leaves 4 untouched, evaluation blocked; Cogito with cascade plans 11 stages and leaves 2; Blueprint alone leaves 12 and is re-evaluated. Each agrees with the recorded `depends_on` IDs.
+- Open run `6b07cabc0e1fd52012766c16`: read as "Unresolved call", 7/13 saved, Actus in progress (attempt 2 of 3), "Check recorded outcome" and "Cancel after current stage" offered, Resume not offered, every re-run refused ("a call for actus has not settled"), not a release candidate.
+- Limit: this proves the binding of real records to the screens' content. It is not a visual check: the builder preview session cannot read DIMA's runs ("Run not found" under row-level security).

@@ -1,5 +1,6 @@
 import { Layers, AlertTriangle, Info, Atom, Scale, MessageSquare, Crosshair, GitBranch } from "lucide-react";
-import { PAIRS, DOMAINS } from "@/lib/janus/protocolRegistry";
+import { PAIRS, PATTERNS, DOMAINS } from "@/lib/janus/protocolRegistry";
+import SynthesisStructure from "@/components/janus/tabs/SynthesisStructure";
 
 // Pair identity comes from the canonical registry; only the colors are local.
 const PAIR_COLORS = ["indigo", "rose", "violet", "emerald", "blue", "amber"];
@@ -16,7 +17,7 @@ const intersectionColorMap = {
   amber: { card: "bg-amber-50/[0.15] dark:bg-amber-900/[0.10] border-amber-300/60 dark:border-amber-500/35", text: "text-amber-700 dark:text-amber-300", label: "text-amber-800 dark:text-amber-200" },
 };
 
-export default function SynthesisTab({ data }) {
+export default function SynthesisTab({ data, view }) {
   if (!data) return <div className="text-slate-500 p-6">No synthesis data available.</div>;
 
   // Handle both empathy_driven_strategy (v2.0) and alignment_engine (legacy) field names
@@ -27,8 +28,10 @@ export default function SynthesisTab({ data }) {
 
       {/* 4 Named Synthesis Patterns — v2.0 */}
       <div className="text-xs text-slate-500 dark:text-slate-400 font-mono uppercase tracking-widest mb-2">
-        Section V — The Nexus: Emergent Cross-Domain Patterns
+        Section V — The Nexus
       </div>
+
+      {view && <SynthesisStructure view={view} />}
 
       {/* ═══ INTERSECTION MATRIX — 6 Domain Pairs ═══ */}
       {data.intersection_matrix && Object.keys(data.intersection_matrix).length > 0 && (
@@ -36,7 +39,7 @@ export default function SynthesisTab({ data }) {
           <div className="flex items-center gap-2 mb-3">
             <GitBranch className="w-4 h-4 text-slate-500 dark:text-slate-400" />
             <h4 className="font-semibold text-slate-900 dark:text-white text-sm uppercase tracking-wider opacity-60">
-              Domain Intersection Matrix — 6 Pairs
+              Six Pairwise Intersections
             </h4>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -73,6 +76,12 @@ export default function SynthesisTab({ data }) {
             })}
           </div>
         </div>
+      )}
+
+      {PATTERNS.some(p => data[p.id]) && (
+        <h4 className="font-semibold text-slate-900 dark:text-white text-sm uppercase tracking-wider opacity-60">
+          Four Formal Emergent Patterns
+        </h4>
       )}
 
       {/* 5.1 Quantum Foresight — Corpus/Physics × Actus/Game Theory */}

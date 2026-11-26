@@ -10,12 +10,14 @@ import { intersectionKey, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/jan
 import { QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS } from "@/lib/janus/lifecycleContract";
 import { DATA_PLANE_LAW, PLANES, sealEvidence, renderEvidenceBlock, renderDataBlock, assertBoundaryIntegrity } from "@/lib/janus/evidenceBoundary";
 
-export const PROMPT_TEMPLATE_VERSION = "stage-compiler/2026-11-25.3";
+export const PROMPT_TEMPLATE_VERSION = "stage-compiler/2026-11-26.1";
 export const REFRESH_UNAVAILABLE_MESSAGE =
   "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
 
+// Remaining cognitive-input bound: the Blueprint's (and the domains') derived context. Known debt for Phase 9;
+// never compensated by removing inputs. Since Phase 8 the Synthesis stages are not bounded: a pair reads both of
+// its domains in full, and the patterns stage reads all six pairs in full (plan §3.7).
 const MAX_CONTEXT_LENGTH = 20000;
-const PAIR_INPUT_LIMIT = 6000; // known cognitive-input truncation — removed in Phase 8
 const truncate = (s, max) => (!s || s.length <= max ? s : `${s.slice(0, max)}\n\n[TRUNCATED — original was ${s.length} chars]`);
 const pairOf = (stageKey) => PAIRS.find(p => intersectionKey(p.id) === stageKey);
 
@@ -34,8 +36,21 @@ const STAGE_INPUTS = {
   blueprint: ALL_ARTIFACTS,
 };
 export const stageInputs = (stageKey) => (pairOf(stageKey)?.domains || STAGE_INPUTS[stageKey]).slice();
-/** Inputs without which a stage is not compiled at all. */
-export const requiredInputs = (stageKey) => (pairOf(stageKey)?.domains || (stageKey === QUALIFICATION_KEY ? ["blueprint"] : [])).slice();
+/**
+ * Inputs without which a stage is not compiled at all (each must have a valid active revision).
+ * SYNTHESIS FINAL FORM (plan §14, Phase 8):
+ *  - the patterns stage needs all six pair intersections, each validated: 6/6, never "(not computed)";
+ *  - in a mode whose plan has Synthesis (Full), the Blueprint needs the validated Synthesis: no premature Blueprint.
+ *    Through these two rules it also rests on all four primary domains. The partial profiles (Quick, Standard) have
+ *    no Synthesis stage, so their Blueprint is unchanged.
+ */
+export const requiredInputs = (stageKey, mode) => {
+  if (pairOf(stageKey)) return pairOf(stageKey).domains.slice();
+  if (stageKey === QUALIFICATION_KEY) return ["blueprint"];
+  if (stageKey === "synthesis") return [...INTERSECTION_KEYS];
+  if (stageKey === "blueprint" && MODE_PROFILES[mode]?.stages.includes("synthesis")) return ["synthesis"];
+  return [];
+};
 
 // ── SME identity (registry-derived) ──
 function smeIdentity(domainKey) {
@@ -214,7 +229,7 @@ ${REFRESH_ROSTER()}`,
   animus: domainSpec("animus"),
   actus: domainSpec("actus"),
   synthesis: (config, inp) => ({
-    parseKey: "synthesis", title: "DOMAIN: SYNTHESIS — THE NEXUS (Section V)",
+    parseKey: "synthesis", title: "DOMAIN: SYNTHESIS — THE NEXUS (Section V)", untruncated: true,
     instructions: `You are the Janus Synthesis Engine. The 6 domain intersection pairs have ALREADY been computed by dedicated cross-domain analysis and are supplied as prior stage outputs. Each represents the EMERGENT wisdom found at the intersection of two expert domains.
 
 Using ONLY those intersection pairs as your source material, produce the 4 NAMED EMERGENT PATTERNS:
@@ -289,9 +304,9 @@ ${critique.map((c, i) => `${i + 1}. ${c.id} — ${c.standard}`).join("\n")}`,
 
 function intersectionSpec(pair, inp) {
   const [a, b] = pair.domains;
-  const side = (tag, d) => `DOMAIN ${tag}: ${DOMAINS[d].title} (Section ${DOMAINS[d].section})\nExpert Output:\n${JSON.stringify(inp[d]).slice(0, PAIR_INPUT_LIMIT)}`;
+  const side = (tag, d) => `DOMAIN ${tag}: ${DOMAINS[d].title} (Section ${DOMAINS[d].section})\nExpert Output:\n${JSON.stringify(inp[d])}`;
   return {
-    parseKey: pair.id, title: "CROSS-DOMAIN SYNTHESIS",
+    parseKey: pair.id, title: "CROSS-DOMAIN SYNTHESIS", untruncated: true,
     instructions: `You are the Janus Synthesis Engine performing a SINGLE intersection analysis.
 Your task: find what EMERGES at the intersection of two expert domains that NEITHER domain alone could produce.
 

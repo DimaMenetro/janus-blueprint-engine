@@ -49,7 +49,7 @@ function refusalsFor(view, wanted, plan) {
     out.push("this run has not finished. Resume it first; a re-run then replaces what it left failed or stale");
   }
   for (const k of plan) {
-    const absent = requiredInputs(k).filter(r => !stageInfo[r]?.active && !plan.slice(0, plan.indexOf(k)).includes(r));
+    const absent = requiredInputs(k, staged ? run.execution_mode : undefined).filter(r => !stageInfo[r]?.active && !plan.slice(0, plan.indexOf(k)).includes(r));
     if (absent.length) out.push(`${k} needs ${absent.join(", ")}, which has no valid revision`);
   }
   return out;

@@ -35,7 +35,9 @@ export const configOf = (run) => ({
  */
 export async function executeStage({ view, stageKey, origin, evidence = [], onBegan }) {
   const active = (k) => view.stageInfo[k]?.active;
-  const missing = requiredInputs(stageKey).filter(k => !active(k));
+  // The mode's Synthesis-before-Blueprint rule binds staged runs (the engine's own plan). A historical Run is
+  // re-run as before: its record predates the plan and is never held to it.
+  const missing = requiredInputs(stageKey, view.storage === STORAGE_MODEL.staged ? view.run.execution_mode : undefined).filter(k => !active(k));
   if (missing.length) return { skipped: { stageKey, missing } };
   const inputKeys = stageInputs(stageKey).filter(active);
   const compiled = compileStage({
