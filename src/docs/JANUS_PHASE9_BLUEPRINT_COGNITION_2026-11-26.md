@@ -40,7 +40,7 @@ The 20,000-character cut on derived context is removed for every stage (`MAX_CON
 ## 3. Tests
 - New: `phase9Corrections.test.js` (13), reproducing the live circumstances.
 - Changed: one Phase 8 test in `phase8Closeout.test.js` (it pinned "only the Synthesis stages changed", no longer true; rewritten to the invariant, marked in place). The authorization note in `stageEngine.test.js` was corrected: that replacement was made before it was authorized.
-- Inherited six files: unchanged in this tranche.
+- Inherited six files: no assertion changed in this tranche; the only edit is that corrected note.
 
 ## 4. OPEN DECISION — blocks the Blueprint pipeline
 Plan §15.4 and the directive require durable Blueprint sub-stages (candidates, comparison/selection, skeleton, expansion, criteria, deterministic assembly, critique, refinement). Inherited tests pin the Blueprint as exactly one model call and one stage:
