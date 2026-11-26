@@ -1,5 +1,6 @@
 import { EXECUTION_MODES } from "./janusSchema";
 import { protocolLabel, getSubdomains, readSubdomain, PAIRS, pairLabel } from "@/lib/janus/protocolRegistry";
+import { blueprintMarkdown } from "@/lib/janus/blueprintMarkdown";
 
 export function generateMarkdown(data, executionMode) {
   const mode = EXECUTION_MODES[executionMode.toUpperCase()];
@@ -101,13 +102,9 @@ export function generateMarkdown(data, executionMode) {
     if (data.synthesis?.limitation_foreground) md += `### Limitations\n${data.synthesis.limitation_foreground}\n\n`;
   }
 
-  if (data.blueprint) {
-    md += "## Blueprint\n\n";
-    if (data.blueprint?.goal) md += `**Goal:** ${data.blueprint.goal}\n\n`;
-    if (data.blueprint?.steps?.length) { md += "### Steps\n\n"; data.blueprint.steps.forEach(step => { md += `#### Step ${step.step}: ${step.title}\n${step.instructions}\n\n`; }); }
-    if (data.blueprint?.success_criteria?.length) { md += "### Success Criteria\n"; data.blueprint.success_criteria.forEach(c => md += `- ${c}\n`); md += "\n"; }
-    if (data.blueprint?.risk_register?.length) { md += "### Risk Register\n\n| Risk | Impact | Mitigation |\n|------|--------|------------|\n"; data.blueprint.risk_register.forEach(r => md += `| ${r.risk} | ${r.impact} | ${r.mitigation} |\n`); }
-  }
+  // The Blueprint is written out in full (blueprintMarkdown): the earlier layout kept only goal, step titles and
+  // instructions, success criteria and risks, and lost everything else the artifact held.
+  md += blueprintMarkdown(data.blueprint);
 
   return md;
 }

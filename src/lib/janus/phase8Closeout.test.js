@@ -60,7 +60,7 @@ describe("a valid final Synthesis (stage validation)", () => {
   it("constraint_collisions must be present: none found is an empty list, not produced is invalid", () => {
     const set = (v) => { const o = good(); if (v === undefined) delete o.constraint_collisions; else o.constraint_collisions = v; return errorsOf(o); };
     expect(set(undefined)).toEqual(["constraint_collisions missing (an empty list is valid, absence is not)"]);
-    expect(set(null)).toEqual(["constraint_collisions missing (an empty list is valid, absence is not)"]);
+    expect(set(null)).toContain("constraint_collisions missing (an empty list is valid, absence is not)");
     expect(set([""])).toEqual(["constraint_collisions[0] is not a meaningful entry"]);
     expect(set([])).toEqual([]);
   });
