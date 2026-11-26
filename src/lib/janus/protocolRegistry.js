@@ -291,11 +291,29 @@ export const MODE_PROFILES = {
 };
 
 // ── MODEL POLICY (Operator-level rule, 2026-09-29) ─────────────────
+// Operator clarification 2026-11-26: the model is named explicitly on every call, from the Run record. The
+// benchmark run relied on the app-level setting; its calls returned at several hundred tokens a second, which no
+// Opus-class model does, so "inherited" could not be shown to mean Opus. Gemini 3.1 is prohibited; the prohibition
+// is not extended to the family by inference, and no Gemini model is in this roster. No hidden fallback: a call
+// runs on the model recorded on its Run or it fails.
+export const DEFAULT_MODEL = "claude_opus_5_5";
+/** The app-level default: what a call uses when no model is named. Kept selectable so its use is a recorded choice. */
+export const APP_DEFAULT_MODEL = "automatic";
+/** THE roster of models a Run may execute on (the server function holds the same ids; a test keeps them equal). */
+export const OPERATIONAL_MODELS = [
+  { id: DEFAULT_MODEL, label: "Claude Opus 5.5", note: "Authorized operational default. Deepest reasoning; uses more integration credits per call." },
+  { id: "claude_fable_5_2", label: "Claude Fable 5.2", note: "Uses more integration credits per call." },
+  { id: "claude-sonnet-5", label: "Claude Sonnet 5", note: "Faster; uses more integration credits than the app default." },
+  { id: "gpt_6_2_sol", label: "GPT-6.2 Sol", note: "Uses more integration credits per call." },
+  { id: "gpt_6_2_astra", label: "GPT-6.2 Astra", note: "Uses more integration credits per call." },
+  { id: APP_DEFAULT_MODEL, label: "App default (fast, low cost)", note: "The platform's everyday model. Not suited to Janus cognition." },
+];
+export const modelLabel = (id) => OPERATIONAL_MODELS.find(m => m.id === id)?.label || (id ? String(id) : "App default (not recorded)");
 export const MODEL_POLICY = {
-  operational_model: "claude_opus (operator app setting — inherited, no per-call override)",
-  prohibited_model_prefixes: ["gemini"],
+  operational_model: `${DEFAULT_MODEL} by default, named explicitly on every call; the operator may select another roster model per run`,
+  prohibited_model_prefixes: ["gemini_3_1"],
   hidden_fallback_allowed: false,
-  refresh_architecture: "provider-neutral retrieval → provenance-bearing source corpus → Claude Opus analysis",
+  refresh_architecture: "live index retrieval per subdomain (no model) → provenance-bearing source corpus → analysis by the run's operational model",
 };
 
 // ── LEGACY ALIASES (read-only, historical records) ─────────────────

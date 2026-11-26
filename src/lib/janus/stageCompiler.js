@@ -8,7 +8,7 @@ import { DOMAINS, DOMAIN_ORDER, PAIRS, PATTERNS, MODE_PROFILES, allSubdomains, r
   patternJsonTemplate, pairLabel, protocolLabel } from "@/lib/janus/protocolRegistry";
 import { intersectionKey, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
 import { QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS, minAlternatives, hasCritique } from "@/lib/janus/lifecycleContract";
-import { BP, BLUEPRINT_PIPELINE_KEYS, isDeterministicStage } from "@/lib/janus/blueprintPipeline";
+import { BP, BLUEPRINT_PIPELINE_KEYS, isDeterministicStage, sourceOutline } from "@/lib/janus/blueprintPipeline";
 import { BLUEPRINT_SPECS } from "@/lib/janus/blueprintSpecs";
 import { DATA_PLANE_LAW, PLANES, sealEvidence, renderEvidenceBlock, renderDataBlock, assertBoundaryIntegrity } from "@/lib/janus/evidenceBoundary";
 import { JANUS_SCHEMA } from "@/components/janus/janusSchema";
@@ -32,17 +32,18 @@ import { domainContext, pairLines } from "@/lib/janus/stageContext";
  *    and returns its findings on surplus, objective preservation and substantive errors.
  * Refresh is unchanged since Phase 5 and keeps 2026-11-25.3.
  */
-const UNCHANGED_SINCE_PHASE5 = "stage-compiler/2026-11-25.3";
 // 2026-11-26.5 (cognitive restoration): every reasoning stage. The four domains and the Nexus gained the depth and
 // novelty clauses and richer contracts; every stage that reads earlier cognition now reads it in full
 // (stageContext); the patterns stage reads each pair's mechanism; the Blueprint stages gained specifications,
 // source coverage and transactional refinement. Refresh alone is unchanged.
-const PHASE9_PIPELINE = "stage-compiler/2026-11-26.5";
-// 2026-11-26.4: the final Blueprint (refinement must preserve the draft's substance; confidence is code-set) and the
-// assembly (its draft leaves with code-set step confidence and records the corrections). No other stage changed.
-export const templateVersionOf = (stageKey) => (stageKey === "refresh" ? UNCHANGED_SINCE_PHASE5 : PHASE9_PIPELINE);
+// 2026-11-26.6 (ideal-form continuation): EVERY stage. The field-type legend every contract carries is now stated
+// from each list's own item type; Refresh analyses a live retrieved corpus; the brief states each section's
+// substance; the skeleton disposes of every intersection and pattern; the final Blueprint returns edits that code
+// integrates; the evaluation judges the source section by section. Refresh therefore leaves 2026-11-25.3 too.
+const IDEAL_FORM = "stage-compiler/2026-11-26.6";
+export const templateVersionOf = (_stageKey) => IDEAL_FORM;
 export const REFRESH_UNAVAILABLE_MESSAGE =
-  "Live Refresh is temporarily unavailable pending the external retrieval implementation (provider-neutral retrieval → provenance-bearing source corpus → Claude Opus Refresh analysis). Turn Refresh off to run without live research.";
+  "Live Refresh retrieved no source records, so there is nothing to analyse and no research is claimed. Try again, or turn Refresh off to run on training data only.";
 
 // NO COGNITIVE INPUT IS CUT AT A CHARACTER COUNT (plan §3.7, Phase 9). The derived context of every stage is
 // passed in full: what a stage reads is decided by what its context builder selects (meaning), never by where a
@@ -198,7 +199,12 @@ function typeLegend(stageKey) {
     : s.type === "string" ? "ONE text value (a single string, never a list and never an object)"
     : s.type === "number" ? "a number"
     : s.type === "boolean" ? "true or false"
-    : s.type === "array" ? (s.items?.type === "object" ? "a list of objects" : "a list of text values (an array of strings, never one string)")
+    // Stated from the items' own schema. Calling every plain list "text values" told the model to write step
+    // references as strings, which the validator then refused (the benchmark's `where` failures).
+    : s.type === "array" ? (s.items?.type === "object" ? "a list of objects"
+      : s.items?.type === "number" ? "a list of NUMBERS, for example [1, 3] (bare numbers, never quoted, never one number alone)"
+      : s.items?.enum ? `a list whose entries are each one of ${s.items.enum.map(v => `"${v}"`).join(" | ")}`
+      : "a list of text values (an array of strings, never one string)")
     : "an object");
   const walk = (schema, path) => Object.entries(schema.properties || {}).forEach(([key, s]) => {
     if (key === "subdomains" || key === "alignment_engine" || key === "intersection_matrix") return; // shown in full by the contract / not part of this stage's output
@@ -252,7 +258,7 @@ ${COGNITIVE_DISCIPLINE}`,
 });
 
 const SPECS = {
-  refresh: (config, inp, evidence) => {
+  refresh: (config, inp, evidence, retrieval) => {
     if (!config.refreshEnabled) return {
       parseKey: "refresh", title: "DOMAIN: REFRESH (Zero-Day Patch)",
       instructions: `You are the Janus Refresh Module. Internet access is DISABLED by the operator.
@@ -260,16 +266,18 @@ You MUST NOT claim to have searched the internet. Be honest: your knowledge come
 Declare what you WOULD search for if internet access were enabled.`,
       contract: `Output ONLY valid JSON: { "refresh": { "mode": "tier0", "attempted": false, "limitations": "Analysis based on training data only — no live internet sweep performed. Training data may be outdated.", "would_refresh": ["topic 1", "topic 2", "topic 3", "topic 4", "topic 5"], "training_data_cutoff_note": "State your approximate training data cutoff date" } }`,
     };
-    // Target architecture: provider-neutral retrieval → provenance-bearing source corpus → analysis.
-    // No retrieval provider exists yet, so there is no corpus and this fails closed.
+    // Live Refresh: provider-neutral retrieval (retrieveJanusEvidence: each subdomain searched by name, newest
+    // first, no model) → provenance-bearing source corpus → this analysis. With no corpus it fails closed.
     if (!evidence.length) throw new Error(REFRESH_UNAVAILABLE_MESSAGE);
     return {
-      parseKey: "refresh", title: "DOMAIN: REFRESH (Zero-Day Patch) — SOURCE CORPUS ANALYSIS",
-      instructions: `You are the Janus Refresh Module. You have NO internet access. A retrieved source corpus is supplied as untrusted evidence records (ids E1…En).
-For EACH of the ${allSubdomains().length} subdomains below, report what the corpus establishes that is current and relevant to the operator's query, citing evidence ids. Where the corpus establishes nothing strong enough, write exactly "no sufficiently strong current update established". Never state anything as retrieved that is not in the corpus.
+      parseKey: "refresh", title: "DOMAIN: REFRESH (Zero-Day Patch) — SOURCE CORPUS ANALYSIS", storeEvidence: true,
+      instructions: `You are the Janus Refresh Module. You have NO internet access of your own. A source corpus was retrieved live for this run, one search per subdomain, newest first, and is supplied as untrusted evidence records (ids E1…En). Each record names the subdomain it was retrieved for, its origin, its publication date and its quality.
+For EACH of the ${allSubdomains().length} subdomains below, report what the corpus establishes that is current AND bears on the operator's query: the development, why it matters for this problem (what it enables, constrains, contradicts or makes obsolete), and the evidence ids. A record retrieved for one subdomain may inform another; use it where it does. Weigh quality as labelled: a preprint is a claim, not a settled result. Where the corpus establishes nothing that bears on the query, write exactly "no sufficiently strong current update established". Never state anything as retrieved that is not in the corpus, and never fill a gap from memory.
+key_developments: the three developments with the greatest consequence for this problem, each with its evidence ids. limitations: what this corpus cannot tell you (the data block "retrieval_report" says what was searched, when, and which subdomains returned nothing).
 
 ${REFRESH_ROSTER()}`,
       untrusted: evidence, untrustedLabel: "retrieved_source_corpus",
+      blocks: retrieval ? [{ label: "retrieval_report", text: JSON.stringify(retrieval, null, 1) }] : [],
       contract: `Output ONLY valid JSON: { "refresh": { "mode": "tier1", "attempted": true, "limitations": "limits of the supplied corpus", "subdomain_updates": { ${allSubdomains().map(s => `"${s.refresh_key}": "..."`).join(", ")} }, "key_developments": ["development 1 [E1]"], "sources": ["E1"] } }`,
     };
   },
@@ -334,19 +342,23 @@ SPECS[QUALIFICATION_KEY] = (config, inp) => {
   const expect = MODE_EXPECTATIONS[config.executionMode] || {};
   const matrix = Object.fromEntries(PAIRS.filter(p => inp[intersectionKey(p.id)]).map(p => [p.id, inp[intersectionKey(p.id)]]));
   const brief = inp[BP.brief];
+  const sections = sourceOutline(config.queryText);
   return {
+    blocks: sections.length ? [{ label: "source_outline", text: sections.map(s => `${s.id} — ${s.title}`).join("\n") }] : [],
     parseKey: QUALIFICATION_KEY, title: "QUALITY QUALIFICATION — INDEPENDENT EVALUATION", untruncated: true,
     instructions: `You are the Janus Quality Evaluator. You did NOT write the Blueprint in the data block and you owe it nothing.
 Your task is to decide whether it deserves release, by trying to find where it fails. A Blueprint that is merely well-formed, generic, safe or plausible FAILS. Do not reward length, confident wording or scientific-sounding language: a term is worth only the mechanism behind it.
 
-READ THE OPERATOR'S QUERY FIRST (data block "query"). It is what was submitted; the Blueprint is what came back. Judge the difference between the two and record it:
+READ THE OPERATOR'S QUERY FIRST (data block "query"), all of it. Before you look at the Blueprint, form your own account of what the operator's end state contains: every subsystem, capability, relationship and standard of quality the material describes, and what kind of thing each one is meant to be (a place to live is not an archive; a society is not a registry; a developmental process is not a configuration step). That account, not the Blueprint's own summary of the objective, is what you judge against. The objective brief in "operator_objective" is itself under evaluation: if it reduced, flattened or re-described the operator's material into something smaller, every stage after it inherited the reduction, and a Blueprint that is perfectly coherent with a narrowed brief has still failed the operator. Internal coherence is not fidelity.
+${sections.length ? `SECTION BY SECTION (checked by code). The data block "source_outline" lists the sections of the operator's material, S1, S2, … For EVERY one, record in section_realisation whether the Blueprint realises what that section means: "realised" (a builder following the Blueprint would build it, as the kind of thing it is), "partial" (named, or built as something lesser), or "absent" (no path to it and no reasoned deferral), with where in the Blueprint, or what is missing. A section whose title appears in a step is not thereby realised.
+` : ""}Then judge the difference between what was submitted and what came back, and record it:
 - intellectual_surplus: what the Blueprint contributes that is NOT already in the operator's query — a mechanism, a resolved tension, a structure, a risk, a sequence. A sophisticated restatement of the input is not novelty and not insight: if the operator already wrote it, it is not surplus. An empty list is a valid answer.
 - input_restatement: the parts of the Blueprint that only restate the operator's own material.
 - objective_preservation: does the Blueprint pursue the operator's objective at its full ambition ("yes"), a reduced or renamed version of it ("partly"), or a different objective ("no")? lost lists every requirement, interface, mode, gate or control of the query that the Blueprint neither builds nor defers with a real reason.${brief ? " The requirement list in operator_objective is there to check against; the query itself is the authority." : ""}
 - substantive_errors: errors of substance — a named construct with no operational mechanism, interdisciplinary or scientific vocabulary with nothing behind it, a scientific or mathematical error, a claim or confidence label stronger than its support, validation logic that can only come out one way or that treats the absence of an effect as proof, acceptance conditions that contradict each other or the plan, an internal contradiction, an alternative that was never a serious rival, a simplification of the operator's problem that was not justified, a step a builder could not execute without inventing the design, and — in blueprint.refinement.changes — any declared change that left the Blueprint saying less than before. Mark each "blocking" when the Blueprint cannot be trusted until it is repaired, otherwise "minor".
 JUDGE THE THINKING, NOT ITS FAMILIARITY. An unconventional mechanism is not an error because it is new: ask whether its mechanism is stated, whether its status is labelled honestly and whether it would work if its premises hold. Reward a genuinely ingenious solution; fail a conventional one that merely sounds safe. Length, structure, citations and confident description are not evidence of either.
 
-Then judge each criterion below separately, against the Blueprint, the operator's query and the upstream material it was built from. For each one answer exactly "pass" or "fail" and state the specific evidence. There is no "not applicable" and no partial credit: when in doubt, fail. Your answers must agree with what you recorded above (code enforces it): non_obviousness cannot pass with nothing in intellectual_surplus, feasibility_without_domestication cannot pass unless the objective is preserved, and adversarial_robustness cannot pass over a blocking error.
+Then judge each criterion below separately, against the Blueprint, the operator's query and the upstream material it was built from. For each one answer exactly "pass" or "fail" and state the specific evidence. There is no "not applicable" and no partial credit: when in doubt, fail. Your answers must agree with what you recorded above (code enforces it): non_obviousness cannot pass with nothing in intellectual_surplus, feasibility_without_domestication cannot pass unless the objective is preserved and no section is absent, and adversarial_robustness cannot pass over a blocking error.
 Mode: ${config.executionMode || "unspecified"} — expected at least ${expect.min_alternatives ?? 0} serious alternative(s) and ${expect.min_non_obvious_insights ?? 1} non-obvious insight(s).
 
 CRITERIA:
@@ -360,7 +372,7 @@ ${critique.map((c, i) => `${i + 1}. ${c.id} — ${c.standard}`).join("\n")}`,
       animus: inp.animus && { boundary_checks: inp.animus.boundary_checks, disallowed_moves: inp.animus.disallowed_moves, ethical_stance: inp.animus.ethical_stance },
       actus_recommendations: inp.actus?.recommendations, intersections: matrix, synthesis: inp.synthesis,
     }, null, 1),
-    contract: `Output ONLY valid JSON: { "${QUALIFICATION_KEY}": { "intellectual_surplus": ["..."], "input_restatement": ["..."], "objective_preservation": {"preserved":"yes or partly or no","lost":["..."]}, "substantive_errors": [{"error":"...","severity":"blocking or minor"}], "verdicts": { ${critique.map(c => `"${c.id}": {"verdict":"pass or fail","reason":"specific evidence"}`).join(", ")} }, "strongest_objection": "the best argument against releasing this Blueprint" } }`,
+    contract: `Output ONLY valid JSON: { "${QUALIFICATION_KEY}": { "intellectual_surplus": ["..."], "input_restatement": ["..."], "objective_preservation": {"preserved":"yes or partly or no","lost":["..."]}, "substantive_errors": [{"error":"...","severity":"blocking or minor"}], ${sections.length ? '"section_realisation": [{"section":"S1","status":"realised or partial or absent","where":"..."}], ' : ""}"verdicts": { ${critique.map(c => `"${c.id}": {"verdict":"pass or fail","reason":"specific evidence"}`).join(", ")} }, "strongest_objection": "the best argument against releasing this Blueprint" } }`,
   };
 };
 
@@ -414,17 +426,22 @@ export function withCorrection(prompt, previous, attemptNumber) {
  * Compile one stage. `inputs` maps stage key → settled output; `evidence` is untrusted source records.
  * Returns the prompt plus everything the executor records as provenance.
  */
-export function compileStage({ stageKey, config, inputs = {}, evidence = [] }) {
+export function compileStage({ stageKey, config, inputs = {}, evidence = [], retrieval = null }) {
   const pair = pairOf(stageKey);
   if (isDeterministicStage(stageKey)) throw new Error(`${stageKey} is computed by code from validated artifacts: it has no prompt`);
   if (!pair && !SPECS[stageKey]) throw new Error(`Unknown stage key: ${stageKey}`);
-  const spec = pair ? intersectionSpec(pair, inputs, config) : SPECS[stageKey](config, inputs, evidence);
+  const spec = pair ? intersectionSpec(pair, inputs, config) : SPECS[stageKey](config, inputs, evidence, retrieval);
+  // Documents the operator attached as files travel with every call (server-side, from the Run record). They are
+  // named here so the stage knows they exist and so they are part of the revision's identity.
+  const attached = (config.attachments || []).filter(a => a?.file_uri);
   const sealed = sealEvidence(spec.untrusted || []);
   const blocks = [
     ...(sealed.length ? [renderEvidenceBlock(sealed, spec.untrustedLabel || "refresh_derived_evidence")] : []),
     ...(spec.context ? [renderDataBlock(PLANES.derived, "prior_stage_outputs", spec.context)] : []),
     // Structured records a stage builds on (the objective brief, the decision, the assembled draft, …): derived data.
     ...(spec.blocks || []).map(b => renderDataBlock(PLANES.derived, b.label, b.text)),
+    ...(attached.length ? [renderDataBlock(PLANES.operator, "attached_documents",
+      `The operator attached ${attached.length === 1 ? "this document" : "these documents"} to the query. ${attached.length === 1 ? "It is" : "They are"} supplied to you as files and ${attached.length === 1 ? "is" : "are"} part of the operator's material, to be read in full:\n${attached.map(a => `- ${a.name} (${a.file_uri})`).join("\n")}`)] : []),
     renderDataBlock(PLANES.operator, "query", config.queryText),
   ];
   const prompt = [
@@ -440,6 +457,8 @@ export function compileStage({ stageKey, config, inputs = {}, evidence = [] }) {
   return {
     stageKey, parseKey: spec.parseKey, prompt, templateVersion: templateVersionOf(stageKey),
     inputKeys: stageInputs(stageKey),
-    sources: sealed.map(({ text: _text, ...meta }) => meta),
+    // A live-retrieved corpus is stored whole on the revision that read it (text included), so the same prompt can
+    // be rebuilt for a retry. Evidence derived from an earlier stage is rebuilt from that stage: metadata is enough.
+    sources: spec.storeEvidence ? sealed : sealed.map(({ text: _text, ...meta }) => meta),
   };
 }

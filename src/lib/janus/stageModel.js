@@ -32,6 +32,8 @@ export const configOf = (run) => ({
   blueprintLevel: run.blueprint_level || "L2",
   noveltyDial: run.novelty_dial || "medium",
   refreshEnabled: !!run.refresh_enabled,
+  // Documents attached as files: named in every prompt and sent with every call by the server, from the Run record.
+  ...(Array.isArray(run.attachments) && run.attachments.some(a => a?.file_uri) ? { attachments: run.attachments } : {}),
 });
 /** Key under which a revision's inputs carry the run configuration to the stage integrity rules. */
 export const CONFIG_INPUT = "@config";

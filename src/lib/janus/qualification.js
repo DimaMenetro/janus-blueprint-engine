@@ -222,6 +222,11 @@ export function evaluatorConsistency(output) {
   const kept = output.objective_preservation?.preserved;
   if (kept && kept !== "yes")
     held.feasibility_without_domestication = `The evaluator found the operator's objective ${kept === "no" ? "replaced" : "only partly preserved"}${output.objective_preservation.lost?.length ? ` (lost: ${output.objective_preservation.lost.join("; ")})` : ""}.`;
+  // A section of the operator's material that holds obligations and that the evaluator found absent from the
+  // Blueprint is scope that was dropped, whatever the overall answer says.
+  const absent = (output.section_realisation || []).filter(s => s?.status === "absent").map(s => s.section);
+  if (absent.length && !held.feasibility_without_domestication)
+    held.feasibility_without_domestication = `The evaluator found ${absent.length === 1 ? "a section" : "sections"} of the operator's material absent from the Blueprint: ${absent.join(", ")}.`;
   const blocking = (output.substantive_errors || []).filter(x => x?.severity === "blocking").map(x => x.error);
   if (blocking.length) held.adversarial_robustness = `The evaluator recorded blocking errors of substance: ${blocking.join("; ")}.`;
   return held;
@@ -298,7 +303,8 @@ export function deriveQualification(view, lifecycle = view.run.status) {
     strongestObjection: evaluation?.output?.strongest_objection || null,
     // The evaluator's findings on what was submitted versus what came back, as recorded.
     findings: evaluation ? { intellectual_surplus: evaluation.output.intellectual_surplus || null, input_restatement: evaluation.output.input_restatement || null,
-      objective_preservation: evaluation.output.objective_preservation || null, substantive_errors: evaluation.output.substantive_errors || null } : null,
+      objective_preservation: evaluation.output.objective_preservation || null, substantive_errors: evaluation.output.substantive_errors || null,
+      section_realisation: evaluation.output.section_realisation || null } : null,
     evaluationStageId: evaluation?.id || null,
   };
 }

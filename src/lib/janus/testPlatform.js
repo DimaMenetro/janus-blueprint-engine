@@ -7,7 +7,7 @@
  *  - an equality condition does not match a record that lacks the field ("" does not match "never set");
  *  - { $in: [..., null] } does match a record that lacks the field.
  */
-import { subdomainIds, PAIRS, PATTERNS } from "@/lib/janus/protocolRegistry";
+import { subdomainIds, PAIRS, PATTERNS, DOMAIN_ORDER } from "@/lib/janus/protocolRegistry";
 import { QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
 import { assembleBlueprint } from "@/lib/janus/blueprintPipeline";
 
@@ -55,6 +55,10 @@ function dispositions(prompt = "") {
   return {
     requirement_dispositions: [{ requirement: "Q1", disposition: "implemented", where: [1], reasoning: "Step 1 scopes the pilot" }],
     ...(withActus(prompt) ? { recommendation_dispositions: [{ recommendation: "R1", disposition: "implemented", where: [2], reasoning: "Step 2 is the pilot" }] } : {}),
+    // Step 3 is built on the first pair and the first pattern; the others are answered with a reason.
+    ...(withPatterns(prompt) ? { synthesis_dispositions: [...PAIRS.map(p => p.id), ...PATTERNS.map(p => `pattern:${p.id}`)].map(source =>
+      (source === PAIRS[0].id || source === `pattern:${PATTERNS[0].id}` ? { source, disposition: "implemented", where: [3], reasoning: "Step 3 scales on it" }
+        : { source, disposition: "rejected", reasoning: "It changes nothing in a district pilot" })) } : {}),
   };
 }
 const planStep = (n, title, derived_from) => ({ step: n, title, purpose: `Purpose of ${title}`, phase: "P1", depends_on_steps: n > 1 ? [1] : [], fulfils: n === 1 ? ["Q1"] : [], derived_from, confidence: "Contested" });
@@ -165,7 +169,19 @@ const faultFor = (key) => {
   const f = llm.transport[key];
   return Array.isArray(f) ? f.shift() || null : f || null;
 };
+// Stand-in for retrieveJanusEvidence: one source record per subdomain, unless a test stages a gap or an outage.
+const retrieve = async () => {
+  llm.retrievals += 1;
+  if (!session.user) throw httpError(401, { error: "Unauthorized" });
+  if (session.user.role !== "admin") throw httpError(403, { error: "Janus retrieval is limited to operators" });
+  if (llm.retrieval === "down") throw httpError(500, { error: "Internal error" });
+  const ids = DOMAIN_ORDER.flatMap(subdomainIds);
+  const records = llm.retrieval === "empty" ? [] : ids.map(id => ({ kind: "preprint", title: `Recent work on ${id}`, origin: `http://arxiv.org/abs/${id}`,
+    published_at: "2026-11-20T00:00:00Z", retrieved_at: "2026-11-26T00:00:00Z", quality: "arXiv preprint: not peer reviewed", text: `Abstract about ${id}`, subdomains: [id] }));
+  return { status: 200, data: { source: "arXiv API", retrieved_at: "2026-11-26T00:00:00Z", swept: ids, records, gaps: [] } };
+};
 const invoke = async (name, payload) => {
+  if (name === "retrieveJanusEvidence") return retrieve();
   if (name !== "invokeJanusStage") throw httpError(404, { error: `Function ${name} not found` });
   const fault = faultFor(String(payload.prompt).match(/^STAGE KEY: (\S+)$/m)?.[1]);
   if (fault === "unreached") throw networkError();
@@ -226,6 +242,9 @@ const model = async (prompt) => {
   if (llm.sequence[key]?.length) return { [key]: clone(llm.sequence[key].shift()) }; // one seeded output per call, in order
   if (llm.override[key]) return { [key]: clone(llm.override[key]) }; // structurally valid output a test wants to seed
   if (key === "blueprint") return { blueprint: blueprintFor(prompt) };
+  // Live Refresh: the analysis of the retrieved corpus, every subdomain covered, sources cited by evidence id.
+  if (key === "refresh" && prompt.includes("label=retrieved_source_corpus")) return { refresh: { mode: "tier1", attempted: true, limitations: "Preprints only.",
+    subdomain_updates: Object.fromEntries(DOMAIN_ORDER.flatMap(subdomainIds).map(id => [id, `Update on ${id} [E1]`])), key_developments: ["A development [E1]"], sources: ["E1"] } };
   if (PIPELINE[key]) return { [key]: PIPELINE[key](prompt) };
   if (key === "qualification") return { qualification: evaluation() };
   return { [key]: OUT[key] || { insight: `${key} insight`, tension: `${key} tension`, resolution: `${key} resolution` } };
@@ -242,6 +261,7 @@ export const platform = {
     db.Run.length = 0; db.RunStage.length = 0; db.RunAttempt.length = 0;
     session.user = { ...OPERATOR };
     llm.failOn = null; llm.invalidOn = null; llm.failTimes = {}; llm.invalidTimes = {}; llm.failMessage = FAIL_MESSAGE; llm.transport = {}; llm.pending.length = 0;
+    llm.retrieval = null; llm.retrievals = 0;
     llm.override = {}; llm.sequence = {}; llm.verdicts = {}; llm.findings = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
   },
   /** Hold the model call for one stage open until release() — an unresolved, live call. */

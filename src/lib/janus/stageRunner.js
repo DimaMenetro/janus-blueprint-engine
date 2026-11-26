@@ -23,7 +23,9 @@ import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
 import { beginStage, openAttempt, settleAttempt, settleStage, readAttempt, voidAttempt, releaseSlot, runStatus, readRun } from "@/lib/janus/stageStore";
 import { classifyParseError, parseKeyOf, QUALIFICATION_KEY, STORAGE_MODEL } from "@/lib/janus/stageModel";
-import { QUALITY_CRITERIA, criterionApplies, retryDecision, stageIntegrity } from "@/lib/janus/lifecycleContract";
+import { QUALITY_CRITERIA, criterionApplies, retryDecision, stageIntegrity, clampStepConfidence } from "@/lib/janus/lifecycleContract";
+import { BP, sourceOutline } from "@/lib/janus/blueprintPipeline";
+import { isRefinementPatch, applyRefinement } from "@/lib/janus/blueprintRefinement";
 import { withCorrection } from "@/lib/janus/stageCompiler";
 import { continuationOf, continuableFor } from "@/lib/janus/executionState";
 
@@ -112,6 +114,13 @@ export function validateStageOutput(stageKey, output, { inputs } = {}) {
     // holds its criterion answers to them (qualification.deriveQualification), so they are mandatory output.
     ["intellectual_surplus", "input_restatement", "substantive_errors"].filter(f => !Array.isArray(output?.[f])).forEach(f => errors.push(`qualification.${f}: a list is required (it may be empty)`));
     if (!["yes", "partly", "no"].includes(output?.objective_preservation?.preserved)) errors.push('qualification.objective_preservation.preserved: exactly one of "yes" | "partly" | "no" is required');
+    // A sectioned source is judged section by section: the evaluator states, for each one, whether the Blueprint
+    // realises it. Silence about a section is not an answer.
+    const sections = sourceOutline(inputs?.["@config"]?.queryText);
+    if (sections.length) {
+      const judged = Object.fromEntries((Array.isArray(output?.section_realisation) ? output.section_realisation : []).map(s => [s?.section, s?.status]));
+      sections.filter(s => !["realised", "partial", "absent"].includes(judged[s.id])).forEach(s => errors.push(`qualification.section_realisation: section ${s.id} ("${s.title}") needs a status: exactly one of "realised" | "partial" | "absent"`));
+    }
     return { validator: "qualification-verdicts", valid: errors.length === 0, errors };
   }
   if (stageKey.startsWith("intersection:")) {
@@ -143,7 +152,20 @@ export function resolveTransport(stageKey, t, integrity) {
   // "Contested") are applied once, here. Before, validation ran on the normalized copy and the raw one was stored,
   // so a dependency the validator accepted as step 2 was later read as the string "2" and reported unresolved.
   // The model's exact response stays on the attempt (response_text).
-  const data = normalizeStageOutput(stageKey, parsed.data);
+  // REFINEMENT BY EDITS. The final Blueprint stage returns edits; code integrates them into the exact draft the
+  // revision was compiled from and the integrated Blueprint is what is validated and stored. Edits that cannot be
+  // applied are invalid mandatory output, each named by its address.
+  let produced = parsed.data;
+  if (stageKey === BP.final && isRefinementPatch(produced)) {
+    const base = integrity?.[BP.assembly]?.blueprint;
+    const applied = base ? applyRefinement(base, produced) : { errors: ["the draft these edits refer to is not available"] };
+    if (applied.errors.length) {
+      const shown = applied.errors.slice(0, 5).join("; ") + (applied.errors.length > 5 ? ` (+${applied.errors.length - 5} more)` : "");
+      return { outcome: "schema_failure", message: `Output failed mandatory validation — ${shown}`, output: produced, validation: { validator: "blueprint-refinement", valid: false, errors: applied.errors } };
+    }
+    produced = clampStepConfidence(applied.blueprint, integrity);
+  }
+  const data = normalizeStageOutput(stageKey, produced);
   const validation = validateStageOutput(stageKey, data, { inputs: integrity });
   // Parsed but invalid is settled failure evidence (plan §12.2), never successful cognition.
   if (!validation.valid) {

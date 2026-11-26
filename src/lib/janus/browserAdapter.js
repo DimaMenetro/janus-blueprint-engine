@@ -3,7 +3,7 @@
  * Each entry point picks which stage keys to request and hands them to the canonical stage engine.
  * No prompts, no model calls and no completion rules live here.
  */
-import { PROTOCOL, MODEL_POLICY } from "@/lib/janus/protocolRegistry";
+import { PROTOCOL, MODEL_POLICY, DEFAULT_MODEL, OPERATIONAL_MODELS } from "@/lib/janus/protocolRegistry";
 import { TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
 import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
 import { base44 } from "@/api/base44Client";
@@ -57,15 +57,19 @@ async function advance(runId, { keys, origin, force = false }, hooks = {}) {
 
 /** New run: every stage of the mode's plan, in order. */
 export async function executeJanus(params, hooks) {
-  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = params;
-  if (refreshEnabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE); // fail closed before any record or model call
+  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, attachments = [] } = params;
+  // Refresh is a stage of the Full plan only. A model outside the roster is refused before any record.
+  const refreshEnabled = !!params.refreshEnabled && stagePlan(executionMode).includes("refresh");
+  const model = params.model || DEFAULT_MODEL;
+  if (!OPERATIONAL_MODELS.some(m => m.id === model)) throw new Error(`"${model}" is not a model Janus may execute on`);
   await assertOperator();
   const run = await createRun({
+    model, ...(attachments.length ? { attachments } : {}),
     active_attempt_id: "", // the execution slot starts free
     query_text: queryText, execution_mode: executionMode, output_mode: outputMode, blueprint_level: blueprintLevel,
     novelty_dial: noveltyDial, refresh_enabled: refreshEnabled, status: "running", validation_errors: [], raw_json: "{}",
     storage_model: STORAGE_MODEL.staged, protocol_version: PROTOCOL.version, engine_version: ENGINE_VERSION,
-    orchestrator: ORCHESTRATOR, model_policy_snapshot: { ...MODEL_POLICY },
+    orchestrator: ORCHESTRATOR, model_policy_snapshot: { ...MODEL_POLICY, operational_model: model },
   });
   const result = await advance(run.id, { keys: stagePlan(executionMode), origin: "execution" }, hooks);
   return { ...result, success: result.status === "completed" };
@@ -83,7 +87,6 @@ export async function resumeJanus(runId, hooks) {
   const view = await loadRunView(runId);
   if (!view) throw new Error("Run not found");
   if (view.storage !== STORAGE_MODEL.staged) throw new Error("Historical runs are read-only and cannot be resumed");
-  if (view.run.refresh_enabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE);
   if (TERMINAL_STATES.includes(view.run.status)) throw new Error(`This run has ended (${view.run.status}) and is not resumed. A finished run recovers through a re-run, which produces a new revision.`);
   await assertOperator();
   const result = await advance(runId, { keys: stagePlan(view.run.execution_mode), origin: "resume" }, hooks);

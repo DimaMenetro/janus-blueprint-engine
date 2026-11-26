@@ -190,6 +190,22 @@ export function stepConfidenceErrors(blueprint, inputs) {
       ? [`step ${s.step}: labelled ${s.confidence} but rests on ${ceiling} material. Confidence is the weakest of what the step cites; it changes only if derived_from does`] : [];
   });
 }
+/**
+ * The same law applied by code to a Blueprint the application has just integrated (blueprintRefinement): a step
+ * with no label, or one stronger than its support, is set to the weakest confidence of what it cites. The model
+ * is not asked to compute what code can establish.
+ */
+export function clampStepConfidence(blueprint, inputs) {
+  const claims = inputs?.cogito?.claims;
+  if (!Array.isArray(claims) || !Array.isArray(blueprint?.steps)) return blueprint;
+  const tag = Object.fromEntries(claims.map(c => [c?.id, normalizeTag(c?.tag)]));
+  enforceConfidencePropagation(claims, list(inputs?.actus?.recommendations)).recommendations.forEach(r => { tag[r.id] = normalizeTag(r.inherited_confidence); });
+  const rank = (t) => CONFIDENCE_TAXONOMY.indexOf(normalizeTag(t));
+  return { ...blueprint, steps: blueprint.steps.map(s => {
+    const ceiling = lowestConfidence(list(s?.derived_from).map(id => tag[id]).filter(Boolean));
+    return ceiling && rank(s.confidence) < rank(ceiling) ? { ...s, confidence: ceiling } : s;
+  }) };
+}
 const PAIR_FIELDS = ["insight", "tension", "resolution"];
 /** Serious alternatives the mode and novelty setting require beside the selected approach (plan §7.4, §15.5). */
 export const minAlternatives = (mode, novelty) => Math.max(MODE_EXPECTATIONS[mode]?.min_alternatives ?? 0, novelty === "high" ? 3 : 0);
