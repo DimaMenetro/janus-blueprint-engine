@@ -346,8 +346,10 @@ export function refinementErrors(final, inputs = {}) {
   const draft = inputs[BP.assembly]?.blueprint;
   const findingIds = arr(inputs[BP.critique]?.findings).map(f => f.id);
   if (draft) {
-    e.push(...preservationErrors(final, draft));
-    e.push(...changeErrors(final, draft, findingIds));
+    const lost = preservationErrors(final, draft);
+    const lostAt = lost.map(x => x.split(":")[0]);
+    // A loss already named as a whole (a list that came back shorter) is not repeated entry by entry.
+    e.push(...lost, ...changeErrors(final, draft, findingIds).filter(x => !covers(lostAt, x.split(":")[0])));
     // The alternatives are the comparison's record: none of the base's may disappear (plan §15.1–15.3).
     const b = arr(draft.alternative_approaches).length, a = arr(final?.alternative_approaches).length;
     if (a < b) e.push(`alternative_approaches: the base holds ${b} and the refinement returned ${a}. Every alternative that was seriously compared stays on the record`);
