@@ -1,8 +1,8 @@
-# OPERATOR DIRECTIVE (verbatim) — PART 1 of 2 (Sections I–XI)
+# OPERATOR DIRECTIVE (verbatim) — PART 1 of 3 (Sections I–XI)
 
 > Saved verbatim on 2026-11-26 at DIMA's instruction, before execution, so that it survives context compression.
-> Do not edit. Part 2 holds Sections XII–XXII, DIMA's final personal instruction and the Hybrid Operational Model amendment.
-> The amendment in Part 2 SUPERSEDES the Sonnet restriction and the all-Opus preference stated in Section XIV.
+> Do not edit. Part 2 holds Sections XII–XVI. Part 3 holds Sections XVII–XXII, DIMA's final personal instruction and the Hybrid Operational Model amendment.
+> The amendment in Part 3 SUPERSEDES the Sonnet restriction and the all-Opus preference stated in Section XIV.
 >
 > Attachments supplied with this directive (private chat files; sign before reading, links expire):
 > - `mp/private/6978a10dbc9d7c7a927c09b8/chat/9e4a063896bc7165c915317f12ca4eda_janus-blueprint-engine-anti-kytheionmodified.zip`
@@ -727,4 +727,4 @@ Recover the mechanisms that contributed to their intellectual utility rather tha
 
 The reconstruction must meet or exceed their demonstrated intellectual caliber while more faithfully realizing the complete CP-002 Ideal Form.
 
-(Continues in Part 2.)
+(Continues in Part 2, then Part 3.)

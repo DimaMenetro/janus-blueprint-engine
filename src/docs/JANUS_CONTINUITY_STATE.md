@@ -1,6 +1,17 @@
 # Janus Continuity State (Kytheion)
 Read this first after any context reset.
 
+## READ NEXT, IN THIS ORDER (2026-11-26, DIMA's Ideal Form directive)
+1. `JANUS_KYTHEION_SME_STATE.md` — Kytheion's own CP-002 execution (Refresh ON): research, constraints, claims, intersections, model allocation, causal findings. Operate as **Janus-Kytheion** from it.
+2. `JANUS_OPERATOR_DIRECTIVE_2026-11-26_IDEAL_FORM_PART1.md`, `…PART2.md`, `…PART3.md` — DIMA's directive, verbatim. Part 3 ends with the Hybrid Operational Model amendment.
+3. The section "IDEAL FORM TRANCHE" near the end of this file — what is done, what is next, the exact continuation boundary.
+
+## OPERATIVE DECISIONS THAT SUPERSEDE OLDER LINES OF THIS FILE (2026-11-26)
+- **Model policy:** explicit per-call model selection is AUTHORIZED. Sonnet is the general substrate, Opus is reserved for consequential reasoning (allocation in the SME state §8). The "MODEL POLICY (binding…)" section below is HISTORICAL: its blanket Gemini ban and its "no per-call override" rule are withdrawn.
+- **Gemini:** only Gemini 3.1 is prohibited. Other Gemini versions are judged on capability and authorization. Refresh must be a complete live capability, not fail-closed.
+- **Paid calls:** none without DIMA's explicit approval (probes, runs, validation, external APIs). Use the recorded probe evidence.
+- **Unchanged:** operator-only containment; historical runs untouched; publishing is DIMA's; never weaken inherited tests (narrow replacement only where DIMA's decision supersedes an assertion, marked in place); Phase 10 not started.
+
 - **Governing plan:** `src/docs/JANUS_FINAL_FORM_ARCHITECTURE_IMPLEMENTATION_PLAN_v1.2_2026-09-29.md` (authorized end-to-end by DIMA; continue automatically between phases except at the plan's explicit operator gates; no stopping for documentary neatness).
 - **Protocol:** `src/docs/CP-002-O-D-JNP.md` (v2.0 Ideal Form, 25 subdomains 7/6/5/7).
 - **Current phase:** Phase 0 COMPLETE. **Phase 1 COMPLETE (2026-09-29)** — 11/11 Vitest tests pass (`npm test`), and the build passes. Next up: Phase 2 (Lifecycle, Completion & Quality Specification).
@@ -139,8 +150,32 @@ An earlier Phase 6 pass was stopped because Kytheion judged recovery code "convo
 - **Model policy: still UNVERIFIED at runtime** (see tranche 1). Unchanged, and the largest open risk to cognitive depth.
 - Not started: two-way Actus–Blueprint trace; qualification, release and limitations in exports and print; device/visual checks of the new screens and of the account-switch round trip; a live run of the pipeline (needs DIMA's approval of the paid call).
 
+## IDEAL FORM TRANCHE (2026-11-26, DIMA's Ideal Form directive + Hybrid Model amendment) — PHASE 9 STILL OPEN
+### Established before any code changed (evidence, read-only)
+- **Repository:** HEAD `c1056e4`; tree = `17c3766` (288/288, 16 files) + the directive. `594b98b` (interrupted work) was reverted by `8210e97`; readable with `git show 594b98b:<path>`.
+- **The benchmark ran on a fast low-cost model, not Opus (strong inference).** Live records of run `6b0868e3…`: the query is 194,922 characters; every call settled in 5–27 s; domain calls returned 7–9k characters in 9–11 s; whole-Blueprint outputs of 26–30k characters returned in 13–20 s (hundreds of output tokens per second). The function sent `InvokeLLM({ prompt })`; the platform guide states an omitted model is `automatic`. Depth was already gone at the first domain (Corpus 4 constraints, Cogito 3 claims, Actus 3 recommendations for a 195k-character vision; brief 5 requirements, 34 of 57 sections marked context; skeleton 3 steps, confidence written as "High"/"Medium"). The substrate is therefore the first cause; mechanisms cannot be judged until a run uses the allocated models.
+- **Current app-runtime model catalog (platform guide, 2026-11-26):** `claude_opus_5_5`, `claude-sonnet-5`, `claude_fable_5_1`, `claude_fable_5_2`, `gpt_6_luna`, `gpt_6_sol`, `gpt_6_astra`, `gpt_6_2_sol`, `gpt_6_2_astra`, `glm_5_2`, `gemini_3_8_flash` (the only one with InvokeLLM web context). The AI Gateway accepts the same ids. `gemini_4_carbon` and `claude_sonnet_5_5` are Builder-catalog ids, not app-runtime ids.
+- **Gateway interface (docs):** `const { baseURL, token, headers } = base44.asServiceRole.aiGateway.connection()` (synchronous), then OpenAI-compatible `POST {baseURL}/chat/completions` with `Authorization: Bearer token` plus `headers`. Service-role only, backend only. Billed to the app's credit quota; rejected before the model runs when credits are out. Docs do not describe reasoning effort, web search or usage fields: those rest on DIMA's reported probes (SME state §8).
+- **Refinement failures, as recorded:** r1 43 errors (numeric `where` returned as strings: the type legend called every non-object list "text values"); r2 3 (declared changes with nothing changed, positions written zero-based); r3 16 (undeclared rewrites); r4 101 (lists returned shorter); r5 passed on its second call.
+
+### Decisions (with the reason each exists)
+1. **Transport = AI Gateway, called by `invokeJanusStage`.** Reason: it is the only transport that returns the effective model, usage and finish reason, so "no hidden fallback" becomes checkable. The client still sends only `{ stage_id, prompt }`; the function reads the model from the revision it is asked to run.
+2. **A revision fixes its model when it is created** (`RunStage.provenance.model = { role, requested, effort }`). Retry, continuation and recovery read it from there, so the substrate of a revision cannot change. The Run records the allocation when it starts (`model_policy_snapshot.allocation`); a run that has none (created before this tranche) adopts the default once, recorded with a timestamp, the first time a new revision is created for it.
+3. **Requested and effective model are recorded on every attempt** (`RunAttempt.model_call`). A mismatch is surfaced and blocks completion as a finding; it does not discard paid output (the provider's naming is not yet measured, so failing closed could burn credits on a false alarm).
+4. **No timer in the function** (standing rule). The 5-minute ceiling is met by keeping each call small, never by aborting, truncating or cutting inputs.
+5. **Refinement = operations applied by code** (SME state R1), addressed by the key path shown to the model, with accepted operations kept across the attempts of a revision (a retry supplies only corrections). The earlier whole-document form stays valid for artifacts already recorded.
+6. **Expansion must be decomposed (per step) before real L3 depth is possible.** With Sonnet or Opus speeds a single L3 expansion of a real plan exceeds 5 minutes. Not yet built: see the boundary below.
+
+### Continuation boundary (update this list as work lands)
+- [ ] T1 model allocation: registry, entities, function, engine, selector, diagnostics, tests.
+- [ ] T2 refinement by operations + type legend + one addressing module.
+- [ ] T2b per-step expansion (dynamic part stages, deterministic merge).
+- [ ] T3 objective comprehension first; evaluator's own census; trace = dependence.
+- [ ] T4 live Refresh: direction → retrieval as durable attempts → evidence artifact → assimilation.
+- [ ] T5 attachments, large-document prompt editor, print, qualification in exports.
+
 ## Next action
-DIMA: confirm the model setting, and approve a live Full/L3 run to judge the pipeline's cognition. Kytheion continues with the not-started list. Do not start Phase 10. Do not make a paid call without approval.
+Continue the boundary list above in order. Do not start Phase 10. Do not make a paid call without DIMA's approval. Publishing is DIMA's.
 
 ## Superseded — the decision that preceded the pipeline (kept for the record)
 **DIMA decision needed (Phase 9 record §4):** the Blueprint sub-stage pipeline cannot coexist with inherited assertions that pin the Blueprint as one stage and one call (stage counts of 14/13/12, exact call sequences, exact Blueprint `depends_on`). Authorize replacing those specific assertions with the stronger invariants, then build the pipeline (candidates → comparison/selection → skeleton → expansion → criteria → deterministic assembly → critique → refinement → qualification) and the presentation. Do not start Phase 10. Publishing is DIMA's. Do not make a paid call.
