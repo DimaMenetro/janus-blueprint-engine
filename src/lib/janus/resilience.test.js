@@ -51,7 +51,10 @@ describe("settled-failure classification", () => {
     expect(RETRY_POLICY.retryable.map(e => retryDecision(e, 1))).toEqual(RETRY_POLICY.retryable.map(() => "retry_scheduled"));
     expect(RETRY_POLICY.retryable.map(e => retryDecision(e, MAX))).toEqual(RETRY_POLICY.retryable.map(() => "exhausted"));
     const terminal = FAILURE_EVIDENCE.filter(e => !RETRY_POLICY.retryable.includes(e));
-    expect(terminal).toEqual(["platform_termination", "quota_failure", "operator_cancellation"]);
+    // DAIONAE'S REVIEW 2026-11-27: `output_truncated` joins the evidence that is never retried — the provider stopped at
+    // the output limit, and the same request is cut off again (lifecycleContract.OUTPUT_TRUNCATED). The three classes
+    // this assertion always listed are unchanged, as is what it asserts: retry is decided from the settled outcome alone.
+    expect(terminal).toEqual(["platform_termination", "quota_failure", "operator_cancellation", "output_truncated"]);
     [...terminal, "succeeded", "not_started"].forEach(e => expect(retryDecision(e, 1)).toBe("none"));
   });
 
