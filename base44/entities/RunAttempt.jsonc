@@ -150,6 +150,14 @@
     "elapsed_ms": {
       "type": "number",
       "description": "Telemetry only \u2014 never failure evidence"
+    },
+    "call_path": {
+      "type": "string",
+      "description": "Who made the model call for this attempt: server (the invokeJanusStage function) or page (the operator's page, calling the AI Gateway with the operator's own token). Read from the run's model policy snapshot when the attempt was opened. Absent on attempts recorded before the page path existed; those were made by the server."
+    },
+    "page_observation": {
+      "type": "object",
+      "description": "Page path only. TELEMETRY, NEVER EVIDENCE: what the page observed of its own call (when the request was sent, when the response and the first and last stream events arrived, how much content arrived, the HTTP status, the browser's error, screen visibility and wake-lock state). Written while the call streams and when it ends. It never settles an attempt: only transport does."
     }
   },
   "required": [
