@@ -130,10 +130,7 @@ describe("no second active roster in executable code", () => {
     });
     walkServer(serverRoot);
     const rel = (f) => path.relative(serverRoot, f);
-    // AMENDED 2026-11-27 (DIMA's workflow-suitability directive, section VIII Probe A): ONE temporary diagnostic function is allowed on
-// branch janus-pipeline-expansion: probeExecutionBudget (admin-only, no model call, no record, log lines only). It is deleted together
-// with this entry and the matching assertion below when Probe A is closed. Nothing else changes: the retired diagnostics stay retired.
-expect(server.map(rel).sort()).toEqual(["functions/invokeJanusStage/entry.ts", "functions/probeExecutionBudget/entry.ts", "shared/errorResponse.ts", "shared/janusModels.ts"]);
+    expect(server.map(rel).sort()).toEqual(["functions/invokeJanusStage/entry.ts", "shared/errorResponse.ts", "shared/janusModels.ts"]); // the retired diagnostics stay retired
     const text = (f) => fs.readFileSync(path.join(serverRoot, f), "utf8");
     const listed = [...text("shared/janusModels.ts").match(/AUTHORIZED_MODELS = \[([^\]]*)\]/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
     expect([...listed].sort()).toEqual(Object.keys(MODELS).sort());
@@ -141,7 +138,5 @@ expect(server.map(rel).sort()).toEqual(["functions/invokeJanusStage/entry.ts", "
     expect(prohibited).toEqual(MODEL_POLICY.prohibited_model_prefixes);
     expect(text("functions/invokeJanusStage/entry.ts")).not.toMatch(/gemini|sonnet|opus|claude|gpt_|automatic|InvokeLLM|integrations\.Core|add_context_from_internet|file_urls|web_search|tools\s*:/i);
     expect(text("shared/errorResponse.ts")).not.toMatch(/\bmodel\s*:|gemini|sonnet|claude|add_context_from_internet|file_urls/i);
-    // AMENDED 2026-11-27 with the entry above: the diagnostic names no model and has no path to inference, the built-in integration, the Gateway, files or tools.
-    expect(text("functions/probeExecutionBudget/entry.ts")).not.toMatch(/\bmodel\s*:|gemini|sonnet|opus|claude|gpt_|automatic|InvokeLLM|integrations\.|aiGateway|chat\/completions|add_context_from_internet|file_urls|web_search|tools\s*:/i);
   });
 });

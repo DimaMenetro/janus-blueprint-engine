@@ -34,25 +34,27 @@ Isolation, checked before the first call: admin-only; no model call; no entity r
 - [I] `waitUntil` cannot carry a model call past its request. The documented 5-minute maximum does not matter for it: the post-response window is 30 s.
 
 ### 2.3 Run #3 — attached, to beyond the ceiling (`attached330`, 330 s, a second witness every 15 s)
-PENDING.
+- [O] Heartbeats every 5 s to tick 59 (299.817 s). The side requests (every 15 s; ticks 45, 48, 51, 54 and 57 were read) all returned `ok`: each is a separate invocation with its own `POST → 200`, so a function that calls a function from the branch reaches the branch's copy. At 299.8 s (19:49:05.538Z) the platform line `POST → no response (canceled)`. Read again at about 19:50:50Z: nothing after it, although a heartbeat was due every 5 s and a side request every 15 s.
+- [O] The test tool reported "timed out after 300 seconds": the caller ended the request. This is the second cancel (the first at 185 s), now with a witness that does not depend on the request's own log channel: a function stops doing work when its caller leaves. Section 5 (a) rests on it.
+- [O] No request attached to a caller beyond 300 s has been observed: the only waiting client available here (the test tool) ends at 300 s itself, the sandbox client at 120 s. The platform's own end at 300 s (status and body) therefore remains [D], and [H] (the plan records a measured result of about 295 s for a monolithic backend function). A server-side caller that waits as long as the platform allows is Probe B's step `OVER`.
 
 ### 2.4 Redeploying a function hides its earlier log lines [O]
 The window 18:20Z to 18:40Z held 76 lines (run #1 and its pings) when read before the probe was redeployed; the same window read after it was `[]`. The reader serves the latest deployment. `invokeJanusStage` was redeployed 2026-11-27 02:45:51Z, after both Cogito claims, which is why its logs for those calls are gone. Rule that follows: read a function's logs for a failed call before redeploying that function.
 
 ### 2.5 Cost [O]
-Integration credits used: 1,709.43 (start of the previous turn), 1,712.07 (start of this turn), 1,712.47 (after run #2 with its pings and two rejected raw requests); run #3: PENDING. Function time is not a visible line item; a few hundred seconds of function time cost fractions of a credit. Message credits 53.84 of 500, unchanged by the probes.
+Integration credits used: 1,709.43 (start of the previous turn), 1,712.07 (start of this turn), 1,712.47 (after run #2 with its pings and two rejected raw requests); 1,712.97 after run #3 (60 heartbeats, a side request every 15 s, the Gateway route checks). Probe A in this turn: +0.90; the previous turn's activity with run #1: +2.64; at most about 3.5 credits in all. Function time is not a visible line item; a few hundred seconds of function time cost fractions of a credit. Message credits 53.84 of 500, unchanged by the probes.
 
 ### 2.6 Removal
-PENDING (the function, the test amendment and its marked comments are removed together; the final source is kept in section 8 so the probe can be recreated in one write).
+Done after run #3: the function and its temporary test amendment (two marked comments and one assertion) were deleted together and the inherited guard is back to its original form. The final source is in section 8, so the probe can be recreated in one write (with the same marked amendment).
 
 ## 3. Platform facts gathered at no cost
 - [O] `agent-profile`: runtime "current", automation pipeline "workflows"; entitlements backend_functions, workflows, actors all true. Plan Pro.
 - [O] Workflows on this app: none (platform list `[]`). Workflow runs: none (`[]`). No prior proof exists to reuse.
 - [D] Workflow activities: invoke_backend_function, calculate_field, compute_seconds_until, send_email. No model-call activity. Strictly sequential, no parallel. Waits are durable. A run lives at most 90 days. A step always calls the function's latest saved version (no publish needed). Whether a `then` may point back to an earlier task is not documented.
-- [D] Cost: about 1 integration credit per 10 steps plus the called function's credits; a run is cancelled if credits run out. Run history 3 months. Management API (personal or workspace token): list and get runs with their step log, cancel (`cancelling`), run now with replay of a prior run's trigger payload, analyze a failed run, versions. No app-side SDK for workflow runs is documented. Retry behavior on failure is not specified.
+- [D] Cost: about 1 integration credit per 10 steps plus the called function's credits; a run is cancelled if credits run out. Run history 3 months. Management API (personal or workspace token): list and get runs with their step log, cancel (`cancelling`), run now with replay of a prior run's trigger payload, analyze a failed run, versions. No app-side SDK for workflow runs is documented. Retry behavior on failure is not specified. Per-plan run quotas and concurrency limits are not documented.
 - [D] Branches: workflows are shared with main and cannot be created or edited on a branch.
 - [D] SDK Gateway types: video is the only asynchronous surface (`POST /videos` returns a job to poll).
-- [O] Gateway `GET /models` with the signed-in token: 200, 12 chat models. GET on `/responses`, `/chat/completions`, `/batches`, `/files`, `/models/{id}`: 404 "App not found"; a GET 404 on `/chat/completions` (a route that exists for POST) shows that this is the router's generic answer. POST with an empty body (no prompt, so no inference possible): PENDING.
+- [O] Gateway `GET /models` with the signed-in token: 200, 12 chat models. GET on `/responses`, `/chat/completions`, `/batches`, `/files`, `/models/{id}`: 404 "App not found"; a GET 404 on `/chat/completions` (a route that exists for POST) shows that this is the router's generic answer. POST with an empty body (no prompt, so no inference is possible): `/chat/completions` 400 `Field required` (param `model`): the route exists and validates; `/responses`, `/batches` and a control path that does not exist (`/definitely-not-a-route-9f3a`) all 405 Method Not Allowed. [I] `/responses` and `/batches` are not routes of this Gateway: no Responses API (so no `background` mode) and no Batch API; chat completions is the only text route.
 - [D] In-app agents: model selectable per agent (Claude models included); effort, per-turn limit and disconnect behavior undocumented. [I] The documented surface cannot meet the model-evidence invariants.
 - [D] Actors (Durable Objects): a room hibernates after about 10 s of quiet even with clients connected, and is evicted after 1 to 2 minutes idle with `hibernate: false`; the actor's service-role client lists entities, functions and integrations, not the Gateway; "not for async flows"; a new actor cannot connect on a branch. [I] An actor could only be another durable caller of functions, which a Workflow already is. Not a long-call host. Untested.
 - [H] Corpus on Sonnet 5, effort high: 19,106 / 22,044 / 23,072 tokens in 234.6 / 263.1 / 281.7 s (about 82 tokens/s), 80 credits per call (Opus 5.5: 160). The three calls ended inside the documented limit. A Cogito call never completed and never produced evidence: whether it exceeds 300 s is unmeasured.
@@ -153,4 +155,61 @@ Read back from this branch afterwards (read-only): workflow list and runs, the r
 4. Unchanged and untouched: the unresolved-call rule and the earlier decision D1 (operator close of a call that can never be recorded).
 
 ## 8. Probe A source (for a rerun; the function is removed)
-PENDING (written at removal).
+`base44/functions/probeExecutionBudget/entry.ts` as it was when removed. Phases: `ping`, `heartbeat` (the caller waits), `detach` (answers at once, the loop continues under `waitUntil`); `side_every_seconds` adds the second witness.
+```ts
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
+import { waitUntil } from 'base44:runtime';
+
+export default async function(req) {
+  const t0 = Date.now();
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me().catch((e) => (e.status === 401 ? null : Promise.reject(e)));
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (user.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
+    const body = await req.json().catch(() => ({}));
+    const label = String(body.label || 'probe').slice(0, 40);
+    const line = (event, extra = {}) => console.log(JSON.stringify({
+      probe: 'execution_budget', label, event, elapsed_ms: Date.now() - t0, at: new Date().toISOString(), ...extra,
+    }));
+    if (body.phase === 'ping') { line('ping'); return Response.json({ ok: true, label, at: new Date().toISOString() }); }
+    if (body.phase !== 'heartbeat' && body.phase !== 'detach') {
+      return Response.json({ error: 'phase must be ping, heartbeat or detach' }, { status: 400 });
+    }
+    const maxSeconds = Math.min(Math.max(Number(body.max_seconds) || 0, 1), 900);
+    const sideEvery = Math.max(Number(body.side_every_seconds) || 0, 0);
+    const loop = async (mode) => {
+      let tick = 0;
+      let lastSide = Date.now();
+      while (Date.now() - t0 < maxSeconds * 1000) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        tick += 1;
+        line('heartbeat', { tick, mode });
+        if (sideEvery && Date.now() - lastSide >= sideEvery * 1000) {
+          lastSide = Date.now();
+          const side = await base44.functions.invoke('probeExecutionBudget', { phase: 'ping', label: `${label}-side-${tick}` })
+            .then(() => 'ok', (e) => `failed ${e?.response?.status ?? e?.message}`);
+          line('side_ping', { tick, side });
+        }
+      }
+      line('survived', { tick, mode });
+      return tick;
+    };
+    if (body.phase === 'detach') {
+      line('detach', { max_seconds: maxSeconds });
+      waitUntil(loop('after_response').catch((e) => line('background_failed', { error: String(e?.message || e) })));
+      return Response.json({ ok: true, label, detached: true, answered_ms: Date.now() - t0 });
+    }
+    if (req.signal && typeof req.signal.addEventListener === 'function') {
+      req.signal.addEventListener('abort', () => line('client_disconnected'));
+    }
+    line('start', { max_seconds: maxSeconds, signal_observable: !!req.signal });
+    const ticks = await loop('attached');
+    return Response.json({ ok: true, label, survived: true, elapsed_ms: Date.now() - t0, ticks });
+  } catch (error) {
+    console.error('[probeExecutionBudget] failed', error?.stack || error);
+    return Response.json({ error: 'Probe failed' }, { status: 500 });
+  }
+}
+```
+Read its logs with the platform reader: `functions-mgmt/probeExecutionBudget/logs`, `branch_id` = the branch id while it lives only here. Read before any redeploy (section 2.4). The test tool ends a call at 300 s; the sandbox client at 120 s.
