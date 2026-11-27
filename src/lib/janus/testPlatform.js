@@ -23,8 +23,9 @@ const clone = (x) => JSON.parse(JSON.stringify(x));
  * list). An object the schema declares without properties (a stage output, the allocation, the usage) is kept as
  * written. An update replaces the nested object as a whole.
  * The double applies the real schema files to the nested objects the engine writes, so a field the engine relies on
- * and the schema does not declare fails here instead of vanishing in production, and code that tells "absent" from
- * `null` is exercised with what it will really read.
+ * and the schema does not declare fails here instead of vanishing in production. It does NOT reproduce the `null`
+ * the real store returns for an unwritten declared field: engine code must therefore never tell "absent" from
+ * `null` (it reads such fields by truthiness only).
  */
 // The schema files are found from this file's own location (src/lib/janus → the app root), not from the working
 // directory, so this module needs no Node global and reads the same files wherever the tests are started from.
@@ -33,7 +34,7 @@ const SCHEMAS = Object.fromEntries(["Run", "RunStage", "RunAttempt"].map(n => [n
 const DECLARED = { Run: ["model_policy_snapshot"], RunStage: ["provenance", "validation"], RunAttempt: ["transport", "model_call"] };
 const conform = (schema, v) => (Array.isArray(v) ? (schema?.items ? v.map(x => conform(schema.items, x)) : v)
   : v && typeof v === "object" && schema?.properties
-    ? Object.fromEntries(Object.entries(schema.properties).map(([k, s]) => [k, v[k] === undefined ? (s.type === "array" ? [] : null) : conform(s, v[k])]))
+    ? Object.fromEntries(Object.entries(v).filter(([k]) => k in schema.properties).map(([k, x]) => [k, conform(schema.properties[k], x)]))
     : v);
 const stored = (name, data) => Object.fromEntries(Object.entries(data).map(([k, v]) => [k, DECLARED[name]?.includes(k) ? conform(SCHEMAS[name].properties[k], v) : v]));
 const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k] ?? null) : rec[k] === v));
