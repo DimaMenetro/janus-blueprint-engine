@@ -5,6 +5,7 @@ Read this first after any context reset.
 1. `JANUS_KYTHEION_SME_STATE.md` — Kytheion's own CP-002 execution (Refresh ON): research, constraints, claims, intersections, model allocation, causal findings. Operate as **Janus-Kytheion** from it.
 2. `JANUS_OPERATOR_DIRECTIVE_2026-11-26_IDEAL_FORM_PART1.md`, `…PART2.md`, `…PART3.md` — DIMA's directive, verbatim. Part 3 ends with the Hybrid Operational Model amendment.
 3. The section "IDEAL FORM TRANCHE" near the end of this file — what is done, what is next, the exact continuation boundary.
+4. On branch `janus-pipeline-expansion` only (2026-11-27): `JANUS_WORKFLOW_SUITABILITY_ADJUDICATION_2026-11-27.md` (DIMA's Workflow suitability directive: evidence, probes, adjudication; the directive is saved verbatim beside it as `JANUS_OPERATOR_DIRECTIVE_2026-11-27_WORKFLOW_SUITABILITY.md`) and `JANUS_PAGE_CALL_PATH_BRANCH_2026-11-27.md` (the paused page-path branch). Main's `JANUS_EXECUTION_SUBSTRATE_EVALUATION_2026-11-27.md` and the section "EXECUTION SUBSTRATE" of main's continuity state are not on this branch: read them with `git show origin/main:src/docs/<file>`.
 
 ## OPERATIVE DECISIONS THAT SUPERSEDE OLDER LINES OF THIS FILE (2026-11-26)
 - **Model policy:** explicit per-call model selection is AUTHORIZED. Sonnet is the general substrate, Opus is reserved for consequential reasoning (allocation in the SME state §8). The "MODEL POLICY (binding…)" section below is HISTORICAL: its blanket Gemini ban and its "no per-call override" rule are withdrawn.

@@ -3,7 +3,7 @@
 Janus-Kytheion for DIMA. Read after `JANUS_CONTINUITY_STATE.md` (its section "PAGE CALL PATH BRANCH" points here).
 
 ## 0. Source availability (honest boundary)
-The branch directive names `src/docs/JANUS_EXECUTION_SUBSTRATE_EVALUATION_2026-11-27.md` and a section "EXECUTION SUBSTRATE (2026-11-27)" in the continuity state. **Neither exists in this branch**: they were written on main in the same turn that started this branch, after the branch was cut from main's code. This branch therefore works from the directive below, which restates every decision the evaluation fixed for it (workflows not the path; InvokeLLM not the path; the exact requirements 1–9). The evaluation's own text, sources and DIMA's reserved decisions D1/D2 live on main and are not reproduced here from memory.
+The branch directive names `src/docs/JANUS_EXECUTION_SUBSTRATE_EVALUATION_2026-11-27.md` and a section "EXECUTION SUBSTRATE (2026-11-27)" in the continuity state. **Neither exists in this branch**: they were written on main in the same turn that started this branch, after the branch was cut from main's code. This branch therefore works from the directive below, which restates every decision the evaluation fixed for it (workflows not the path; InvokeLLM not the path; the exact requirements 1–9). The evaluation's own text, sources and DIMA's reserved decisions D1/D2 live on main: read them with `git show origin/main:src/docs/JANUS_EXECUTION_SUBSTRATE_EVALUATION_2026-11-27.md` (read on 2026-11-27; its section 6 is the requirement list restated below). Its determination 1 ("Workflows are not a path for the model calls") was overturned for now by DIMA's 2026-11-27 workflow-suitability directive: see `JANUS_WORKFLOW_SUITABILITY_ADJUDICATION_2026-11-27.md`.
 
 ## 1. The branch directive (verbatim, saved before execution)
 
@@ -29,4 +29,4 @@ The branch directive names `src/docs/JANUS_EXECUTION_SUBSTRATE_EVALUATION_2026-1
 > Exit criteria: (E1) a Full L3 run through the page path settles Cogito with the answering model, finish reason and usage recorded, or the telemetry shows exactly where the page path ends; (E2) two tabs never produce two calls for one attempt; (E3) full suite, lint and production build green.
 
 ## 2. Status
-IN PROGRESS — sections 3+ are written as the work lands.
+PAUSED (2026-11-27, DIMA's workflow-suitability directive). Built: only the optional RunAttempt fields `call_path` and `page_observation`. Not built: the second call path in the stage runner, the Prompt page selector, the wake lock, the Diagnostics model-list panel. Nothing paid ran. Whether to resume, reshape or drop this branch's work depends on the adjudication in `JANUS_WORKFLOW_SUITABILITY_ADJUDICATION_2026-11-27.md`.
