@@ -30,7 +30,9 @@ export default function EvaluationControls({ q, runId, t, onChanged }) {
   return (
     <div>
       {action === "continue" && <p style={line(t)}>The last evaluation call failed and a retry is pending. Continuing uses the same evaluation version at attempt {q.evaluationRetry.nextAttempt}; the attempt limit is not reset.</p>}
-      {action === "new_version" && <p style={line(t)}>The evaluation of this Blueprint version settled without verdicts{q.lastEvaluationError ? ` (${q.lastEvaluationError})` : ""}. Another evaluation is a new version with its own attempt limit, and only starts on your decision.</p>}
+      {action === "new_version" && <p style={line(t)}>{q.evaluationRejected
+        ? "The evaluation of this Blueprint version was answered by another model than the one it was fixed to."
+        : `The evaluation of this Blueprint version settled without verdicts${q.lastEvaluationError ? ` (${q.lastEvaluationError})` : ""}.`} Another evaluation is a new version with its own attempt limit, and only starts on your decision.</p>}
       {blocked && <p style={line(t, true)}>The evaluation was not continued, because it is no longer the same operation: {blocked.reasons.join("; ")}. Nothing was started.</p>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
         {blocked && <button onClick={closeBlocked} disabled={busy} style={btn(t, busy)}><GitBranch style={{ width: 14, height: 14 }} />Close this version to start a new one</button>}

@@ -23,7 +23,7 @@ describe("execution — durable stages (Phase 3 exit tests, on the canonical eng
     expect(result.success).toBe(true);
     const run = h.db.Run[0];
     expect(run.storage_model).toBe("staged_v1");
-    STAGE_ORDER.forEach(k => expect(run[k]).toBeUndefined());
+    STAGE_ORDER.forEach(k => expect(run[k]).toBeNull()); // STORE-FIDELITY 2026-11-27: null is what the store holds for a field never written (was toBeUndefined)
 
     const stages = stagesOf(run.id);
     // Phase 9 (DIMA's continuation directive, 2026-11-26): the Blueprint is a pipeline of nine durable stages, no longer

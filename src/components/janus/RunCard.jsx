@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { format } from "date-fns";
 import { FileText, Clock, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
+import { instantOf } from "@/lib/janus/storeTime";
 
 export default function RunCard({ run }) {
   const shortTitle = run.query_text?.substring(0, 60) + (run.query_text?.length > 60 ? "..." : "");
@@ -20,7 +21,7 @@ export default function RunCard({ run }) {
             <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
               <div className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                <span>{run.created_date ? format(new Date(run.created_date), "MMM d, yyyy HH:mm") : "—"}</span>
+                <span>{instantOf(run.created_date) ? format(instantOf(run.created_date), "MMM d, yyyy HH:mm") : "—"}</span>
               </div>
               <span className="text-xs px-2 py-0.5 rounded backdrop-blur-[40px] bg-white/[0.10] dark:bg-white/[0.05] text-slate-700 dark:text-slate-300 border border-white/60 dark:border-white/35">
                 {run.output_mode || "Blueprint"}

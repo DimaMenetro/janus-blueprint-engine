@@ -193,7 +193,7 @@ export async function evaluateJanus(runId, { newVersion = false } = {}, hooks = 
   if (q.blocked) throw new Error(q.blocked);
   const action = q.evaluationAction;
   if (!action) throw new Error(q.pending === "in_progress" ? "The evaluation call for this Blueprint version has not settled and its outcome is unknown: nothing is started beside it" : "This Blueprint version already has its evaluation");
-  if (action === "new_version" && !newVersion) throw new Error(`The last evaluation of this Blueprint version settled without verdicts (${q.lastEvaluationError}). Another evaluation is a new version and needs your explicit decision.`);
+  if (action === "new_version" && !newVersion) throw new Error(`${q.evaluationRejected ? `${q.evaluationRejected}.` : `The last evaluation of this Blueprint version settled without verdicts (${q.lastEvaluationError}).`} Another evaluation is a new version and needs your explicit decision.`);
   if (action === "continue" && newVersion) throw new Error("The evaluation is waiting for its retry, so it is continued, not replaced: its attempt limit is not reset.");
   if (driving.has(runId)) throw new Error("This run is already being executed in this session");
   await assertOperator();

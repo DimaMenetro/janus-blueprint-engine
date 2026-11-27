@@ -115,12 +115,13 @@
         "platform_termination",
         "parse_failure",
         "schema_failure",
+        "output_truncated",
         "quota_failure",
         "operator_cancellation",
         "not_started"
       ],
       "default": "in_flight",
-      "description": "Actual settled outcome. in_flight means a provider request may still be live. not_started means no model call was ever made for this attempt."
+      "description": "Actual settled outcome. in_flight means a provider request may still be live. not_started means no model call was ever made for this attempt. output_truncated means the provider stopped at the output limit before the answer was complete: the same request would be cut off again, so it is never retried unchanged."
     },
     "settled_by": {
       "type": "string",

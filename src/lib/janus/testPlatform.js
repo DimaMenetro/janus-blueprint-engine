@@ -1,11 +1,34 @@
 /**
  * Test-only platform double (imported by *.test.js): an in-memory entity store and a deterministic
  * stand-in for the model-call backend function. No network, no credits.
- * The store mirrors the Base44 behaviour Janus relies on, as measured against the real store (2026-11-25):
- *  - updateMany(query, { $set }) applies to the records matching `query` only and returns
- *    { success, updated, has_more }; of concurrent conditional writes on one record, exactly one gets updated: 1;
- *  - an equality condition does not match a record that lacks the field ("" does not match "never set");
- *  - { $in: [..., null] } does match a record that lacks the field.
+ *
+ * THE STORE BEHAVES AS THE REAL ONE WAS MEASURED TO (2026-11-25 and 2026-11-27, with temporary records that were
+ * deleted in the same call). Every rule below is a measurement, not an assumption; a behaviour that was not
+ * measured is not imitated.
+ *
+ *  WRITES THAT APPLY THE ENTITY SCHEMA — create(data) and update(id, patch):
+ *   - a key the schema does not declare is dropped, at the top level and at every depth of an object the schema
+ *     declares with properties, including the items of a declared list (this is how `provenance.method` and
+ *     `provenance.refines` were lost in production before they were declared);
+ *   - a declared property that was not written is stored as its declared default, as `[]` for a list, and as
+ *     `null` otherwise — at the top level and inside declared objects. It is present, not absent;
+ *   - an object the schema declares without properties (a stage output, the allocation, the usage) is kept exactly
+ *     as written;
+ *   - update touches only the top-level keys of the patch, and REPLACES a declared object as a whole: its other
+ *     properties do not survive, they become null;
+ *   - enumerations are not enforced: a value outside the declared list is stored as written.
+ *  THE CONDITIONAL WRITE DOES NOT APPLY THE SCHEMA — updateMany(query, { $set }):
+ *   - it sets exactly the given paths (a dotted path reaches inside an object) on the records matching `query`,
+ *     keeps undeclared keys, fills nothing, and returns { success, updated, has_more }; of concurrent conditional
+ *     writes on one record, exactly one gets updated: 1.
+ *  QUERIES:
+ *   - an equality condition on "" does not match a field that was never set; a condition on null does;
+ *     { $in: [..., null] } does.
+ *  TIMESTAMPS:
+ *   - created_date and updated_date are written by the store. A READ returns them as UTC with six fractional digits
+ *     and NO zone designator ("2026-11-27T02:32:49.133000"); the response to the write that produced them carries a
+ *     "Z". Read as local time they are wrong by the reader's UTC offset (storeTime.js reads them);
+ *   - a date-time the app writes is returned exactly as written.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -15,29 +38,31 @@ import { QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
 import { assembleBlueprint } from "@/lib/janus/blueprintPipeline";
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
-/**
- * WHAT THE REAL STORE KEEPS (measured 2026-11-27 with temporary records: the engine had been writing
- * `provenance.method` and `provenance.refines`, and the stored records did not have them). Inside an object whose
- * entity schema declares its properties — at any depth, including the items of a declared list — the store keeps
- * the declared properties only, and returns every declared property that was not written as `null` (`[]` for a
- * list). An object the schema declares without properties (a stage output, the allocation, the usage) is kept as
- * written. An update replaces the nested object as a whole.
- * The double applies the real schema files to the nested objects the engine writes, so a field the engine relies on
- * and the schema does not declare fails here instead of vanishing in production. It does NOT reproduce the `null`
- * the real store returns for an unwritten declared field: engine code must therefore never tell "absent" from
- * `null` (it reads such fields by truthiness only).
- */
-// The schema files are found from this file's own location (src/lib/janus → the app root), not from the working
+// The real schema files, found from this file's own location (src/lib/janus → the app root), not from the working
 // directory, so this module needs no Node global and reads the same files wherever the tests are started from.
+// The double applies them as the store does, so a field the engine relies on and the schema does not declare is
+// lost here exactly as it would be in production, and the engine reads back exactly what production returns.
 const ENTITY_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../base44/entities");
 const SCHEMAS = Object.fromEntries(["Run", "RunStage", "RunAttempt"].map(n => [n, JSON.parse(fs.readFileSync(path.join(ENTITY_DIR, `${n}.jsonc`), "utf8"))]));
-const DECLARED = { Run: ["model_policy_snapshot"], RunStage: ["provenance", "validation"], RunAttempt: ["transport", "model_call"] };
+/** What the store holds for a declared property that was not written. */
+const unwritten = (schema) => (schema.default !== undefined ? clone(schema.default) : schema.type === "array" ? [] : null);
+/** A written value as a schema-applying write stores it. */
 const conform = (schema, v) => (Array.isArray(v) ? (schema?.items ? v.map(x => conform(schema.items, x)) : v)
-  : v && typeof v === "object" && schema?.properties
-    ? Object.fromEntries(Object.entries(v).filter(([k]) => k in schema.properties).map(([k, x]) => [k, conform(schema.properties[k], x)]))
-    : v);
-const stored = (name, data) => Object.fromEntries(Object.entries(data).map(([k, v]) => [k, DECLARED[name]?.includes(k) ? conform(SCHEMAS[name].properties[k], v) : v]));
-const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k] ?? null) : rec[k] === v));
+  : v && typeof v === "object" && schema?.properties ? conformObject(schema.properties, v)
+  : v);
+const conformObject = (properties, data) => Object.fromEntries(Object.entries(properties).map(([k, s]) => [k, k in data ? conform(s, data[k]) : unwritten(s)]));
+/** One instant as a read returns it (no zone designator) and as the write that produced it answers (with "Z"). */
+const asRead = (iso) => iso.replace("Z", "000");
+const asWritten = (iso) => iso.replace("Z", "000Z");
+/** The conditional write sets a path as given; a dotted path reaches inside an object. Nothing is conformed. */
+const setPath = (rec, dotted, value) => {
+  const keys = dotted.split(".");
+  let at = rec;
+  keys.slice(0, -1).forEach(k => { if (at[k] == null || typeof at[k] !== "object") at[k] = {}; at = at[k]; });
+  at[keys[keys.length - 1]] = value;
+};
+const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k] ?? null)
+  : v === null ? rec[k] == null : rec[k] === v));
 
 const subs = (d) => Object.fromEntries(subdomainIds(d).map(id => [id, { perspective: `${id} view`, key_findings: ["f"] }]));
 const step = (n, title, derived_from) => ({ step: n, title, purpose: `Purpose of ${title}`, phase: "P1", fulfils: n === 1 ? ["Q1"] : [], instructions: "Do it", inputs: ["i"], outputs: ["o"], validation: "Check it",
@@ -146,27 +171,40 @@ const llm = { failOn: null, invalidOn: null, failTimes: {}, invalidTimes: {}, fa
 const session = { user: { ...OPERATOR } };
 let n = 0;
 
-const entity = (name) => ({
-  create: async (data) => {
-    n += 1;
-    const rec = { id: `${name}-${n}`, created_date: new Date(1767225600000 + n * 1000).toISOString(), ...stored(name, clone(data)) };
-    db[name].push(rec);
-    return clone(rec);
-  },
-  update: async (id, patch) => {
-    const rec = db[name].find(r => r.id === id);
-    if (!rec) throw new Error(`${name} ${id} not found`);
-    Object.assign(rec, stored(name, clone(patch)));
-    return clone(rec);
-  },
-  filter: async (query) => db[name].filter(r => matches(r, query)).map(clone),
-  // Conditional write. Matching and writing happen in one synchronous step, as one atomic store operation.
-  updateMany: async (query, { $set }) => {
-    const hits = db[name].filter(r => matches(r, query));
-    hits.forEach(r => Object.assign(r, stored(name, clone($set))));
-    return { success: true, updated: hits.length, has_more: false };
-  },
-});
+// The store's own clock for the double: one second per record created, so creation order is the order of dates.
+const stamp = () => new Date(1767225600000 + n * 1000).toISOString();
+const answered = (rec, at) => ({ ...clone(rec), ...(at.created ? { created_date: asWritten(at.created) } : {}), updated_date: asWritten(at.updated) });
+const entity = (name) => {
+  const properties = SCHEMAS[name].properties;
+  return {
+    // Applies the schema: undeclared keys dropped, unwritten declared properties stored as default / [] / null.
+    create: async (data) => {
+      n += 1;
+      const at = stamp();
+      const rec = { ...conformObject(properties, clone(data)), id: `${name}-${n}`, created_date: asRead(at), updated_date: asRead(at) };
+      db[name].push(rec);
+      return answered(rec, { created: at, updated: at });
+    },
+    // Applies the schema to the keys of the patch only; a declared object in the patch replaces the stored one whole.
+    update: async (id, patch) => {
+      const rec = db[name].find(r => r.id === id);
+      if (!rec) throw new Error(`${name} ${id} not found`);
+      const at = stamp();
+      Object.entries(clone(patch)).filter(([k]) => k in properties).forEach(([k, v]) => { rec[k] = conform(properties[k], v); });
+      rec.updated_date = asRead(at);
+      return answered(rec, { updated: at });
+    },
+    filter: async (query) => db[name].filter(r => matches(r, query)).map(clone),
+    // Conditional write. Matching and writing happen in one synchronous step, as one atomic store operation.
+    // It does NOT apply the schema: the given paths are set as given.
+    updateMany: async (query, { $set }) => {
+      const hits = db[name].filter(r => matches(r, query));
+      const at = asRead(stamp());
+      hits.forEach(r => { Object.entries(clone($set)).forEach(([p, v]) => setPath(r, p, v)); r.updated_date = at; });
+      return { success: true, updated: hits.length, has_more: false };
+    },
+  };
+};
 const entities = { Run: entity("Run"), RunStage: entity("RunStage"), RunAttempt: entity("RunAttempt") };
 const took = async (write) => (await write).updated === 1;
 
@@ -230,8 +268,12 @@ const invoke = async (name, payload) => {
   const settleOnServer = async () => {
     let result, failure;
     llm.models.push(spec.requested);
-    try { result = await model(payload.prompt); } catch (e) { failure = { evidence: classify(e.message), message: e.message }; }
-    const model_call = { requested_model: spec.requested, reasoning_effort: spec.effort,
+    try {
+      result = await model(payload.prompt);
+      // As the function: no content is a provider failure, unless the provider says it stopped at the output limit.
+      if (typeof result === "string" && !result.trim() && llm.finish[key] !== "length") throw new Error(`the provider returned no content (finish reason: ${llm.finish[key] || "stop"})`);
+    } catch (e) { failure = { evidence: classify(e.message), message: e.message }; }
+    const model_call = { requested_model: spec.requested, reasoning_effort: spec.effort, max_output_tokens: 32000,
       ...(failure ? {} : { effective_model: llm.effective[key] || spec.requested, finish_reason: llm.finish[key] || "stop", usage: { total_tokens: 1 } }) };
     await entities.RunAttempt.update(attempt.id, {
       transport: { state: failure ? "failed" : "returned", ...failure, recorded_at: new Date().toISOString() },

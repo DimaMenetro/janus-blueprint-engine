@@ -25,7 +25,7 @@ import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
 import { beginStage, openAttempt, settleAttempt, settleStage, readAttempt, voidAttempt, releaseSlot, runStatus, readRun } from "@/lib/janus/stageStore";
 import { classifyParseError, parseKeyOf, QUALIFICATION_KEY, STORAGE_MODEL } from "@/lib/janus/stageModel";
-import { QUALITY_CRITERIA, criterionApplies, retryDecision, stageIntegrity } from "@/lib/janus/lifecycleContract";
+import { QUALITY_CRITERIA, criterionApplies, retryDecision, stageIntegrity, OUTPUT_TRUNCATED } from "@/lib/janus/lifecycleContract";
 import { withCorrection } from "@/lib/janus/stageCompiler";
 import { continuationOf, continuableFor } from "@/lib/janus/executionState";
 
@@ -141,12 +141,22 @@ export function validateStageOutput(stageKey, output, { inputs } = {}) {
 export function resolveTransport(stageKey, t, integrity) {
   if (t.state === "failed") return { outcome: t.evidence, message: `LLM call failed — ${t.message}` };
   const parseKey = parseKeyOf(stageKey);
-  // An output the provider cut off at its output limit is not a malformed answer, and the rejection says so: the
-  // next attempt of a stage that returns operations can then continue from what was accepted.
-  const cut = t.call?.finish_reason === "length" ? " — the output was cut off at the model's output-length limit (finish reason: length), so it is incomplete" : "";
   let parsed;
-  try { parsed = parseLLMResponse(t.result, parseKey); } catch (e) { return { outcome: "parse_failure", message: `Parse error — ${e.message}${cut}` }; }
-  if (parsed.error) return { outcome: classifyParseError(parsed.error), message: `${parsed.error.replace(`${parseKey}: `, "")}${cut}` };
+  try { parsed = parseLLMResponse(t.result, parseKey); } catch (e) { parsed = { unreadable: `Parse error — ${e.message}` }; }
+  const said = parsed.error ? parsed.error.replace(`${parseKey}: `, "") : null;
+  // AN ANSWER CUT OFF AT THE OUTPUT LIMIT is not a malformed answer (lifecycleContract.OUTPUT_TRUNCATED). The
+  // evidence is the provider's own finish reason, recorded by the function with the call. When the answer cannot be
+  // read as a JSON object at all — including when the whole limit was spent before any of it was produced — the
+  // revision is settled on this ONE call: the same request would be cut off again, and it is not bought again.
+  // An answer that IS a complete JSON object is whole whatever the finish reason says, and is validated as usual.
+  const unreadable = parsed.unreadable || (said && classifyParseError(parsed.error) === "parse_failure" ? said : null);
+  if (unreadable && t.call?.finish_reason === "length") {
+    const limit = t.call.max_output_tokens ? ` of ${t.call.max_output_tokens} tokens` : "";
+    const none = !String(t.result ?? "").trim();
+    return { outcome: OUTPUT_TRUNCATED, message: `The answer was cut off at the call's output limit${limit} (finish reason: length)${none ? ", before any of it was produced" : ""}. The same request would be cut off again, so it is not repeated: this stage's answer does not fit one call as it is asked for.` };
+  }
+  if (parsed.unreadable) return { outcome: "parse_failure", message: parsed.unreadable };
+  if (parsed.error) return { outcome: classifyParseError(parsed.error), message: said };
   // ONE REPRESENTATION (Phase 9). The artifact that is validated is the artifact that is stored: the schema's
   // documented normalizations (a step number or dependency written as "2" → 2, "medium" → "med", "Probable" →
   // "Contested") are applied once, here. Before, validation ran on the normalized copy and the raw one was stored,

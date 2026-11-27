@@ -4,7 +4,7 @@
  * the code-decided verdicts and the release decision are recomputed from stage records every time, so the
  * engine and every screen read the same answer. The generator's opinion of its own work is never an input.
  */
-import { PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, lowestConfidence, modelStanding, modelLabel } from "@/lib/janus/protocolRegistry";
+import { PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, lowestConfidence, modelEvidence } from "@/lib/janus/protocolRegistry";
 import { completionManifest, enforceConfidencePropagation, normalizeTag, qualify, releaseDecision,
   QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS, stageIntegrity, MAX_REFINEMENT_CYCLES } from "@/lib/janus/lifecycleContract";
 import { QUALIFICATION_KEY, STORAGE_MODEL, CONFIG_INPUT, configOf } from "@/lib/janus/stageModel";
@@ -54,26 +54,52 @@ export function completionOf(view) {
 }
 
 /**
- * SUBSTRATE EVIDENCE (model allocation). Every revision that calls a model is fixed to one when it is created, and
- * the function records which model the provider says answered. A revision answered by a DIFFERENT model than the
- * one it was fixed to is not the cognition the run was allocated: it blocks completion until that stage is re-run.
- * Absence of evidence is said, not judged: a transport that reported no model, and a revision that records none
- * because it ran before explicit allocation (on the platform's default model), are warnings.
+ * THE SUBSTRATE OF ONE REVISION, as recorded: the model it was fixed to when it was created, what the provider
+ * reported for the call that produced it (its succeeded call; for a revision that produced nothing, its last call),
+ * and how the two compare (protocolRegistry.modelEvidence). One reading for every surface: completion, the
+ * evaluation, Stage lineage and Diagnostics. `standing` is one of
+ *   verified | substituted | unconfirmed | unreported   a model was fixed and a call settled;
+ *   unrecorded   the revision records no model: it ran before explicit allocation, on the platform's default;
+ *   pending      a model is fixed and no call of the revision has settled;
+ *   computed     the revision was computed by code: no model was called.
+ * A historical artifact has no revision record and no substrate to read: null.
+ */
+export function substrateOf(view, rev) {
+  if (!rev || rev.legacy) return null;
+  if (rev.provenance?.method === "deterministic") return { standing: "computed", note: "computed by code: no model was called", call: null };
+  const made = (view.attempts?.[rev.id] || []).filter(a => a.outcome !== "not_started" && a.outcome !== "in_flight");
+  const call = (made.filter(a => a.outcome === "succeeded").pop() || made[made.length - 1])?.model_call || null;
+  const fixed = rev.provenance?.model;
+  if (!fixed?.requested) return { standing: "unrecorded", note: "records no model: produced before explicit allocation, on the platform's default model", call };
+  const known = { role: fixed.role || null, requested: fixed.requested, effort: fixed.effort || null, call };
+  if (!made.length) return { ...known, standing: "pending", note: "no call of this version has settled" };
+  return { ...known, ...modelEvidence(fixed.requested, call?.effective_model) };
+}
+
+/**
+ * SUBSTRATE EVIDENCE AT COMPLETION (model allocation). Every revision that calls a model is fixed to one when it is
+ * created, and the function records which model the provider says answered. A revision answered by ANOTHER model
+ * than the one it was fixed to — another tier, or another version of the same tier — is not the cognition the run
+ * was allocated: it blocks completion until that stage is re-run.
+ * Absence of evidence is said, not judged, and never read as confirmation: a name that carries the tier but no
+ * version, a transport that reported no model, and a revision that records none because it ran before explicit
+ * allocation, are warnings.
+ * The independent evaluation is not a stage of the run's plan: it is held to the same rule where its verdicts are
+ * read (deriveQualification), so a substituted evaluator affects qualification, never completion.
  */
 export function substrateFindings(view) {
-  const blocking = [], unreported = [], unrecorded = [];
+  const blocking = [], unconfirmed = [], unreported = [], unrecorded = [];
   stagePlan(view.run.execution_mode).forEach(key => {
-    const rev = view.stageInfo[key]?.active;
-    if (!rev || rev.legacy || rev.provenance?.method === "deterministic") return;
-    const fixed = rev.provenance?.model?.requested;
-    if (!fixed) { unrecorded.push(key); return; }
-    const call = (view.attempts?.[rev.id] || []).filter(a => a.outcome === "succeeded").pop()?.model_call;
-    const standing = modelStanding(fixed, call?.effective_model);
-    if (standing === "mismatch") blocking.push(`${key}: answered by "${call.effective_model}", not the model this version was fixed to (${modelLabel(fixed)}). Re-run the stage.`);
-    else if (standing === "unreported") unreported.push(key);
+    const s = substrateOf(view, view.stageInfo[key]?.active);
+    if (!s) return;
+    if (s.standing === "substituted") blocking.push(`${key}: ${s.note}. Re-run the stage.`);
+    else if (s.standing === "unconfirmed") unconfirmed.push(`${key}: "${s.call.effective_model}"`);
+    else if (s.standing === "unreported") unreported.push(key);
+    else if (s.standing === "unrecorded") unrecorded.push(key);
   });
   const some = (n) => `${n} stage version${n === 1 ? "" : "s"}`;
   return { blocking, warnings: [
+    ...(unconfirmed.length ? [`The model that answered ${some(unconfirmed.length)} is not confirmed: the provider's name carries the tier but no version (${unconfirmed.join(", ")})`] : []),
     ...(unreported.length ? [`The transport did not report which model answered ${some(unreported.length)} (${unreported.join(", ")})`] : []),
     ...(unrecorded.length ? [`${some(unrecorded.length)} record${unrecorded.length === 1 ? "s" : ""} no model: produced before explicit allocation, on the platform's default model (${unrecorded.join(", ")})`] : []),
   ] };
@@ -268,7 +294,16 @@ export function deriveQualification(view, lifecycle = view.run.status) {
   const blocked = !completion.complete ? "The run is not protocol-complete, so there is no candidate to qualify."
     : lifecycle !== "completed" ? "Qualification begins only once the run has completed."
     : bp?.stale ? `The Blueprint is stale (${bp.stale}). Re-run it before it can be qualified.` : null;
-  const evaluation = !blocked && q?.active && !q.stale && (q.active.depends_on || []).includes(bp?.active?.id) ? q.active : null;
+  const candidate = !blocked && q?.active && !q.stale && (q.active.depends_on || []).includes(bp?.active?.id) ? q.active : null;
+  // THE EVALUATOR IS HELD TO THE SAME SUBSTRATE RULE AS THE WORK IT JUDGES (Daionae's review, 2026-11-27). The
+  // evaluation revision is fixed to a model like every other; if another model answered it — another tier, or
+  // another version of the same tier — its verdicts are not the independent judgment the run was allocated, and
+  // they are not accepted: nothing is qualified, released or refined on them. The paid output stays inspectable.
+  // Another evaluation is a new version, on the operator's decision only (never started by the engine).
+  // Unconfirmed, unreported and unrecorded identity are said beside the verdicts, as for any stage.
+  const evaluator = substrateOf(view, candidate);
+  const evaluationRejected = evaluator?.standing === "substituted" ? `The independent evaluation of this Blueprint version was ${evaluator.note}, so its verdicts are not accepted` : null;
+  const evaluation = evaluationRejected ? null : candidate;
   const code = blocked ? {} : codeVerdicts({ mode: run.execution_mode, blueprintLevel: run.blueprint_level }, artifacts, view.pipeline?.[BP.brief]);
   const critique = evaluation?.output?.verdicts || {};
   const held = evaluatorConsistency(evaluation?.output);
@@ -305,9 +340,12 @@ export function deriveQualification(view, lifecycle = view.run.status) {
   // a new version with a new attempt limit: only the operator's explicit decision makes it, never the engine.
   const forBlueprint = (view.lineage || []).filter(s => s.stage_key === QUALIFICATION_KEY && (s.depends_on || []).includes(bp?.active?.id));
   const last = forBlueprint[forBlueprint.length - 1];
-  const spent = last?.status === "failed" || (last?.status === "cancelled" && last.error_class === "artifact_not_recorded");
+  // A rejected evaluation bought its call too: this Blueprint version has had a paid evaluation, so another one is
+  // never started by the engine, whatever came after it.
+  const spent = last?.status === "failed" || (last?.status === "cancelled" && last.error_class === "artifact_not_recorded") || !!evaluationRejected;
   const evaluationAction = blocked || evaluation ? null : live ? (waiting ? "continue" : null) : spent ? "new_version" : "start";
-  const pending = blocked || evaluation ? null : live ? (waiting ? "awaiting_retry" : "in_progress") : q?.latest?.status === "failed" ? "evaluation_failed" : "awaiting_evaluation";
+  const pending = blocked || evaluation ? null : live ? (waiting ? "awaiting_retry" : "in_progress")
+    : q?.latest?.status === "failed" ? "evaluation_failed" : evaluationRejected ? "evaluation_rejected" : "awaiting_evaluation";
 
   return {
     state, result, criteria, blocked, pending, completion,
@@ -319,6 +357,10 @@ export function deriveQualification(view, lifecycle = view.run.status) {
     // continue | start | new_version | null — what the evaluation pathway may do now (adapter: evaluateJanus)
     evaluationAction, evaluationRetry: waiting ? { nextAttempt: waiting.nextAttempt, revision: q.latest.revision } : null,
     lastEvaluationError: spent ? last.error_message : null,
+    // Why a succeeded evaluation's verdicts are not accepted (a substituted evaluator), or null.
+    evaluationRejected,
+    // The model behind the evaluation that is read (or was rejected): { requested, effort, standing, note, call }.
+    evaluator,
     // The engine starts an evaluation on its own only when this Blueprint version has never had one that made a call.
     needsEvaluation: evaluationAction === "start",
     release: releaseDecision(lifecycle, state),

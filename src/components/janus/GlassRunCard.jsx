@@ -3,6 +3,7 @@ import { FileText, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { glassCard, glassSurface } from "@/components/ui/LiquidGlass";
+import { instantOf } from "@/lib/janus/storeTime";
 
 const statusStyles = {
   completed: (isDark) => ({
@@ -52,7 +53,7 @@ export default function GlassRunCard({ run, t, isDark }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: t.subtitle }}>
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <Clock style={{ width: 12, height: 12 }} />
-                <span>{run.created_date ? format(new Date(run.created_date), "MMM d, yyyy HH:mm") : "—"}</span>
+                <span>{instantOf(run.created_date) ? format(instantOf(run.created_date), "MMM d, yyyy HH:mm") : "—"}</span>
               </div>
               <span style={{
                 fontSize: 11, padding: "2px 8px", borderRadius: 8,

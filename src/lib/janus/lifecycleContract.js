@@ -53,10 +53,23 @@ export function releaseDecision(lifecycle, qualification) {
 }
 
 // ── 3. FAILURE / RETRY POLICY (§12) ────────────────────────────────
+/**
+ * OUTPUT TRUNCATED (Daionae's review, 2026-11-27): the provider stopped at the output limit of the call (its own
+ * finish reason, recorded by the function) before the answer could be read as the stage's artifact. It is settled
+ * failure evidence of its own, distinct from a malformed answer, because what it says is about the REQUEST: the
+ * same request has the same limit and is cut off again. It is therefore never retried — a retry sends the
+ * revision's prompt unchanged apart from a correction notice, which cannot make the answer shorter than the limit.
+ * Three purchases of one inadequate request is exactly what the earlier classification (parse_failure) produced.
+ * A stage whose answer does not fit one call is decomposed (plan §15.4); nothing is cut to make it fit.
+ */
+export const OUTPUT_TRUNCATED = "output_truncated";
 export const FAILURE_EVIDENCE = ["provider_error", "transport_settled_failure", "platform_termination",
-  "parse_failure", "schema_failure", "quota_failure", "operator_cancellation"];
+  "parse_failure", "schema_failure", "quota_failure", "operator_cancellation", OUTPUT_TRUNCATED];
 export const RETRY_POLICY = {
   max_attempts_per_stage: 3,
+  // Retryable = another attempt of the same revision can differ in outcome: a call that failed, or an answer the
+  // code rejected and can name the rejections of. Not retryable = the outcome is determined by something a retry
+  // does not change (quota, termination, cancellation, the output limit).
   retryable: ["provider_error", "transport_settled_failure", "parse_failure", "schema_failure"],
   requires_settled_prior_attempt: true, // never race a live provider promise
   local_inference_deadline: null,       // elapsed time is telemetry, not failure

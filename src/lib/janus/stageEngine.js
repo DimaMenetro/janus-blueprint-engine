@@ -43,11 +43,17 @@ const DETERMINISTIC = {
  * A run that records none was created before explicit allocation: it adopts the default once, here, with the
  * moment recorded on the run — only when a NEW revision is about to be created for it, never for a revision that
  * already exists (that one keeps the model it recorded). A historical Run is never written.
+ *
+ * ADOPTION ADDS, IT NEVER REWRITES. The policy the run declared when it started is the policy its earlier revisions
+ * were produced under; it stays in the snapshot exactly as it was recorded. What is adopted is written beside it:
+ * the allocation, the moment, and — as `adopted_policy` — the policy in force for the revisions created from now on.
+ * (The store replaces the snapshot object as a whole on update, so the recorded fields are written back explicitly.)
  */
 async function allocationOf(view) {
   const recorded = view.run.model_policy_snapshot;
   if (recorded?.allocation) return recorded;
-  const adopted = { ...modelPolicySnapshot(), allocation_adopted_at: new Date().toISOString() };
+  const { profile, customized, allocation, ...policy } = modelPolicySnapshot();
+  const adopted = { ...(recorded || {}), profile, customized, allocation, allocation_adopted_at: new Date().toISOString(), adopted_policy: policy };
   if (view.storage === STORAGE_MODEL.staged) await updateRun(view.run.id, { model_policy_snapshot: adopted });
   return adopted;
 }

@@ -136,7 +136,10 @@ export default async function(req) {
       if (typeof choice?.finish_reason === 'string') call.finish_reason = choice.finish_reason;
       if (data?.usage && typeof data.usage === 'object') call.usage = data.usage;
       result = textOf(choice?.message?.content);
-      if (!result.trim()) throw new Error(`the provider returned no content (finish reason: ${call.finish_reason || 'not reported'})`);
+      // An answer cut off at the output limit is not a provider failure, even when the whole limit was spent before
+      // any of it was produced: it is returned as it is, with its finish reason on the record, and the app settles
+      // it as truncated. Thrown into the failure class below it would be retried, and the same request bought again.
+      if (!result.trim() && call.finish_reason !== 'length') throw new Error(`the provider returned no content (finish reason: ${call.finish_reason || 'not reported'})`);
     } catch (error) {
       // A settled failure of the call is failure evidence: its class and message only. The stack stays in the logs.
       console.error(`[invokeJanusStage] attempt=${attempt.id} call failed`, error?.stack || error);

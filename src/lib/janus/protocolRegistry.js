@@ -295,7 +295,9 @@ export const MODE_PROFILES = {
  * AUTHORIZED RUNTIME MODELS — the only identifiers Janus may request, and the only place in `src` that names a model
  * (screens read their labels from here). They are app-runtime ids as the AI Gateway knows them. The server holds
  * the same list (base44/shared/janusModels.ts); a test keeps the two identical.
- *  signature  what the provider's reported model name must contain for a call to count as answered by this tier;
+ *  signature  the tier word the provider's reported model name must carry for a call to count as answered by
+ *             this tier at all. The VERSION is read from the identifier itself (statedVersion): tier and version
+ *             together are the model's identity, and both must match for an answer to count as verified;
  *  standing   what establishes the identifier at runtime. "listed": in the Gateway's own catalog (read 2026-11-27,
  *             at no cost). "called": an actual Gateway call returned (DIMA's recorded probes, 2026-11-26).
  */
@@ -303,8 +305,8 @@ export const MODELS = {
   claude_opus_5_5: { label: "Claude Opus 5.5", family: "claude", signature: "opus", standing: "listed and called" },
   "claude-sonnet-5": { label: "Claude Sonnet 5", family: "claude", signature: "sonnet", standing: "listed, not yet called" },
   claude_opus_4_8: { label: "Claude Opus 4.8 (historical comparison)", family: "claude", signature: "opus", standing: "called, not listed" },
-  gpt_6_2_astra: { label: "GPT-6.2 Astra", family: "gpt", signature: "gpt", standing: "listed, not yet called" },
-  gemini_3_8_flash: { label: "Gemini 3.8 Flash", family: "gemini", signature: "gemini", standing: "listed and called (web search)", research: true },
+  gpt_6_2_astra: { label: "GPT-6.2 Astra", family: "gpt", signature: "astra", standing: "listed, not yet called" },
+  gemini_3_8_flash: { label: "Gemini 3.8 Flash", family: "gemini", signature: "flash", standing: "listed and called (web search)", research: true },
 };
 /** Never requested, whatever is selected. The operator's rule names Gemini 3.1 only; other Gemini versions stand on their own. */
 const PROHIBITED_MODEL_PREFIXES = ["gemini_3_1"];
@@ -390,18 +392,49 @@ export function stageModel(snapshot, stageKey) {
   return entry?.model ? { role, requested: entry.model, effort: entry.effort || DEFAULT_EFFORT } : null;
 }
 /**
- * How the model that answered compares with the model that was requested:
- *  verified    the provider's name carries the requested identifier;
- *  tier        the same family and tier, the exact version not confirmed by the name;
- *  mismatch    a different model answered;
- *  unreported  the transport reported no model.
+ * THE IDENTITY OF THE MODEL THAT ANSWERED (corrected on Daionae's review, 2026-11-27).
+ * A model is a tier AND a version. Another version of the same tier is another model: Opus 4.8 answering for Opus
+ * 5.5 is a substitution, exactly as a small fast model answering for it would be. The earlier rule compared names
+ * with their separators removed and accepted the tier word alone, so it could neither tell 5 from 5.5 nor a
+ * same-tier substitution from the model that was requested.
+ *
+ * `statedVersion` reads the version a model name states: its one- or two-digit numeric parts, in order, up to the
+ * first date stamp (a numeric part of four digits or more: "…-20261101", "…-2026-11-01"). A trailing ".0" states
+ * the same version ("5.0" is 5). Three-digit parts are build numbers and are not a version.
  */
-export function modelStanding(requested, effective) {
-  if (!effective) return "unreported";
-  const flat = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (flat(effective).includes(flat(requested))) return "verified";
-  return MODELS[requested] && flat(effective).includes(MODELS[requested].signature) ? "tier" : "mismatch";
+const nameParts = (name) => String(name).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+export function statedVersion(name) {
+  const version = [];
+  for (const part of nameParts(name)) {
+    if (/^\d{4,}$/.test(part)) break;
+    if (/^\d{1,2}$/.test(part)) version.push(Number(part));
+  }
+  while (version.length > 1 && version[version.length - 1] === 0) version.pop();
+  return version;
 }
+/** The tier words a reported name must carry: the registry's for an authorized model, the identifier's own words otherwise. */
+const tierWords = (id) => (MODELS[id] ? [MODELS[id].signature] : nameParts(id).filter(p => /^[a-z]+$/.test(p)));
+/**
+ * How the model that answered compares with the model a revision was fixed to — { standing, note }:
+ *  verified     the reported name carries the tier and states the same version;
+ *  substituted  another model answered: another tier, or another version of the same tier;
+ *  unconfirmed  the reported name carries the tier and states no version, so which version answered is not known.
+ *               Not evidence of a substitution, and never counted as verified;
+ *  unreported   the transport reported no model.
+ * The judgment rests on the name the transport reports. How the Gateway names an answering model has not been
+ * measured yet (no live call has gone through it): the first approved call is that measurement.
+ */
+export function modelEvidence(requested, effective) {
+  if (!effective) return { standing: "unreported", note: "the transport did not report which model answered" };
+  const said = String(effective).toLowerCase();
+  const label = modelLabel(requested);
+  if (!tierWords(requested).every(word => said.includes(word))) return { standing: "substituted", note: `answered by "${effective}", not the model this version was fixed to (${label})` };
+  const wanted = statedVersion(requested), got = statedVersion(effective);
+  if (!got.length && wanted.length) return { standing: "unconfirmed", note: `answered by "${effective}", which names the tier but no version: whether it was ${label} is not confirmed` };
+  if (got.join(".") !== wanted.join(".") && wanted.length) return { standing: "substituted", note: `answered by "${effective}": the tier this version was fixed to, but version ${got.join(".")} instead of ${wanted.join(".")} (${label})` };
+  return { standing: "verified", note: `answered by "${effective}"` };
+}
+export const modelStanding = (requested, effective) => modelEvidence(requested, effective).standing;
 
 // ── LEGACY ALIASES (read-only, historical records) ─────────────────
 // Historical subdomain keys → canonical id. Never used to generate prompts.

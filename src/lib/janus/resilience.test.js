@@ -80,9 +80,9 @@ describe("an unknown outcome is unresolved, never a failure", () => {
     expect(result).toMatchObject({ unresolved: "cogito", status: "running" });
     expect(attemptsOf("cogito")).toHaveLength(1); // no retry, no replacement attempt
     expect(attemptsOf("cogito")[0]).toMatchObject({ outcome: "in_flight", claim_state: "claimed", retry_decision: "none" });
-    expect(attemptsOf("cogito")[0].transport).toBeUndefined();
+    expect(attemptsOf("cogito")[0].transport).toBeNull(); // STORE-FIDELITY 2026-11-27: null is what the store holds for a field never written (was toBeUndefined)
     expect(stageOf("cogito").status).toBe("running"); // the stage is not settled
-    expect(stageOf("cogito").error_class).toBeUndefined(); // and no failure evidence was made up
+    expect(stageOf("cogito").error_class).toBeNull(); // and no failure evidence was made up — STORE-FIDELITY 2026-11-27 (was toBeUndefined)
     expect(h.db.RunStage.some(s => s.status === "failed")).toBe(false);
     expect(slot()).toBe(attemptsOf("cogito")[0].id); // the run's execution slot stays occupied
     expect(modelCalls("blueprint")).toBe(0); // nothing further was scheduled
@@ -170,7 +170,7 @@ describe("bounded retry, only after settlement", () => {
     // No outcome is invented for the retry that never ran, and the revision is not closed with budget left.
     expect(result).toMatchObject({ status: "running", refused: { stageKey: "cogito", reason: "never_claimed" } });
     expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "running" });
-    expect(stageOf("cogito").error_class).toBeUndefined();
+    expect(stageOf("cogito").error_class).toBeNull(); // STORE-FIDELITY 2026-11-27: null is what the store holds for a field never written (was toBeUndefined)
     expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "interrupted", resumable: true, failures: [], awaiting: { key: "cogito", nextAttempt: 2 } });
 
     const stageId = stageOf("cogito").id;
@@ -332,7 +332,7 @@ describe("recovery from durable evidence: the truth table, case by case", () => 
     expect(attemptsOf("cogito")[0].error_message).toMatch(/^Output failed mandatory validation/);
     // Retryable with budget left: the revision is not settled as failed, and the invalid output is not an artifact.
     expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "running" });
-    expect(stageOf("cogito").output).toBeUndefined();
+    expect(stageOf("cogito").output).toBeNull(); // STORE-FIDELITY 2026-11-27: null is what the store holds for a field never written (was toBeUndefined)
     expect(viewOf(runId).stageInfo.cogito.active).toBeNull();
     expect(viewOf(runId).artifacts.cogito).toBeUndefined();
     expect(modelCalls("cogito")).toBe(1);
@@ -352,7 +352,7 @@ describe("recovery from durable evidence: the truth table, case by case", () => 
     expect(stageOf("corpus")).toEqual(corpus);
     // Retryable with budget left: the revision is not settled. Its next valid operation is attempt 2 (see "same-revision retry continuation").
     expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "running" });
-    expect(stageOf("cogito").error_class).toBeUndefined();
+    expect(stageOf("cogito").error_class).toBeNull(); // STORE-FIDELITY 2026-11-27: null is what the store holds for a field never written (was toBeUndefined)
   });
 
   it("case 4 — claimed, nothing recorded: unresolved. Asking again, resuming and waiting change nothing", async () => {
@@ -382,7 +382,7 @@ describe("recovery from durable evidence: the truth table, case by case", () => 
     expect(modelCalls("cogito")).toBe(1); // no new call, and no new outcome
     // The unclaimed retry used none of the budget; the revision still waits for attempt 2 and is not closed.
     expect(stageOf("cogito")).toMatchObject({ revision: 1, status: "running" });
-    expect(stageOf("cogito").error_class).toBeUndefined();
+    expect(stageOf("cogito").error_class).toBeNull(); // STORE-FIDELITY 2026-11-27: null is what the store holds for a field never written (was toBeUndefined)
     expect(deriveExecutionState(viewOf(runId))).toMatchObject({ resumable: true, failures: [], awaiting: { key: "cogito", nextAttempt: 2 } });
   });
 
@@ -640,7 +640,7 @@ describe("same-revision retry continuation", () => {
     expect(await recover(result.runId)).toEqual({ settled: true, unresolved: null, awaiting: { stageKey: "qualification", nextAttempt: 2 } });
     expect(attemptsOf("qualification")).toEqual([expect.objectContaining({ outcome: "provider_error", retry_decision: "retry_scheduled", settled_by: "recovery" })]);
     expect(stageOf("qualification")).toMatchObject({ revision: 1, status: "running" });
-    expect(stageOf("qualification").error_class).toBeUndefined();
+    expect(stageOf("qualification").error_class).toBeNull(); // STORE-FIDELITY 2026-11-27: null is what the store holds for a field never written (was toBeUndefined)
     expect(h.db.Run[0]).toMatchObject({ status: "completed", released_blueprint_stage_id: "" });
     expect(deriveExecutionState(viewOf(result.runId))).toMatchObject({ status: "completed", resumable: false, awaiting: null, qualificationAwaiting: { key: "qualification", nextAttempt: 2 } });
   });

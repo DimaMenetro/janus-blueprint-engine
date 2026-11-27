@@ -99,7 +99,7 @@
     },
     "model_policy_snapshot": {
       "type": "object",
-      "description": "Model policy and allocation in force when the run started. The allocation never changes afterwards; every stage revision records the model it was fixed to.",
+      "description": "Model policy and allocation in force when the run started. The allocation never changes afterwards; every stage revision records the model it was fixed to. A run created before explicit allocation keeps in these fields exactly what it declared at its start; what it adopted later is recorded beside them (allocation, allocation_adopted_at, adopted_policy), never over them.",
       "properties": {
         "operational_model": {
           "type": "string"
@@ -136,6 +136,30 @@
           "type": "string",
           "format": "date-time",
           "description": "Set only on a run created before explicit allocation: when it adopted the default, the first time a new stage revision was created for it"
+        },
+        "adopted_policy": {
+          "type": "object",
+          "description": "Set only together with allocation_adopted_at: the model policy in force for the stage revisions created from the adoption on. The policy the run declared at its start stays in the fields above, unchanged.",
+          "properties": {
+            "operational_model": {
+              "type": "string"
+            },
+            "prohibited_model_prefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hidden_fallback_allowed": {
+              "type": "boolean"
+            },
+            "refresh_architecture": {
+              "type": "string"
+            },
+            "transport": {
+              "type": "string"
+            }
+          }
         }
       }
     },

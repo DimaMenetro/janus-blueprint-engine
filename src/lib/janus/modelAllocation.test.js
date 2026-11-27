@@ -4,6 +4,7 @@
 // judged. Expectations are written out here, independently of the engine's derivations.
 // This file names no model: identifiers are read from the registry, the one place that names them.
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 vi.mock("@/api/base44Client", async () => ({ base44: (await import("@/lib/janus/testPlatform")).platform.base44 }));
 
@@ -18,6 +19,7 @@ import { substrateFindings, deriveQualification } from "@/lib/janus/qualificatio
 import { stagePlan } from "@/lib/janus/executionState";
 import { isDeterministicStage } from "@/lib/janus/blueprintPipeline";
 import { QUALIFICATION_KEY } from "@/lib/janus/stageModel";
+import { instantOf } from "@/lib/janus/storeTime";
 import { MODELS, MODEL_POLICY, COGNITIVE_ROLES, ALLOCATION_PROFILES, DEFAULT_PROFILE, DEFAULT_EFFORT, roleOf, resolveAllocation,
   modelPolicySnapshot, stageModel, modelStanding, cognitionModels } from "@/lib/janus/protocolRegistry";
 
@@ -27,6 +29,7 @@ const SUBSTRATE = HYBRID.domain;        // the general substrate
 const REASONER = HYBRID.intersection;   // reserved for consequential reasoning
 const called = () => h.db.RunStage.filter(s => !isDeterministicStage(s.stage_key));
 const viewOf = () => composeRunView(h.db.Run[0], h.db.RunStage, h.db.RunAttempt);
+const snapshotOf = () => JSON.parse(JSON.stringify(h.db.Run[0].model_policy_snapshot));
 const refusal = (promise) => promise.then(() => null, e => ({ evidence: e.evidence, reason: e.reason }));
 
 beforeEach(() => h.reset());
@@ -130,17 +133,36 @@ describe("the substrate of a version cannot change, and is never left to a defau
   });
 
   it("a run created before explicit allocation adopts the default once, with the moment recorded, when a new version is created for it", async () => {
+    // The policy such a run declared when it started — the policy its earlier versions were produced under.
+    const declared = { operational_model: "inherited from the app setting", prohibited_model_prefixes: ["gemini"], hidden_fallback_allowed: false, refresh_architecture: "fail closed until retrieval is approved" };
     const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1", active_attempt_id: "",
-      model_policy_snapshot: { operational_model: "inherited from the app setting", hidden_fallback_allowed: false } });
+      model_policy_snapshot: declared });
     await resumeJanus(run.id);
-    const adopted = h.db.Run[0].model_policy_snapshot;
+    const adopted = snapshotOf();
     expect(adopted.allocation).toEqual(resolveAllocation().roles);
+    expect(adopted).toMatchObject({ profile: DEFAULT_PROFILE, customized: false });
     expect(adopted.allocation_adopted_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     called().forEach(s => expect(s.provenance.model.requested).toBe(HYBRID[roleOf(s.stage_key)]));
 
+    // DAIONAE'S REVIEW (2026-11-27): adoption adds, it never rewrites. What the run declared at its start is still
+    // there, field for field; the policy now in force is recorded beside it, not over it.
+    Object.entries(declared).forEach(([field, value]) => expect(adopted[field]).toEqual(value));
+    expect(adopted.transport).toBeNull(); // it declared no transport, and none was written into its declaration
+    expect(adopted.adopted_policy).toEqual({ operational_model: MODEL_POLICY.operational_model, prohibited_model_prefixes: MODEL_POLICY.prohibited_model_prefixes,
+      hidden_fallback_allowed: MODEL_POLICY.hidden_fallback_allowed, refresh_architecture: MODEL_POLICY.refresh_architecture, transport: MODEL_POLICY.transport });
+    expect(adopted.adopted_policy.operational_model).not.toBe(declared.operational_model);
+
     await rerunStages(run.id, { targets: ["cogito"] });
-    expect(h.db.Run[0].model_policy_snapshot.allocation_adopted_at).toBe(adopted.allocation_adopted_at); // adopted once
+    expect(snapshotOf()).toEqual(adopted); // adopted once: a later operation changes nothing in it
     expect(h.db.RunStage.filter(s => s.stage_key === "cogito").map(s => s.provenance.model.requested)).toEqual([SUBSTRATE, SUBSTRATE]);
+  });
+
+  it("a run that declared nothing at its start adopts the allocation without a declaration being invented for it", async () => {
+    const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1", active_attempt_id: "" });
+    expect(snapshotOf()).toBeNull();
+    await resumeJanus(run.id);
+    expect(snapshotOf()).toMatchObject({ operational_model: null, prohibited_model_prefixes: [], hidden_fallback_allowed: null, refresh_architecture: null, transport: null,
+      profile: DEFAULT_PROFILE, allocation: resolveAllocation().roles, adopted_policy: { transport: MODEL_POLICY.transport } });
   });
 });
 
@@ -188,20 +210,130 @@ describe("what the provider reports is recorded and judged, never hidden", () =>
   });
 });
 
-describe("the store keeps only what the entity schemas declare inside a declared object", () => {
-  it("the nested records the engine relies on are declared and survive; an undeclared key does not, at any depth", async () => {
-    const { runId } = await executeJanus(params("quick"));
-    expect(h.db.RunStage.find(s => s.stage_key === "blueprint:assembly").provenance).toMatchObject({ method: "deterministic", origin: "execution" });
-    expect(h.db.RunStage.find(s => s.stage_key === "corpus").provenance).toMatchObject({ model: { role: "domain" } });
-    const odd = await h.base44.entities.RunStage.create({ run_id: runId, stage_key: "probe", revision: 1, status: "failed",
+// The expectations of this block are the live store's own answers, transcribed from the measurement of 2026-11-27
+// (temporary records, deleted in the same call). They hold the test store to the real one: if the double drifts
+// from what was measured, these fail.
+describe("the test store behaves as the real store was measured to", () => {
+  const E = () => h.base44.entities;
+  const stage = (extra) => E().RunStage.create({ run_id: "probe-run", stage_key: "probe", revision: 1, status: "failed", ...extra });
+  const read = async (name, id) => (await E()[name].filter({ id }))[0];
+
+  it("a write that applies the schema drops what is not declared, at every depth, and stores what was not written as default, empty list or null", async () => {
+    const made = await stage({ zz_undeclared_top: 1, started_at: "2026-11-27T02:30:00.123Z",
       provenance: { origin: "execution", undeclared_key: 1, model: { requested: "m", undeclared: 1 }, sources: [{ id: "S1", undeclared_in_item: 1 }] } });
-    expect(odd.provenance).toEqual({ origin: "execution", model: { requested: "m" }, sources: [{ id: "S1" }] });
-    const attempt = await h.base44.entities.RunAttempt.create({ run_id: runId, stage_id: odd.id, stage_key: "probe", attempt_number: 1, outcome: "not_started", transport: { state: "returned" } });
-    await h.base44.entities.RunAttempt.update(attempt.id, { transport: { state: "failed", evidence: "provider_error", message: "m", undeclared: 1 } });
-    expect(h.db.RunAttempt.find(a => a.id === attempt.id).transport).toEqual({ state: "failed", evidence: "provider_error", message: "m" });
+    const kept = await read("RunStage", made.id);
+    expect(kept).not.toHaveProperty("zz_undeclared_top");
+    expect(kept).toMatchObject({ protocol_version: null, depends_on: [], input_fingerprint: null, output: null, validation: null, error_class: null, completed_at: null,
+      started_at: "2026-11-27T02:30:00.123Z" }); // a date-time the app writes comes back exactly as written
+    expect(kept.provenance).toEqual({ origin: "execution", orchestrator: null, model_policy: null, method: null, model: { role: null, requested: "m", effort: null }, refines: null,
+      sources: [{ id: "S1", kind: null, title: null, origin: null, published_at: null, retrieved_at: null, quality: null, subdomains: [] }] });
+
+    const bare = await read("RunStage", (await E().RunStage.create({ run_id: "probe-run", stage_key: "probe", revision: 2, status: "running" })).id);
+    expect(bare).toMatchObject({ provenance: null, validation: null, output: null }); // a declared object never written is null, not an object of nulls
+    const attempt = await read("RunAttempt", (await E().RunAttempt.create({ run_id: "probe-run", stage_id: made.id, stage_key: "probe", attempt_number: 1, claim_state: "unclaimed" })).id);
+    expect(attempt).toMatchObject({ transport: null, model_call: null, response_text: null, retry_decision: "none", outcome: "in_flight" }); // declared defaults are applied
+    const run = await read("Run", (await E().Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "cancelled",
+      model_policy_snapshot: { operational_model: "old policy text", hidden_fallback_allowed: false, zz_undeclared: 1 } })).id);
+    expect(run).toMatchObject({ active_attempt_id: null, graph_epoch: null, completion_manifest: null, corpus: null, validation_errors: [], storage_model: null, refresh_enabled: false, blueprint_level: "L2" });
+    // `adopted_policy` was declared after the measurement; null is the measured rule for a declared object never written.
+    expect(run.model_policy_snapshot).toEqual({ operational_model: "old policy text", prohibited_model_prefixes: [], hidden_fallback_allowed: false, refresh_architecture: null,
+      transport: null, profile: null, customized: null, allocation: null, allocation_adopted_at: null, adopted_policy: null });
   });
 
-  it("every nested field the engine writes on a refinement version is declared, so the cycle it bounds can be read back", async () => {
+  it("an object declared without properties is kept as written; a partly written declared one is filled", async () => {
+    const made = await stage({ provenance: { origin: "refinement", refines: { blueprint_stage_id: "b", cycle: 1, zz: 1,
+      deficiencies: [{ id: "E1", severity: "blocking", category: "c", where: "w", problem: "p", required_change: "r", zz: 1 }] } },
+      output: { any: { nested: [1, { k: null }] }, empty_list: [], nul: null }, validation: { valid: true } });
+    const kept = await read("RunStage", made.id);
+    expect(kept.output).toEqual({ any: { nested: [1, { k: null }] }, empty_list: [], nul: null });
+    expect(kept.validation).toEqual({ validator: null, valid: true, errors: [] });
+    expect(kept.provenance.refines).toEqual({ blueprint_stage_id: "b", evaluation_stage_id: null, cycle: 1,
+      deficiencies: [{ id: "E1", severity: "blocking", category: "c", where: "w", problem: "p", evidence: null, required_change: "r" }] });
+  });
+
+  it("update replaces a declared object as a whole; the conditional write sets exactly the given paths and applies no schema", async () => {
+    const made = await stage({ provenance: { origin: "execution", model: { requested: "m" } } });
+    await E().RunStage.update(made.id, { provenance: { method: "deterministic" }, zz_undeclared_top: 2 });
+    const updated = await read("RunStage", made.id);
+    expect(updated.provenance).toEqual({ origin: null, orchestrator: null, model_policy: null, method: "deterministic", model: null, refines: null, sources: [] });
+    expect(updated).not.toHaveProperty("zz_undeclared_top");
+    expect(updated.status).toBe("failed"); // a key outside the patch is untouched
+
+    expect(await E().RunStage.updateMany({ id: made.id }, { $set: { provenance: { origin: "x", zz: 2 } } })).toEqual({ success: true, updated: 1, has_more: false });
+    expect((await read("RunStage", made.id)).provenance).toEqual({ origin: "x", zz: 2 });
+    await E().RunStage.updateMany({ id: made.id }, { $set: { "provenance.method": "dot" } });
+    expect((await read("RunStage", made.id)).provenance).toEqual({ origin: "x", zz: 2, method: "dot" });
+    expect(await E().RunStage.updateMany({ id: "no-such-record" }, { $set: { status: "failed" } })).toEqual({ success: true, updated: 0, has_more: false });
+
+    const attempt = await E().RunAttempt.create({ run_id: "probe-run", stage_id: made.id, stage_key: "probe", attempt_number: 1, outcome: "in_flight", claim_state: "unclaimed" });
+    await E().RunAttempt.update(attempt.id, { transport: { state: "failed", evidence: "provider_error", message: "m", undeclared: 1 }, model_call: { requested_model: "m", usage: { a: 1, b: { c: 2 } }, zz: 1 } });
+    expect(await read("RunAttempt", attempt.id)).toMatchObject({ claim_state: "unclaimed",
+      transport: { state: "failed", evidence: "provider_error", message: "m", http_status: null, recorded_at: null },
+      model_call: { requested_model: "m", effective_model: null, reasoning_effort: null, max_output_tokens: null, request_id: null, finish_reason: null, usage: { a: 1, b: { c: 2 } } } });
+    expect((await read("RunAttempt", attempt.id)).model_call).not.toHaveProperty("zz");
+  });
+
+  it("an enumeration is not enforced by any write; a query on null finds a field never set, a query on the empty string does not", async () => {
+    const made = await E().RunAttempt.create({ run_id: "probe-run", stage_id: "s", stage_key: "probe", attempt_number: 1, outcome: "zz_not_in_enum" });
+    expect((await read("RunAttempt", made.id)).outcome).toBe("zz_not_in_enum");
+    await E().RunAttempt.update(made.id, { outcome: "zz_not_in_enum_2" });
+    expect((await read("RunAttempt", made.id)).outcome).toBe("zz_not_in_enum_2");
+    expect(await E().RunAttempt.filter({ id: made.id, error_message: "" })).toHaveLength(0);
+    expect(await E().RunAttempt.filter({ id: made.id, error_message: { $in: ["", null] } })).toHaveLength(1);
+    expect(await E().RunAttempt.filter({ id: made.id, error_message: null })).toHaveLength(1);
+  });
+
+  it("the store's own timestamps are read back without a zone designator, although they are UTC; the write that made them answers with one", async () => {
+    const made = await stage({});
+    expect(made.created_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
+    const kept = await read("RunStage", made.id);
+    expect(kept.created_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/);
+    expect(kept.updated_date).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/);
+    expect(instantOf(kept.created_date).toISOString()).toBe(instantOf(made.created_date).toISOString()); // the same instant, read correctly either way
+  });
+});
+
+describe("what the engine writes is what the store keeps", () => {
+  it("the nested records the engine relies on are declared and survive", async () => {
+    await executeJanus(params("quick"));
+    expect(h.db.RunStage.find(s => s.stage_key === "blueprint:assembly").provenance).toMatchObject({ method: "deterministic", origin: "execution", model: null });
+    expect(h.db.RunStage.find(s => s.stage_key === "corpus").provenance).toMatchObject({ model: { role: "domain" }, method: null, refines: null, sources: [] });
+  });
+
+  it("every field the engine writes — at the top level and inside each declared object — is declared, so none is dropped", async () => {
+    // Every write the engine makes in a Full run with a refinement cycle is replayed against the schemas: a key
+    // the schema would drop is a key production would lose silently.
+    const dropped = [];
+    const declared = (schema, value, where) => {
+      if (Array.isArray(value)) { if (schema?.items) value.forEach((x, i) => declared(schema.items, x, `${where}[${i}]`)); return; }
+      if (!value || typeof value !== "object" || !schema?.properties) return;
+      Object.entries(value).forEach(([k, x]) => (k in schema.properties ? declared(schema.properties[k], x, `${where}.${k}`) : dropped.push(`${where}.${k}`)));
+    };
+    const schemas = Object.fromEntries(["Run", "RunStage", "RunAttempt"].map(name => [name, JSON.parse(readFileSync(`base44/entities/${name}.jsonc`, "utf8"))]));
+    const restore = [];
+    Object.entries(h.base44.entities).forEach(([name, api]) => ["create", "update"].forEach(op => {
+      const real = api[op];
+      restore.push(() => { api[op] = real; });
+      api[op] = async (...args) => { declared(schemas[name], args[args.length - 1], name); return real(...args); };
+    }));
+    try {
+      const criterion = QUALITY_CRITERIA.find(c => c.method === "critique" && c.hard).id;
+      h.llm.verdicts[criterion] = "fail";
+      const { runId } = await executeJanus(params("full"));
+      await refineJanus(runId);
+      // A run from before explicit allocation, so the adoption write is replayed too.
+      const earlier = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1", active_attempt_id: "",
+        model_policy_snapshot: { operational_model: "inherited from the app setting", hidden_fallback_allowed: false } });
+      await resumeJanus(earlier.id);
+    } finally {
+      restore.forEach(undo => undo());
+    }
+    expect(h.db.RunStage.some(s => s.provenance?.refines)).toBe(true);
+    expect(h.db.Run.some(r => r.model_policy_snapshot?.adopted_policy)).toBe(true);
+    expect([...new Set(dropped)]).toEqual([]);
+  });
+
+  it("a refinement version records the cycle, the base, the evaluation and every finding, so the cycle limit can be read back", async () => {
     const criterion = QUALITY_CRITERIA.find(c => c.method === "critique" && c.hard).id;
     h.llm.verdicts[criterion] = "fail";
     const { runId } = await executeJanus(params("full"));
@@ -212,7 +344,9 @@ describe("the store keeps only what the entity schemas declare inside a declared
     await refineJanus(runId);
     const refined = h.db.RunStage.filter(s => s.stage_key === "blueprint").pop();
     expect(refined.provenance.refines).toMatchObject({ cycle: 1, blueprint_stage_id: expect.any(String), evaluation_stage_id: expect.any(String) });
-    // Stored exactly as written: the store stripped nothing, so the schema declares every field the engine records.
-    expect(refined.provenance.refines.deficiencies).toEqual(expected);
+    // Stored as written: nothing the engine recorded was dropped. `evidence` is a declared field of a finding that a
+    // criterion-derived deficiency does not carry, so the store holds it as null.
+    expect(refined.provenance.refines.deficiencies).toEqual(expected.map(d => ({ evidence: null, ...d })));
+    expect(deriveQualification(composeRunView(h.db.Run[0], h.db.RunStage, h.db.RunAttempt)).refinement.used).toBe(1); // read back from the stored record
   });
 });

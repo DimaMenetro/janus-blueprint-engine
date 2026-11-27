@@ -303,7 +303,8 @@ describe("Resume is continuity, retry is the same revision, only a re-run makes 
     const impact = await previewRerun(runId, { targets: ["cogito"], cascade: true });
     expect(impact.plan).toEqual(["cogito", ...afterBrief("quick")]);
     await rerunStages(runId, { targets: ["cogito"], cascade: true, expected: impact.token });
-    expect(cogito()).toEqual([[1, "failed", "provider_error", "execution"], [2, "succeeded", undefined, "rerun"]]);
+    // STORE-FIDELITY 2026-11-27: a revision with no failure class holds null there, as the store returns it (was undefined).
+    expect(cogito()).toEqual([[1, "failed", "provider_error", "execution"], [2, "succeeded", null, "rerun"]]);
     expect(h.db.RunStage.find(s => s.id === failed.id)).toEqual(failed); // the failed revision is preserved as it was
     expect(attemptsOf("cogito").filter(a => a.stage_id === stageOf("cogito").id)).toHaveLength(1); // its own attempts, its own limit
     const view = viewOf(runId);

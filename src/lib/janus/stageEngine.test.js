@@ -172,7 +172,11 @@ describe("untrusted content boundary", () => {
     const run = await h.base44.entities.Run.create({ query_text: "q", execution_mode: "quick", output_mode: "Blueprint", status: "running", storage_model: "staged_v1" });
     const compiled = compileStage({ stageKey: "refresh", config: refreshOn, evidence: [{ title: "Grid report", origin: "example.org", retrieved_at: "2026-11-01", text: "t" }] });
     const { record } = await runStage({ runId: run.id, stageKey: "refresh", revision: 1, dependsOn: [], origin: "execution", templateVersion: compiled.templateVersion, sources: compiled.sources, prompt: compiled.prompt, parseKey: compiled.parseKey });
-    expect(record.provenance.sources).toEqual([{ id: "E1", title: "Grid report", origin: "example.org", retrieved_at: "2026-11-01" }]);
+    // STORE-FIDELITY 2026-11-27: the record is what the store returns, so the declared fields of a source that were
+    // not supplied are present as null (an empty list for subdomains). The equality stays exact: the metadata that
+    // was supplied, nothing else, and never the source text. (Was the four supplied keys alone, against the earlier test store.)
+    expect(record.provenance.sources).toEqual([{ id: "E1", kind: null, title: "Grid report", origin: "example.org", published_at: null, retrieved_at: "2026-11-01", quality: null, subdomains: [] }]);
+    expect(record.provenance.sources[0]).not.toHaveProperty("text");
   });
 });
 
@@ -207,7 +211,7 @@ describe("resume from durable stage state", () => {
     expect(h.db.Run[0].status).toBe("running");
     const kept = h.db.RunStage.find(s => s.id === orphan.id);
     expect(kept.status).toBe("running"); // outcome unknown — not failed, not settled
-    expect(kept.error_class).toBeUndefined();
+    expect(kept.error_class).toBeNull(); // STORE-FIDELITY 2026-11-27: null is what the store holds for a field never written (was toBeUndefined)
     expect(h.db.RunStage).toHaveLength(2);
     expect(h.db.RunAttempt.map(a => a.outcome)).toEqual(["in_flight"]);
   });
