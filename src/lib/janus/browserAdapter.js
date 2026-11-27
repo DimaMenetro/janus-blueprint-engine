@@ -3,7 +3,7 @@
  * Each entry point picks which stage keys to request and hands them to the canonical stage engine.
  * No prompts, no model calls and no completion rules live here.
  */
-import { PROTOCOL, MODEL_POLICY } from "@/lib/janus/protocolRegistry";
+import { PROTOCOL, modelPolicySnapshot } from "@/lib/janus/protocolRegistry";
 import { TERMINAL_STATES } from "@/lib/janus/lifecycleContract";
 import { STORAGE_MODEL, ENGINE_VERSION, ORCHESTRATOR, INTERSECTION_KEYS, QUALIFICATION_KEY } from "@/lib/janus/stageModel";
 import { base44 } from "@/api/base44Client";
@@ -55,17 +55,21 @@ async function advance(runId, { keys, origin, force = false }, hooks = {}) {
   }
 }
 
-/** New run: every stage of the mode's plan, in order. */
+/**
+ * New run: every stage of the mode's plan, in order. `modelSelection` ({ profile, overrides }) is the operator's
+ * model allocation; it is resolved and recorded on the run before anything else, and never changes afterwards.
+ */
 export async function executeJanus(params, hooks) {
-  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled } = params;
+  const { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, modelSelection } = params;
   if (refreshEnabled) throw new Error(REFRESH_UNAVAILABLE_MESSAGE); // fail closed before any record or model call
+  const policy = modelPolicySnapshot(modelSelection); // refuses an unauthorized model before any record
   await assertOperator();
   const run = await createRun({
     active_attempt_id: "", // the execution slot starts free
     query_text: queryText, execution_mode: executionMode, output_mode: outputMode, blueprint_level: blueprintLevel,
     novelty_dial: noveltyDial, refresh_enabled: refreshEnabled, status: "running", validation_errors: [], raw_json: "{}",
     storage_model: STORAGE_MODEL.staged, protocol_version: PROTOCOL.version, engine_version: ENGINE_VERSION,
-    orchestrator: ORCHESTRATOR, model_policy_snapshot: { ...MODEL_POLICY },
+    orchestrator: ORCHESTRATOR, model_policy_snapshot: policy,
   });
   const result = await advance(run.id, { keys: stagePlan(executionMode), origin: "execution" }, hooks);
   return { ...result, success: result.status === "completed" };

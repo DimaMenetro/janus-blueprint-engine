@@ -4,7 +4,7 @@
  * the code-decided verdicts and the release decision are recomputed from stage records every time, so the
  * engine and every screen read the same answer. The generator's opinion of its own work is never an input.
  */
-import { PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, lowestConfidence } from "@/lib/janus/protocolRegistry";
+import { PAIRS, PATTERNS, CONFIDENCE_TAXONOMY, lowestConfidence, modelStanding, modelLabel } from "@/lib/janus/protocolRegistry";
 import { completionManifest, enforceConfidencePropagation, normalizeTag, qualify, releaseDecision,
   QUALITY_CRITERIA, criterionApplies, MODE_EXPECTATIONS, stageIntegrity, MAX_REFINEMENT_CYCLES } from "@/lib/janus/lifecycleContract";
 import { QUALIFICATION_KEY, STORAGE_MODEL, CONFIG_INPUT, configOf } from "@/lib/janus/stageModel";
@@ -47,8 +47,36 @@ export function completionOf(view) {
   if (view.run.storage_model !== STORAGE_MODEL.staged) return manifest;
   const durable = stagePlan(view.run.execution_mode).flatMap(key =>
     inputIntegrity(view, key).map(e => (key.startsWith("intersection:") ? e : `${key}: ${e}`)));
-  const extra = [...new Set(durable)].filter(e => !manifest.blocking.includes(e));
-  return extra.length ? { ...manifest, blocking: [...manifest.blocking, ...extra], complete: false, completion_label: null } : manifest;
+  const substrate = substrateFindings(view);
+  const extra = [...new Set([...durable, ...substrate.blocking])].filter(e => !manifest.blocking.includes(e));
+  const warned = substrate.warnings.length ? { ...manifest, warnings: [...(manifest.warnings || []), ...substrate.warnings] } : manifest;
+  return extra.length ? { ...warned, blocking: [...manifest.blocking, ...extra], complete: false, completion_label: null } : warned;
+}
+
+/**
+ * SUBSTRATE EVIDENCE (model allocation). Every revision that calls a model is fixed to one when it is created, and
+ * the function records which model the provider says answered. A revision answered by a DIFFERENT model than the
+ * one it was fixed to is not the cognition the run was allocated: it blocks completion until that stage is re-run.
+ * Absence of evidence is said, not judged: a transport that reported no model, and a revision that records none
+ * because it ran before explicit allocation (on the platform's default model), are warnings.
+ */
+export function substrateFindings(view) {
+  const blocking = [], unreported = [], unrecorded = [];
+  stagePlan(view.run.execution_mode).forEach(key => {
+    const rev = view.stageInfo[key]?.active;
+    if (!rev || rev.legacy || rev.provenance?.method === "deterministic") return;
+    const fixed = rev.provenance?.model?.requested;
+    if (!fixed) { unrecorded.push(key); return; }
+    const call = (view.attempts?.[rev.id] || []).filter(a => a.outcome === "succeeded").pop()?.model_call;
+    const standing = modelStanding(fixed, call?.effective_model);
+    if (standing === "mismatch") blocking.push(`${key}: answered by "${call.effective_model}", not the model this version was fixed to (${modelLabel(fixed)}). Re-run the stage.`);
+    else if (standing === "unreported") unreported.push(key);
+  });
+  const some = (n) => `${n} stage version${n === 1 ? "" : "s"}`;
+  return { blocking, warnings: [
+    ...(unreported.length ? [`The transport did not report which model answered ${some(unreported.length)} (${unreported.join(", ")})`] : []),
+    ...(unrecorded.length ? [`${some(unrecorded.length)} record${unrecorded.length === 1 ? "s" : ""} no model: produced before explicit allocation, on the platform's default model (${unrecorded.join(", ")})`] : []),
+  ] };
 }
 
 const rank = (tag) => CONFIDENCE_TAXONOMY.indexOf(normalizeTag(tag));

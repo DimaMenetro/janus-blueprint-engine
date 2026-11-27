@@ -8,7 +8,7 @@
     },
     "stage_key": {
       "type": "string",
-      "description": "Canonical stage key: refresh | corpus | cogito | animus | actus | intersection:<pair_id> | synthesis | blueprint (later phases add blueprint sub-stages)"
+      "description": "Canonical stage key: refresh | corpus | cogito | animus | actus | intersection:<pair_id> | synthesis | blueprint:<sub-stage> | blueprint | qualification"
     },
     "revision": {
       "type": "number",
@@ -77,13 +77,79 @@
       "properties": {
         "origin": {
           "type": "string",
-          "description": "execution | resume | rerun"
+          "description": "execution | resume | rerun | completion | refinement"
         },
         "orchestrator": {
           "type": "string"
         },
         "model_policy": {
           "type": "string"
+        },
+        "method": {
+          "type": "string",
+          "description": "deterministic when the revision was computed by code from validated artifacts (no model call)"
+        },
+        "model": {
+          "type": "object",
+          "description": "The model this revision is fixed to when it is created. Retry, continuation and recovery read it from here, so the substrate of a revision cannot change.",
+          "properties": {
+            "role": {
+              "type": "string",
+              "description": "Cognitive role of the stage (the unit of allocation)"
+            },
+            "requested": {
+              "type": "string",
+              "description": "Model identifier requested for every call of this revision"
+            },
+            "effort": {
+              "type": "string",
+              "description": "Reasoning effort requested"
+            }
+          }
+        },
+        "refines": {
+          "type": "object",
+          "description": "A substantive refinement: the exact Blueprint revision it refines, the evaluation it answers, the cycle and the findings",
+          "properties": {
+            "blueprint_stage_id": {
+              "type": "string"
+            },
+            "evaluation_stage_id": {
+              "type": "string"
+            },
+            "cycle": {
+              "type": "number"
+            },
+            "deficiencies": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "severity": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "where": {
+                    "type": "string"
+                  },
+                  "problem": {
+                    "type": "string"
+                  },
+                  "evidence": {
+                    "type": "string"
+                  },
+                  "required_change": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
         },
         "sources": {
           "type": "array",

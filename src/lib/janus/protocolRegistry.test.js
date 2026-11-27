@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import {
-  PROTOCOL, DOMAINS, DOMAIN_ORDER, PAIRS, PATTERNS, MODE_PROFILES, MODEL_POLICY,
+  PROTOCOL, DOMAINS, DOMAIN_ORDER, PAIRS, PATTERNS, MODE_PROFILES, MODEL_POLICY, MODELS, ALLOCATION_PROFILES, isAuthorizedModel,
   allSubdomains, lowestConfidence, readSubdomain, LEGACY_SUBDOMAIN_ALIASES,
 } from "./protocolRegistry";
 
@@ -61,9 +61,17 @@ describe("CP-002 v2.0 registry", () => {
     expect(MODE_PROFILES.full.partial).toBe(false);
   });
 
-  it("model policy prohibits Gemini, no hidden fallback", () => {
-    expect(MODEL_POLICY.prohibited_model_prefixes).toContain("gemini");
+  // REPLACED 2026-11-27 under DIMA's Ideal Form directive (§XV: "Gemini 3.1 is prohibited. Do not expand that
+  // prohibition to the entire Gemini model family by inference") and the Hybrid Operational Model amendment. The old
+  // assertion required the whole Gemini family to be prohibited. The guarantee is kept and made checkable: the
+  // prohibited model can never be authorized, there is no hidden fallback, and every model any profile allocates is
+  // an authorized one.
+  it("model policy: Gemini 3.1 can never be authorized, no hidden fallback, every allocated model is authorized", () => {
+    expect(MODEL_POLICY.prohibited_model_prefixes).toContain("gemini_3_1");
     expect(MODEL_POLICY.hidden_fallback_allowed).toBe(false);
+    expect(isAuthorizedModel("gemini_3_1_pro")).toBe(false);
+    Object.keys(MODELS).forEach(id => expect(MODEL_POLICY.prohibited_model_prefixes.some(p => id.startsWith(p))).toBe(false));
+    Object.values(ALLOCATION_PROFILES).forEach(p => Object.values(p.models).forEach(m => expect(isAuthorizedModel(m)).toBe(true)));
   });
 
   it("legacy keys read through to canonical ids", () => {
@@ -98,12 +106,21 @@ describe("no second active roster in executable code", () => {
     expect(hits).toEqual([]);
   });
 
-  it("model policy: no per-call model overrides, no Gemini, no Sonnet, no web-context path", () => {
-    const hits = files.filter(f => /\bmodel:\s*["']|gemini_|sonnet|add_context_from_internet/i.test(fs.readFileSync(f, "utf8")));
+  // REPLACED 2026-11-27 under DIMA's Ideal Form directive (§XIV: explicit operational model selection is authorized;
+  // amendment: Sonnet is the substrate). The old assertion forbade any model name anywhere in src. The guarantee is
+  // kept: there is ONE place that names models (the registry, excluded from this scan like before). No other file
+  // can name or select one, and nothing uses the built-in integration's web-context path.
+  it("model policy: models are named in the registry and nowhere else in src", () => {
+    const hits = files.filter(f => /\bmodel:\s*["']|gemini_|sonnet|claude[_-]|gpt_\d|add_context_from_internet/i.test(fs.readFileSync(f, "utf8")));
     expect(hits.map(f => path.relative(root, f))).toEqual([]);
   });
 
-  it("model policy holds in backend functions too: operational or diagnostic, none names a model", () => {
+  // REPLACED 2026-11-27 under the same directive (§XVI: "A declared operational policy must be realized through the
+  // actual execution mechanisms"). The old assertion allowed two server files and no model name in either, which is
+  // what left the model to the platform's default. The guarantee is kept and strengthened: the retired diagnostics
+  // stay retired; ONE server file names models, it is identical to the registry's list and holds the prohibition;
+  // the function itself names no model and has no path to the built-in integration, files, tools or web options.
+  it("model policy holds in backend functions too: one authorized list identical to the registry's, and a function that names no model", () => {
     const serverRoot = path.resolve(process.cwd(), "base44");
     const server = [];
     const walkServer = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach(e => {
@@ -113,8 +130,13 @@ describe("no second active roster in executable code", () => {
     });
     walkServer(serverRoot);
     const rel = (f) => path.relative(serverRoot, f);
-    expect(server.map(rel).sort()).toEqual(["functions/invokeJanusStage/entry.ts", "shared/errorResponse.ts"]); // the retired diagnostics stay retired
-    const hits = server.filter(f => /\bmodel\s*:|gemini|sonnet|add_context_from_internet|file_urls/i.test(fs.readFileSync(f, "utf8")));
-    expect(hits.map(rel)).toEqual([]);
+    expect(server.map(rel).sort()).toEqual(["functions/invokeJanusStage/entry.ts", "shared/errorResponse.ts", "shared/janusModels.ts"]); // the retired diagnostics stay retired
+    const text = (f) => fs.readFileSync(path.join(serverRoot, f), "utf8");
+    const listed = [...text("shared/janusModels.ts").match(/AUTHORIZED_MODELS = \[([^\]]*)\]/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+    expect([...listed].sort()).toEqual(Object.keys(MODELS).sort());
+    const prohibited = [...text("shared/janusModels.ts").match(/PROHIBITED_MODEL_PREFIXES = \[([^\]]*)\]/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
+    expect(prohibited).toEqual(MODEL_POLICY.prohibited_model_prefixes);
+    expect(text("functions/invokeJanusStage/entry.ts")).not.toMatch(/gemini|sonnet|opus|claude|gpt_|automatic|InvokeLLM|integrations\.Core|add_context_from_internet|file_urls|web_search|tools\s*:/i);
+    expect(text("shared/errorResponse.ts")).not.toMatch(/\bmodel\s*:|gemini|sonnet|claude|add_context_from_internet|file_urls/i);
   });
 });

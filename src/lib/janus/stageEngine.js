@@ -4,7 +4,7 @@
  * It is independent of who schedules it. Adapters (browser today, server later) choose WHICH stage keys
  * to ask for; they never build prompts, call the model or decide what counts as completed.
  */
-import { STAGE_ORDER, PROTOCOL } from "@/lib/janus/protocolRegistry";
+import { STAGE_ORDER, PROTOCOL, modelPolicySnapshot, stageModel } from "@/lib/janus/protocolRegistry";
 import { STORAGE_MODEL, QUALIFICATION_KEY, CONFIG_INPUT, configOf, fingerprintInputs, revisionLabel } from "@/lib/janus/stageModel";
 import { outcomeAfterStageFailure } from "@/lib/janus/lifecycleContract";
 import { completionOf, deriveQualification, recordedInputs, inputIntegrity, blueprintAudit, enforceStepConfidence, refinementBasis } from "@/lib/janus/qualification";
@@ -39,6 +39,20 @@ const DETERMINISTIC = {
 };
 
 /**
+ * THE RUN'S MODEL ALLOCATION (cognitive role → model, effort). A run records it when it starts and it never changes.
+ * A run that records none was created before explicit allocation: it adopts the default once, here, with the
+ * moment recorded on the run — only when a NEW revision is about to be created for it, never for a revision that
+ * already exists (that one keeps the model it recorded). A historical Run is never written.
+ */
+async function allocationOf(view) {
+  const recorded = view.run.model_policy_snapshot;
+  if (recorded?.allocation) return recorded;
+  const adopted = { ...modelPolicySnapshot(), allocation_adopted_at: new Date().toISOString() };
+  if (view.storage === STORAGE_MODEL.staged) await updateRun(view.run.id, { model_policy_snapshot: adopted });
+  return adopted;
+}
+
+/**
  * Execute one stage against the durable view. Inputs and exact dependency revisions are whatever the view
  * holds as active. Returns { record } | { failure } (both settled), { skipped } (a required input is absent),
  * { refused } (no call was made for the new revision) or { unresolved } (outcome unknown, nothing settled).
@@ -71,8 +85,11 @@ export async function executeStage({ view, stageKey, origin, evidence = [], onBe
     return validation.valid ? { record } : { failure: { evidence: "schema_failure", message: record.error_message, attempts: 0 } };
   }
   const compiled = compileStage({ stageKey, config, evidence, inputs });
+  // The model this revision is fixed to: its cognitive role's, under the run's recorded allocation.
+  const model = stageModel(await allocationOf(view), stageKey);
+  if (!model) throw new Error(`${stageKey}: the run's allocation gives its cognitive role no model`);
   return runStage({
-    runId: view.run.id, stageKey, origin, onBegan, integrity,
+    runId: view.run.id, stageKey, origin, onBegan, integrity, model,
     revision: (view.stageInfo[stageKey]?.max_revision || 0) + 1,
     dependsOn: inputKeys.map(k => active(k).id),
     templateVersion: compiled.templateVersion, sources: compiled.sources,
@@ -242,6 +259,8 @@ export async function verifyContinuation(view, stage) {
   const now = stageInputs(key).map(k => view.stageInfo[k]?.active?.id).filter(Boolean);
   if ([...now].sort().join("|") !== [...recorded].sort().join("|")) reasons.push("its dependency revisions are no longer the active ones");
   if (stage.provenance?.sources?.length) reasons.push("it read external evidence whose text is not stored");
+  // The function makes no call for a revision that records no model, so such a revision can never be continued.
+  if (!stage.provenance?.model?.requested) reasons.push("it records no model (it was started before explicit model allocation)");
   if (reasons.length) return { ok: false, reasons };
 
   const compiled = compileStage({ stageKey: key, config: configOf(view.run), inputs: Object.fromEntries(deps.map(d => [d.stage_key, d.output])) });

@@ -99,7 +99,7 @@
     },
     "model_policy_snapshot": {
       "type": "object",
-      "description": "Model policy in force when the run started",
+      "description": "Model policy and allocation in force when the run started. The allocation never changes afterwards; every stage revision records the model it was fixed to.",
       "properties": {
         "operational_model": {
           "type": "string"
@@ -115,6 +115,27 @@
         },
         "refresh_architecture": {
           "type": "string"
+        },
+        "transport": {
+          "type": "string",
+          "description": "How model calls are made (ai_gateway)"
+        },
+        "profile": {
+          "type": "string",
+          "description": "Allocation profile the operator chose"
+        },
+        "customized": {
+          "type": "boolean",
+          "description": "True when the operator changed a role's model or effort from the profile"
+        },
+        "allocation": {
+          "type": "object",
+          "description": "Cognitive role -> { model, effort }"
+        },
+        "allocation_adopted_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Set only on a run created before explicit allocation: when it adopted the default, the first time a new stage revision was created for it"
         }
       }
     },

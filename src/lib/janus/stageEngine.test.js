@@ -87,11 +87,24 @@ describe("one canonical engine", () => {
     expect(filesWith(/compileStage\(/)).toEqual(["lib/janus/stageCompiler.js", "lib/janus/stageEngine.js"]);
   });
 
-  it("the model call runs in one narrow backend function that forwards the prompt and nothing else", () => {
+  // REPLACED 2026-11-27 under DIMA's Ideal Form directive (§XIV: "I authorize explicit operational model selection
+  // through supported runtime mechanisms, superseding the previous prohibition against explicit per-call model
+  // overrides"; §XVI: a declared policy must be realized in the actual execution path). The three old assertions
+  // pinned one built-in integration call whose only argument was { prompt } — the very thing that left the model to
+  // the platform's default. Guarantees kept or strengthened: one call site; what is read from the request is a
+  // stage and its prompt, never a model; the model comes only from the stage revision's record and only if
+  // authorized, and a revision that records none gets no call; the prompt is the only content sent; nothing reaches
+  // the built-in integration, files, tools or web options. The remaining assertions below are unchanged.
+  it("the model call runs in one narrow backend function: the prompt is the only content, and the model comes from the stage record", () => {
     const fn = fs.readFileSync(path.resolve(process.cwd(), "base44/functions/invokeJanusStage/entry.ts"), "utf8");
-    expect(fn.match(/InvokeLLM\(/g)).toHaveLength(1);
-    expect(fn).toContain("asServiceRole.integrations.Core.InvokeLLM({ prompt })");
-    expect(fn).not.toMatch(/\bmodel\s*:|gemini/i); // with one call whose only argument is { prompt }, nothing else can be passed
+    expect(fn.match(/\/chat\/completions/g)).toHaveLength(1);
+    expect(fn).not.toMatch(/InvokeLLM|integrations\.Core|automatic|web_search|file_urls|tools\s*:/i);
+    expect(fn).toContain("const { stage_id, prompt, check } = (await req.json().catch(() => null)) || {};"); // nothing else is read from the request
+    expect(fn).toContain("const spec = stage.provenance?.model;");
+    expect(fn).toMatch(/if \(!spec\?\.requested\) return refuse\(409, 'model_not_recorded'/);          // never defaulted
+    expect(fn).toMatch(/if \(!isAuthorizedModel\(spec\.requested\)\) return refuse\(409, 'model_not_authorized'/);
+    expect(fn).toContain("messages: [{ role: 'user', content: prompt }]");
+    expect(fn.indexOf("isAuthorizedModel(spec.requested)")).toBeLessThan(fn.indexOf("claim_state: 'claimed'")); // refused before the claim, so before any call
     expect(fn).toMatch(/auth\.me\(\)/);                // signed-in callers only
     expect(fn).toMatch(/user\.role !== 'admin'/);      // interim containment: operators only, until Phase 6 ownership
     expect(fn).toContain(OPERATOR_ONLY_MESSAGE);

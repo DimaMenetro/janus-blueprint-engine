@@ -1,10 +1,19 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { internalError } from '../../shared/errorResponse.ts';
+import { isAuthorizedModel, REASONING_EFFORTS } from '../../shared/janusModels.ts';
 
 // The call for ONE attempt of ONE in-flight Janus stage revision that the caller can read. Nothing else.
-// The prompt is compiled by the canonical stage compiler; this function only carries it to the integration.
-// Policy is enforced at this boundary: `prompt` is the only field forwarded, so no choice of engine, attached
-// file or web-context option can reach the integration. The call inherits the operator's app setting.
+// The prompt is compiled by the canonical stage compiler; this function carries it to the AI Gateway as the single
+// user message of one chat completion. No tool, file or web option is ever attached.
+//
+// MODEL POLICY is enforced at this boundary. The request carries a stage and its prompt, never a model. The model
+// and the reasoning effort are read from the revision record (RunStage.provenance.model), which is fixed when the
+// revision is created, and the model is accepted only if it is on the authorized list. A retry, a continuation or
+// a recovery of a revision therefore cannot change its substrate, and nothing written in a prompt can choose one.
+// The platform is never left to choose a model: a revision that records none is refused before any call.
+// What the Gateway reports back (the model that answered, the request id, why generation stopped, the usage) is
+// recorded on the attempt together with the outcome. That record is the evidence that no model was substituted.
+//
 // No deadline is added here: the call is awaited until it settles.
 // INTERIM secure transport: the platform ends a function request at 5 minutes. That ceiling is a known
 // limitation of this transport, not a Janus inference deadline; the durable server path must replace it.
@@ -22,13 +31,46 @@ import { internalError } from '../../shared/errorResponse.ts';
 //             disappears loses nothing: the record is the evidence recovery reads.
 // Every refusal below happens before the call and says so (evidence: not_started).
 const MAX_PROMPT_CHARS = 600000;
+// Room for the largest single artifact a stage returns. A stage that needs more is decomposed, never cut.
+const MAX_OUTPUT_TOKENS = 32000;
 const SLOT_FREE = { $in: ['', null] }; // empty, or never set (a run created before the slot existed)
 const refuse = (status, reason, error) => Response.json({ error, reason, evidence: 'not_started' }, { status });
 const took = async (write) => (await write).updated === 1;
 // An id the store rejects as malformed (400) is simply not a record.
 const rows = (query) => query.catch((e) => (e.status === 400 ? [] : Promise.reject(e)));
-const classify = (error) => (error?.status === 429 || /quota|credit|insufficient|limit exceeded|rate limit|\b429\b/i.test(String(error?.message || error))
+const classify = (error) => (error?.status === 429 || error?.status === 402 || /quota|credit|insufficient|limit exceeded|rate limit|\b429\b/i.test(String(error?.message || error))
   ? 'quota_failure' : 'provider_error');
+
+const endpoint = (gateway) => String(gateway.baseURL).replace(/\/+$/, '');
+const gatewayHeaders = (gateway) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${gateway.token}`, ...(gateway.headers || {}) });
+// The Gateway's own explanation of a request it did not serve, when its body carries one.
+const detailOf = (raw) => {
+  try {
+    const d = JSON.parse(raw);
+    const said = d?.error?.message ?? d?.message ?? d?.detail ?? d?.error;
+    return typeof said === 'string' ? said : said ? JSON.stringify(said) : '';
+  } catch (_e) {
+    return '';
+  }
+};
+const textOf = (content) => (typeof content === 'string' ? content
+  : Array.isArray(content) ? content.map((part) => (typeof part === 'string' ? part : part?.text || '')).join('') : '');
+
+// What the Gateway lists as callable chat models. Reads a catalog: no model runs and nothing is billed.
+async function catalog(base44) {
+  const gateway = base44.asServiceRole.aiGateway.connection();
+  const response = await fetch(`${endpoint(gateway)}/models`, { headers: gatewayHeaders(gateway) });
+  const raw = await response.text();
+  let listed = [];
+  try {
+    const data = JSON.parse(raw);
+    const entries = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+    listed = entries.filter((m) => typeof m === 'string' || !m?.type || m.type === 'chat').map((m) => (typeof m === 'string' ? m : m?.id)).filter(Boolean);
+  } catch (_e) {
+    listed = [];
+  }
+  return Response.json({ check: 'catalog', http_status: response.status, listed, ...(response.ok ? {} : { detail: detailOf(raw) || raw.slice(0, 300) }) });
+}
 
 export default async function(req) {
   try {
@@ -37,7 +79,8 @@ export default async function(req) {
     if (!user) return refuse(401, 'unauthorized', 'Unauthorized');
     if (user.role !== 'admin') return refuse(403, 'operators_only', 'Janus execution is limited to operators until durable stage ownership is in place');
 
-    const { stage_id, prompt } = (await req.json().catch(() => null)) || {};
+    const { stage_id, prompt, check } = (await req.json().catch(() => null)) || {};
+    if (check === 'catalog') return await catalog(base44);
     if (typeof stage_id !== 'string' || !stage_id) return refuse(400, 'bad_request', 'stage_id is required');
     if (typeof prompt !== 'string' || !prompt.trim()) return refuse(400, 'bad_request', 'prompt is required');
     if (prompt.length > MAX_PROMPT_CHARS) return refuse(413, 'bad_request', `prompt exceeds ${MAX_PROMPT_CHARS} characters`);
@@ -49,6 +92,12 @@ export default async function(req) {
     const [run] = await rows(base44.entities.Run.filter({ id: stage.run_id }));
     if (!run) return refuse(404, 'not_found', 'Run not found');
     if (run.status === 'cancel_requested' || run.status === 'cancelled') return refuse(409, 'cancel_requested', 'Cancellation was requested for this run: no further call is started');
+
+    // The substrate of this revision, as the revision recorded it. Never taken from the request, never defaulted.
+    const spec = stage.provenance?.model;
+    if (!spec?.requested) return refuse(409, 'model_not_recorded', 'This stage version records no model, so no call is made for it. Start a new version of the stage.');
+    if (!isAuthorizedModel(spec.requested)) return refuse(409, 'model_not_authorized', `This stage version records a model Janus is not authorized to request (${String(spec.requested).slice(0, 60)})`);
+    const effort = REASONING_EFFORTS.includes(spec.effort) ? spec.effort : null;
 
     // The attempt this request is for: the stage's ONE open attempt, and only if nobody has claimed it.
     // Attempts of a revision are sequential, so anything else means a call for this stage may already exist.
@@ -68,10 +117,26 @@ export default async function(req) {
       return refuse(409, 'attempt_claimed', 'This attempt was claimed or closed by another request: one attempt is one call');
     }
 
-    let result;
+    let result = '';
     let transport = { state: 'returned' };
+    const call = { requested_model: spec.requested, max_output_tokens: MAX_OUTPUT_TOKENS, ...(effort ? { reasoning_effort: effort } : {}) };
     try {
-      result = await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt });
+      const gateway = base44.asServiceRole.aiGateway.connection();
+      const response = await fetch(`${endpoint(gateway)}/chat/completions`, {
+        method: 'POST',
+        headers: gatewayHeaders(gateway),
+        body: JSON.stringify({ model: spec.requested, messages: [{ role: 'user', content: prompt }], max_tokens: MAX_OUTPUT_TOKENS, ...(effort ? { reasoning_effort: effort } : {}) }),
+      });
+      const raw = await response.text();
+      if (!response.ok) throw Object.assign(new Error(detailOf(raw) || `the gateway answered ${response.status}`), { status: response.status });
+      const data = JSON.parse(raw);
+      const choice = data?.choices?.[0];
+      if (typeof data?.model === 'string') call.effective_model = data.model;
+      if (typeof data?.id === 'string') call.request_id = data.id;
+      if (typeof choice?.finish_reason === 'string') call.finish_reason = choice.finish_reason;
+      if (data?.usage && typeof data.usage === 'object') call.usage = data.usage;
+      result = textOf(choice?.message?.content);
+      if (!result.trim()) throw new Error(`the provider returned no content (finish reason: ${call.finish_reason || 'not reported'})`);
     } catch (error) {
       // A settled failure of the call is failure evidence: its class and message only. The stack stays in the logs.
       console.error(`[invokeJanusStage] attempt=${attempt.id} call failed`, error?.stack || error);
@@ -84,7 +149,8 @@ export default async function(req) {
     try {
       await svc.RunAttempt.update(attempt.id, {
         transport: { ...transport, recorded_at: new Date().toISOString() },
-        ...(transport.state === 'returned' ? { response_text: typeof result === 'string' ? result : JSON.stringify(result) } : {}),
+        model_call: call,
+        ...(transport.state === 'returned' ? { response_text: result } : {}),
       });
       await freeSlot();
     } catch (error) {
@@ -92,8 +158,8 @@ export default async function(req) {
       console.error(`[invokeJanusStage] attempt=${attempt.id} outcome could not be recorded`, error?.stack || error);
     }
 
-    if (transport.state === 'failed') return Response.json({ error: transport.message, evidence: transport.evidence, recorded }, { status: 502 });
-    return Response.json({ result, recorded });
+    if (transport.state === 'failed') return Response.json({ error: transport.message, evidence: transport.evidence, recorded, model_call: call }, { status: 502 });
+    return Response.json({ result, recorded, model_call: call });
   } catch (error) {
     return internalError('invokeJanusStage', error);
   }

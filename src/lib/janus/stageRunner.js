@@ -17,7 +17,9 @@
  * lost response, a claimed attempt with no record. An unknown outcome is unresolved — the call may still be
  * alive. Nothing is settled, nothing is retried, nothing replaces it, and the run's slot stays taken.
  * No failure class is ever inferred here; a class reaches an attempt only through (a) or (b).
- * Model policy: no per-call override — every call inherits the operator's Claude Opus setting.
+ * Model policy: the request names a stage and carries its prompt, never a model. The function reads the model the
+ * stage revision was fixed to when it was created (stageStore.beginStage) and records, with the outcome, what the
+ * Gateway reported back (`model_call`: the model that answered, why generation stopped, usage).
  */
 import { base44 } from "@/api/base44Client";
 import { validateJanusOutput } from "@/components/janus/janusSchema";
@@ -42,10 +44,14 @@ const CANCEL_STATES = ["cancel_requested", "cancelled"];
  *             null (the function stated nothing — the outcome is not known from this response)
  *   reason    why it refused, when it did
  */
-export async function callLLM(stageId, prompt) {
+export const callLLM = async (stageId, prompt) => (await requestCall(stageId, prompt)).result;
+/** What the Gateway lists as callable chat models. Reads a catalog through the same function: no model runs. */
+export const gatewayCatalog = async () => (await base44.functions.invoke(STAGE_FUNCTION, { check: "catalog" })).data;
+/** The call, with what the function reported about it: { result, call } (`call` = the attempt's model_call record). */
+async function requestCall(stageId, prompt) {
   try {
     const { data } = await base44.functions.invoke(STAGE_FUNCTION, { stage_id: stageId, prompt });
-    return data.result;
+    return { result: data.result, call: data.model_call || null };
   } catch (err) {
     // Keep the server's failure evidence, not the transport wrapper's generic text.
     const body = err?.response?.data;
@@ -59,7 +65,7 @@ export async function callLLM(stageId, prompt) {
 
 /** The outcome the function recorded on an attempt — evidence (b). */
 const recordedTransport = (attempt) => (attempt.transport.state === "returned"
-  ? { state: "returned", result: attempt.response_text }
+  ? { state: "returned", result: attempt.response_text, call: attempt.model_call || null }
   : { state: "failed", evidence: attempt.transport.evidence, message: attempt.transport.message });
 
 /**
@@ -70,7 +76,7 @@ const recordedTransport = (attempt) => (attempt.transport.state === "returned"
  */
 async function attemptCall(stage, attempt, prompt) {
   let said;
-  try { return { state: "returned", result: await callLLM(stage.id, prompt) }; } catch (err) { said = err; }
+  try { return { state: "returned", ...(await requestCall(stage.id, prompt)) }; } catch (err) { said = err; }
   if (said.evidence && said.evidence !== NOT_STARTED) return { state: "failed", evidence: said.evidence, message: said.message };
 
   // The function refused, or stated nothing at all. Neither is taken on trust: "no call was made" is only
@@ -135,9 +141,12 @@ export function validateStageOutput(stageKey, output, { inputs } = {}) {
 export function resolveTransport(stageKey, t, integrity) {
   if (t.state === "failed") return { outcome: t.evidence, message: `LLM call failed — ${t.message}` };
   const parseKey = parseKeyOf(stageKey);
+  // An output the provider cut off at its output limit is not a malformed answer, and the rejection says so: the
+  // next attempt of a stage that returns operations can then continue from what was accepted.
+  const cut = t.call?.finish_reason === "length" ? " — the output was cut off at the model's output-length limit (finish reason: length), so it is incomplete" : "";
   let parsed;
-  try { parsed = parseLLMResponse(t.result, parseKey); } catch (e) { return { outcome: "parse_failure", message: `Parse error — ${e.message}` }; }
-  if (parsed.error) return { outcome: classifyParseError(parsed.error), message: parsed.error.replace(`${parseKey}: `, "") };
+  try { parsed = parseLLMResponse(t.result, parseKey); } catch (e) { return { outcome: "parse_failure", message: `Parse error — ${e.message}${cut}` }; }
+  if (parsed.error) return { outcome: classifyParseError(parsed.error), message: `${parsed.error.replace(`${parseKey}: `, "")}${cut}` };
   // ONE REPRESENTATION (Phase 9). The artifact that is validated is the artifact that is stored: the schema's
   // documented normalizations (a step number or dependency written as "2" → 2, "medium" → "med", "Probable" →
   // "Contested") are applied once, here. Before, validation ran on the normalized copy and the raw one was stored,

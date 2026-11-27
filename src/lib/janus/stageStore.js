@@ -5,7 +5,7 @@
  * Reads compose through runView, so the frontend and the engine share one durable truth.
  */
 import { base44 } from "@/api/base44Client";
-import { PROTOCOL, MODEL_POLICY } from "@/lib/janus/protocolRegistry";
+import { PROTOCOL, MODEL_POLICY, modelPolicySnapshot, stageModel } from "@/lib/janus/protocolRegistry";
 import { ENGINE_VERSION, ORCHESTRATOR, STORAGE_MODEL, fingerprintInputs } from "@/lib/janus/stageModel";
 import { composeRunView } from "@/lib/janus/runView";
 
@@ -36,12 +36,20 @@ export async function findOpenStagedRun() {
   return run || null;
 }
 
-export async function beginStage({ runId, stageKey, revision, dependsOn, templateVersion, prompt, origin, sources = [], refines }) {
+/**
+ * A REVISION FIXES ITS MODEL WHEN IT IS CREATED (provenance.model: { role, requested, effort }). The function that
+ * makes the call reads it from this record and from nowhere else, so no retry, continuation or recovery of the
+ * revision can change its substrate. `model` is what the engine resolved from the run's recorded allocation; a
+ * caller that supplies none gets the default allocation's model for the stage's cognitive role. A revision is
+ * never created without one: the function refuses a revision that records no model.
+ */
+export async function beginStage({ runId, stageKey, revision, dependsOn, templateVersion, prompt, origin, sources = [], refines, model }) {
+  const fixed = model || stageModel(modelPolicySnapshot(), stageKey);
   return base44.entities.RunStage.create({
     run_id: runId, stage_key: stageKey, revision, status: "running",
     protocol_version: PROTOCOL.version, engine_version: ENGINE_VERSION, prompt_template_version: templateVersion,
     depends_on: dependsOn, input_fingerprint: await fingerprintInputs({ stageKey, templateVersion, dependsOn, prompt }),
-    provenance: { origin, orchestrator: ORCHESTRATOR, model_policy: MODEL_POLICY.operational_model, ...(sources.length ? { sources } : {}),
+    provenance: { origin, orchestrator: ORCHESTRATOR, model_policy: MODEL_POLICY.operational_model, ...(fixed ? { model: fixed } : {}), ...(sources.length ? { sources } : {}),
       // A substantive refinement: the exact Blueprint revision it refines, the evaluation it answers and its findings.
       ...(refines ? { refines } : {}) },
     started_at: new Date().toISOString(),

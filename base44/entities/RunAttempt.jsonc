@@ -21,7 +21,7 @@
     },
     "model_policy": {
       "type": "string",
-      "description": "Model policy in force; calls inherit the operator's Claude Opus setting"
+      "description": "Model policy in force when the attempt was opened"
     },
     "claim_state": {
       "type": "string",
@@ -66,6 +66,38 @@
         "recorded_at": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "model_call": {
+      "type": "object",
+      "description": "What the server asked the AI Gateway for and what the Gateway reported back, recorded by the server with the outcome. The evidence that no model was substituted.",
+      "properties": {
+        "requested_model": {
+          "type": "string",
+          "description": "The model the stage revision is fixed to"
+        },
+        "effective_model": {
+          "type": "string",
+          "description": "The model the provider reported as having answered"
+        },
+        "reasoning_effort": {
+          "type": "string",
+          "description": "Effort requested. The effort actually applied is not reported by the transport."
+        },
+        "max_output_tokens": {
+          "type": "number"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "finish_reason": {
+          "type": "string",
+          "description": "Why generation stopped. length means the output was cut off at the output limit."
+        },
+        "usage": {
+          "type": "object",
+          "description": "Token and credit usage exactly as the Gateway reported it"
         }
       }
     },

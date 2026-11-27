@@ -7,11 +7,25 @@
  *  - an equality condition does not match a record that lacks the field ("" does not match "never set");
  *  - { $in: [..., null] } does match a record that lacks the field.
  */
-import { subdomainIds, PAIRS, PATTERNS } from "@/lib/janus/protocolRegistry";
+import fs from "node:fs";
+import path from "node:path";
+import { subdomainIds, PAIRS, PATTERNS, isAuthorizedModel } from "@/lib/janus/protocolRegistry";
 import { QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
 import { assembleBlueprint } from "@/lib/janus/blueprintPipeline";
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
+/**
+ * WHAT THE REAL STORE KEEPS (measured 2026-11-27 on a live record: the engine wrote `provenance.method` and the
+ * stored record did not have it). Inside an object whose entity schema declares its properties, only the declared
+ * properties are stored. The double applies the real schema files to the nested objects the engine writes, so a
+ * field the engine relies on and the schema does not declare fails here instead of vanishing in production.
+ */
+const SCHEMAS = Object.fromEntries(["Run", "RunStage", "RunAttempt"].map(n => [n, JSON.parse(fs.readFileSync(path.resolve(process.cwd(), `base44/entities/${n}.jsonc`), "utf8"))]));
+const DECLARED = { Run: ["model_policy_snapshot"], RunStage: ["provenance", "validation"], RunAttempt: ["transport", "model_call"] };
+const conform = (schema, v) => (Array.isArray(v) ? (schema?.items ? v.map(x => conform(schema.items, x)) : v)
+  : v && typeof v === "object" && schema?.properties ? Object.fromEntries(Object.entries(v).filter(([k]) => k in schema.properties).map(([k, x]) => [k, conform(schema.properties[k], x)]))
+  : v);
+const stored = (name, data) => Object.fromEntries(Object.entries(data).map(([k, v]) => [k, DECLARED[name]?.includes(k) ? conform(SCHEMAS[name].properties[k], v) : v]));
 const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k] ?? null) : rec[k] === v));
 
 const subs = (d) => Object.fromEntries(subdomainIds(d).map(id => [id, { perspective: `${id} view`, key_findings: ["f"] }]));
@@ -117,28 +131,28 @@ const FAIL_MESSAGE = "provider returned 500";
 
 const db = { Run: [], RunStage: [], RunAttempt: [] };
 const llm = { failOn: null, invalidOn: null, failTimes: {}, invalidTimes: {}, failMessage: FAIL_MESSAGE, transport: {}, pending: [],
-  override: {}, sequence: {}, verdicts: {}, findings: {}, calls: [], prompts: [], stages: [], gate: null };
+  override: {}, sequence: {}, verdicts: {}, findings: {}, calls: [], prompts: [], stages: [], gate: null, effective: {}, finish: {}, raw: {}, models: [] };
 const session = { user: { ...OPERATOR } };
 let n = 0;
 
 const entity = (name) => ({
   create: async (data) => {
     n += 1;
-    const rec = { id: `${name}-${n}`, created_date: new Date(1767225600000 + n * 1000).toISOString(), ...clone(data) };
+    const rec = { id: `${name}-${n}`, created_date: new Date(1767225600000 + n * 1000).toISOString(), ...stored(name, clone(data)) };
     db[name].push(rec);
     return clone(rec);
   },
   update: async (id, patch) => {
     const rec = db[name].find(r => r.id === id);
     if (!rec) throw new Error(`${name} ${id} not found`);
-    Object.assign(rec, clone(patch));
+    Object.assign(rec, stored(name, clone(patch)));
     return clone(rec);
   },
   filter: async (query) => db[name].filter(r => matches(r, query)).map(clone),
   // Conditional write. Matching and writing happen in one synchronous step, as one atomic store operation.
   updateMany: async (query, { $set }) => {
     const hits = db[name].filter(r => matches(r, query));
-    hits.forEach(r => Object.assign(r, clone($set)));
+    hits.forEach(r => Object.assign(r, stored(name, clone($set))));
     return { success: true, updated: hits.length, has_more: false };
   },
 });
@@ -179,6 +193,10 @@ const invoke = async (name, payload) => {
   const run = db.Run.find(r => r.id === stage.run_id);
   if (!run) throw refusal(404, "not_found", "Run not found");
   if (["cancel_requested", "cancelled"].includes(run.status)) throw refusal(409, "cancel_requested", "Cancellation was requested for this run: no further call is started");
+  // The substrate of the revision, read from its record: never from the request, never defaulted.
+  const spec = stage.provenance?.model;
+  if (!spec?.requested) throw refusal(409, "model_not_recorded", "This stage version records no model, so no call is made for it. Start a new version of the stage.");
+  if (!isAuthorizedModel(spec.requested)) throw refusal(409, "model_not_authorized", `This stage version records a model Janus is not authorized to request (${spec.requested})`);
   const open = db.RunAttempt.filter(a => a.stage_id === stage.id && a.outcome === "in_flight");
   if (open.length !== 1 || open[0].claim_state !== "unclaimed") throw refusal(409, "attempt_claimed", "This stage has no unclaimed attempt: one attempt is one call");
   const attempt = open[0];
@@ -195,23 +213,30 @@ const invoke = async (name, payload) => {
   }
 
   // The call, then RECORD and free the slot — what the function does once the call settles.
+  // What the Gateway reports back, recorded with the outcome. A test can stage a substituted model
+  // (`llm.effective[key]`) or an output cut off at the output limit (`llm.finish[key]`).
+  const key = stage.stage_key.replace("intersection:", "");
   const settleOnServer = async () => {
     let result, failure;
+    llm.models.push(spec.requested);
     try { result = await model(payload.prompt); } catch (e) { failure = { evidence: classify(e.message), message: e.message }; }
+    const model_call = { requested_model: spec.requested, reasoning_effort: spec.effort,
+      ...(failure ? {} : { effective_model: llm.effective[key] || spec.requested, finish_reason: llm.finish[key] || "stop", usage: { total_tokens: 1 } }) };
     await entities.RunAttempt.update(attempt.id, {
       transport: { state: failure ? "failed" : "returned", ...failure, recorded_at: new Date().toISOString() },
-      ...(failure ? {} : { response_text: JSON.stringify(result) }),
+      model_call,
+      ...(failure ? {} : { response_text: typeof result === "string" ? result : JSON.stringify(result) }),
     });
     await freeSlot();
-    return { result, failure };
+    return { result, failure, model_call };
   };
   if (fault === "lost") throw networkError();
   if (fault === "http") throw httpError(504, "Gateway Timeout");
   if (fault === "late") { llm.pending.push(settleOnServer); throw networkError(); }
-  const { result, failure } = await settleOnServer();
+  const { result, failure, model_call } = await settleOnServer();
   if (fault === "drop") throw networkError();
-  if (failure) throw httpError(502, { error: failure.message, evidence: failure.evidence, recorded: true });
-  return { status: 200, data: { result, recorded: true } };
+  if (failure) throw httpError(502, { error: failure.message, evidence: failure.evidence, recorded: true, model_call });
+  return { status: 200, data: { result, recorded: true, model_call } };
 };
 
 // Deterministic model: what the integration returns for a compiled stage prompt.
@@ -222,6 +247,7 @@ const model = async (prompt) => {
   if (llm.gate?.stageKey === stageKey) { llm.gate.arrive(); await llm.gate.released; }
   const times = (bag) => { if (bag[key] > 0) { bag[key] -= 1; return true; } return false; };
   if (llm.failOn === key || times(llm.failTimes)) throw new Error(llm.failMessage);
+  if (llm.raw[key] !== undefined) return llm.raw[key]; // the provider's text exactly as a test stages it (cut off, not JSON, …)
   if (llm.invalidOn === key || times(llm.invalidTimes)) return { [key]: INVALID[key] || { insight: `${key} insight only` } };
   if (llm.sequence[key]?.length) return { [key]: clone(llm.sequence[key].shift()) }; // one seeded output per call, in order
   if (llm.override[key]) return { [key]: clone(llm.override[key]) }; // structurally valid output a test wants to seed
@@ -243,6 +269,7 @@ export const platform = {
     session.user = { ...OPERATOR };
     llm.failOn = null; llm.invalidOn = null; llm.failTimes = {}; llm.invalidTimes = {}; llm.failMessage = FAIL_MESSAGE; llm.transport = {}; llm.pending.length = 0;
     llm.override = {}; llm.sequence = {}; llm.verdicts = {}; llm.findings = {}; llm.calls.length = 0; llm.prompts.length = 0; llm.stages.length = 0; llm.gate = null;
+    llm.effective = {}; llm.finish = {}; llm.raw = {}; llm.models.length = 0;
   },
   /** Hold the model call for one stage open until release() — an unresolved, live call. */
   gateOn(stageKey) {

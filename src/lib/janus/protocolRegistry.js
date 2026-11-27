@@ -290,13 +290,118 @@ export const MODE_PROFILES = {
     description: "Complete Boot Sequence — 25 subdomains, 6 intersection pairs, 4 emergent patterns" },
 };
 
-// ── MODEL POLICY (Operator-level rule, 2026-09-29) ─────────────────
-export const MODEL_POLICY = {
-  operational_model: "claude_opus (operator app setting — inherited, no per-call override)",
-  prohibited_model_prefixes: ["gemini"],
-  hidden_fallback_allowed: false,
-  refresh_architecture: "provider-neutral retrieval → provenance-bearing source corpus → Claude Opus analysis",
+// ── MODEL POLICY (DIMA, 2026-11-26: explicit selection; Sonnet as the substrate, Opus where reasoning is the product) ──
+/**
+ * AUTHORIZED RUNTIME MODELS — the only identifiers Janus may request, and the only place in `src` that names a model
+ * (screens read their labels from here). They are app-runtime ids as the AI Gateway knows them. The server holds
+ * the same list (base44/shared/janusModels.ts); a test keeps the two identical.
+ *  signature  what the provider's reported model name must contain for a call to count as answered by this tier;
+ *  standing   what establishes the identifier at runtime. "listed": in the Gateway's own catalog (read 2026-11-27,
+ *             at no cost). "called": an actual Gateway call returned (DIMA's recorded probes, 2026-11-26).
+ */
+export const MODELS = {
+  claude_opus_5_5: { label: "Claude Opus 5.5", family: "claude", signature: "opus", standing: "listed and called" },
+  "claude-sonnet-5": { label: "Claude Sonnet 5", family: "claude", signature: "sonnet", standing: "listed, not yet called" },
+  claude_opus_4_8: { label: "Claude Opus 4.8 (historical comparison)", family: "claude", signature: "opus", standing: "called, not listed" },
+  gpt_6_2_astra: { label: "GPT-6.2 Astra", family: "gpt", signature: "gpt", standing: "listed, not yet called" },
+  gemini_3_8_flash: { label: "Gemini 3.8 Flash", family: "gemini", signature: "gemini", standing: "listed and called (web search)", research: true },
 };
+/** Never requested, whatever is selected. The operator's rule names Gemini 3.1 only; other Gemini versions stand on their own. */
+const PROHIBITED_MODEL_PREFIXES = ["gemini_3_1"];
+export const isAuthorizedModel = (id) => typeof id === "string" && Object.prototype.hasOwnProperty.call(MODELS, id)
+  && !PROHIBITED_MODEL_PREFIXES.some(p => id.startsWith(p));
+export const modelLabel = (id) => MODELS[id]?.label || id || "not recorded";
+/** Models a cognitive role may be given (the research model retrieves; it does not reason for Janus). */
+export const cognitionModels = () => Object.keys(MODELS).filter(id => !MODELS[id].research);
+
+export const MODEL_POLICY = {
+  operational_model: "explicit allocation by cognitive role, fixed on every stage version (Sonnet substrate, Opus for consequential reasoning)",
+  prohibited_model_prefixes: PROHIBITED_MODEL_PREFIXES,
+  hidden_fallback_allowed: false,
+  transport: "ai_gateway",
+  refresh_architecture: "direction from the objective → retrieval by an internet-enabled model as durable attempts → evidence in the data plane → assimilation inside each domain",
+};
+
+/**
+ * COGNITIVE ROLES — the unit of allocation. A stage's model is the model of its role, so the operator allocates
+ * intellectual responsibilities, not stage names. `note` says why the role is allocated as it is by default.
+ */
+export const COGNITIVE_ROLES = {
+  comprehension: { label: "Objective comprehension", note: "What is misread here is lost to every later stage." },
+  domain: { label: "Primary domains", note: "Corpus, Cogito, Animus and Actus: the foundation, reached historically on this tier." },
+  intersection: { label: "Six intersections", note: "Where Janus produces what neither domain holds alone." },
+  nexus: { label: "Nexus patterns", note: "The four formal emergent patterns." },
+  generation: { label: "Candidate generation", note: "Diversity missing here cannot be restored downstream." },
+  judgment: { label: "Selection and architecture", note: "Adversarial comparison, the decision and the skeleton." },
+  elaboration: { label: "Expansion and criteria", note: "Detail under an architecture already decided." },
+  critique: { label: "Adversarial critique", note: "Finding what is wrong before the evaluator does." },
+  refinement: { label: "Substantive refinement", note: "The final Blueprint." },
+  qualification: { label: "Independent qualification", note: "A judge from another family is less partial to the work it grades." },
+  assimilation: { label: "Refresh declaration and assimilation", note: "Stating the knowledge boundary; reading retrieved evidence." },
+};
+const STAGE_ROLES = {
+  refresh: "assimilation", corpus: "domain", cogito: "domain", animus: "domain", actus: "domain", synthesis: "nexus",
+  "blueprint:brief": "comprehension", "blueprint:candidates": "generation", "blueprint:selection": "judgment", "blueprint:skeleton": "judgment",
+  "blueprint:expansion": "elaboration", "blueprint:criteria": "elaboration", "blueprint:critique": "critique", blueprint: "refinement",
+  qualification: "qualification",
+};
+export const roleOf = (stageKey) => (String(stageKey).startsWith("intersection:") ? "intersection" : STAGE_ROLES[stageKey] || null);
+
+/** Highest effort the Gateway accepted in the recorded probes ("max" was rejected). The effort applied is not reported back. */
+export const REASONING_EFFORTS = ["high", "medium", "low"];
+export const DEFAULT_EFFORT = "high";
+const everyRole = (model) => Object.fromEntries(Object.keys(COGNITIVE_ROLES).map(r => [r, model]));
+export const ALLOCATION_PROFILES = {
+  hybrid: { label: "Hybrid", description: "Sonnet as the substrate, Opus where reasoning is the product.",
+    models: { ...everyRole("claude-sonnet-5"), comprehension: "claude_opus_5_5", intersection: "claude_opus_5_5", nexus: "claude_opus_5_5",
+      generation: "claude_opus_5_5", judgment: "claude_opus_5_5", critique: "claude_opus_5_5", refinement: "claude_opus_5_5", qualification: "claude_opus_5_5" } },
+  opus: { label: "All Opus", description: "Every role on Opus. The most credits.", models: everyRole("claude_opus_5_5") },
+  sonnet: { label: "All Sonnet", description: "Every role on Sonnet. The fewest credits.", models: everyRole("claude-sonnet-5") },
+};
+export const DEFAULT_PROFILE = "hybrid";
+
+/**
+ * The allocation a run starts with: a profile, with the operator's per-role changes. Refuses a model that is not
+ * authorized, so nothing unauthorized is ever recorded on a run. `overrides`: { role: { model, effort } }.
+ */
+export function resolveAllocation({ profile = DEFAULT_PROFILE, overrides = {} } = {}) {
+  const base = ALLOCATION_PROFILES[profile];
+  if (!base) throw new Error(`Unknown model allocation profile: ${profile}`);
+  const roles = {};
+  Object.keys(COGNITIVE_ROLES).forEach(role => {
+    const model = overrides[role]?.model || base.models[role];
+    const effort = overrides[role]?.effort || DEFAULT_EFFORT;
+    if (!isAuthorizedModel(model) || MODELS[model].research) throw new Error(`${model} is not a model Janus may reason with`);
+    if (!REASONING_EFFORTS.includes(effort)) throw new Error(`${effort} is not a reasoning effort the transport accepts`);
+    roles[role] = { model, effort };
+  });
+  const customized = Object.keys(COGNITIVE_ROLES).some(r => roles[r].model !== base.models[r] || roles[r].effort !== DEFAULT_EFFORT);
+  return { profile, customized, roles };
+}
+/** What a Run records when it starts (and never changes afterwards). */
+export function modelPolicySnapshot(selection) {
+  const { profile, customized, roles } = resolveAllocation(selection);
+  return { ...MODEL_POLICY, profile, customized, allocation: roles };
+}
+/** The model a stage runs on under a recorded snapshot: { role, requested, effort }, or null when none is recorded. */
+export function stageModel(snapshot, stageKey) {
+  const role = roleOf(stageKey);
+  const entry = role ? snapshot?.allocation?.[role] : null;
+  return entry?.model ? { role, requested: entry.model, effort: entry.effort || DEFAULT_EFFORT } : null;
+}
+/**
+ * How the model that answered compares with the model that was requested:
+ *  verified    the provider's name carries the requested identifier;
+ *  tier        the same family and tier, the exact version not confirmed by the name;
+ *  mismatch    a different model answered;
+ *  unreported  the transport reported no model.
+ */
+export function modelStanding(requested, effective) {
+  if (!effective) return "unreported";
+  const flat = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (flat(effective).includes(flat(requested))) return "verified";
+  return MODELS[requested] && flat(effective).includes(MODELS[requested].signature) ? "tier" : "mismatch";
+}
 
 // ── LEGACY ALIASES (read-only, historical records) ─────────────────
 // Historical subdomain keys → canonical id. Never used to generate prompts.
