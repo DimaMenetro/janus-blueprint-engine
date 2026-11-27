@@ -8,7 +8,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 vi.mock("@/api/base44Client", async () => ({ base44: (await import("@/lib/janus/testPlatform")).platform.base44 }));
 
 import { platform as h } from "@/lib/janus/testPlatform";
-import { executeJanus, resumeJanus, rerunStages } from "@/lib/janus/browserAdapter";
+import { executeJanus, resumeJanus, rerunStages, refineJanus } from "@/lib/janus/browserAdapter";
+import { QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
 import { callLLM } from "@/lib/janus/stageRunner";
 import { verifyContinuation } from "@/lib/janus/stageEngine";
 import { openAttempt } from "@/lib/janus/stageStore";
@@ -56,7 +57,7 @@ describe("a run records its allocation and every stage version is fixed to its m
     const snapshot = h.db.Run[0].model_policy_snapshot;
     expect(snapshot).toMatchObject({ profile: "hybrid", customized: false, hidden_fallback_allowed: false, transport: "ai_gateway" });
     expect(Object.keys(snapshot.allocation).sort()).toEqual(Object.keys(COGNITIVE_ROLES).sort());
-    expect(snapshot.allocation_adopted_at).toBeUndefined(); // recorded at the start, not adopted later
+    expect(snapshot.allocation_adopted_at).toBeNull(); // recorded at the start, not adopted later (the store returns an unwritten declared field as null)
     called().forEach(s => expect(s.provenance.model).toEqual({ role: roleOf(s.stage_key), requested: HYBRID[roleOf(s.stage_key)], effort: DEFAULT_EFFORT }));
     expect(h.llm.calls.every(keys => keys.join() === "stage_id,prompt")).toBe(true);
     // What the function asked the Gateway for is exactly what each version recorded, call by call.
@@ -188,11 +189,29 @@ describe("what the provider reports is recorded and judged, never hidden", () =>
 });
 
 describe("the store keeps only what the entity schemas declare inside a declared object", () => {
-  it("the nested records the engine relies on are declared and survive; an undeclared key does not", async () => {
+  it("the nested records the engine relies on are declared and survive; an undeclared key does not, and an unwritten declared one reads as null", async () => {
     const { runId } = await executeJanus(params("quick"));
     expect(h.db.RunStage.find(s => s.stage_key === "blueprint:assembly").provenance).toMatchObject({ method: "deterministic", origin: "execution" });
-    expect(h.db.RunStage.find(s => s.stage_key === "corpus").provenance).toMatchObject({ model: { role: "domain" } });
-    const odd = await h.base44.entities.RunStage.create({ run_id: runId, stage_key: "probe", revision: 1, status: "failed", provenance: { origin: "execution", undeclared_key: 1 } });
-    expect(odd.provenance).toEqual({ origin: "execution" });
+    expect(h.db.RunStage.find(s => s.stage_key === "corpus").provenance).toMatchObject({ model: { role: "domain" }, method: null, refines: null });
+    // Exactly what the live store returned for these writes (measured 2026-11-27).
+    const odd = await h.base44.entities.RunStage.create({ run_id: runId, stage_key: "probe", revision: 1, status: "failed",
+      provenance: { origin: "execution", undeclared_key: 1, model: { requested: "m" }, sources: [{ id: "S1", undeclared_in_item: 1 }] } });
+    expect(odd.provenance).toEqual({ origin: "execution", orchestrator: null, model_policy: null, method: null, model: { role: null, requested: "m", effort: null }, refines: null,
+      sources: [{ id: "S1", kind: null, title: null, origin: null, published_at: null, retrieved_at: null, quality: null, subdomains: [] }] });
+    const attempt = await h.base44.entities.RunAttempt.create({ run_id: runId, stage_id: odd.id, stage_key: "probe", attempt_number: 1, outcome: "not_started", transport: { state: "returned" } });
+    await h.base44.entities.RunAttempt.update(attempt.id, { transport: { state: "failed", evidence: "provider_error", message: "m", undeclared: 1 } });
+    expect(h.db.RunAttempt.find(a => a.id === attempt.id).transport).toEqual({ state: "failed", evidence: "provider_error", message: "m", http_status: null, recorded_at: null });
+  });
+
+  it("every nested field the engine writes on a refinement version is declared, so the cycle it bounds can be read back", async () => {
+    const criterion = QUALITY_CRITERIA.find(c => c.method === "critique" && c.hard).id;
+    h.llm.verdicts[criterion] = "fail";
+    const { runId } = await executeJanus(params("full"));
+    await refineJanus(runId);
+    const refined = h.db.RunStage.filter(s => s.stage_key === "blueprint").pop();
+    expect(refined.provenance.refines).toMatchObject({ cycle: 1, blueprint_stage_id: expect.any(String), evaluation_stage_id: expect.any(String) });
+    expect(refined.provenance.refines.deficiencies.length).toBeGreaterThan(0);
+    // No declared field of a recorded deficiency came back unwritten: the engine and the schema describe the same record.
+    refined.provenance.refines.deficiencies.forEach(d => Object.entries(d).forEach(([field, value]) => expect([field, value]).not.toEqual([field, null])));
   });
 });

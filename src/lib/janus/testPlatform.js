@@ -9,22 +9,32 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { subdomainIds, PAIRS, PATTERNS, isAuthorizedModel } from "@/lib/janus/protocolRegistry";
 import { QUALITY_CRITERIA } from "@/lib/janus/lifecycleContract";
 import { assembleBlueprint } from "@/lib/janus/blueprintPipeline";
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
 /**
- * WHAT THE REAL STORE KEEPS (measured 2026-11-27 on a live record: the engine wrote `provenance.method` and the
- * stored record did not have it). Inside an object whose entity schema declares its properties, only the declared
- * properties are stored. The double applies the real schema files to the nested objects the engine writes, so a
- * field the engine relies on and the schema does not declare fails here instead of vanishing in production.
+ * WHAT THE REAL STORE KEEPS (measured 2026-11-27 with temporary records: the engine had been writing
+ * `provenance.method` and `provenance.refines`, and the stored records did not have them). Inside an object whose
+ * entity schema declares its properties — at any depth, including the items of a declared list — the store keeps
+ * the declared properties only, and returns every declared property that was not written as `null` (`[]` for a
+ * list). An object the schema declares without properties (a stage output, the allocation, the usage) is kept as
+ * written. An update replaces the nested object as a whole.
+ * The double applies the real schema files to the nested objects the engine writes, so a field the engine relies on
+ * and the schema does not declare fails here instead of vanishing in production, and code that tells "absent" from
+ * `null` is exercised with what it will really read.
  */
-const SCHEMAS = Object.fromEntries(["Run", "RunStage", "RunAttempt"].map(n => [n, JSON.parse(fs.readFileSync(path.resolve(process.cwd(), `base44/entities/${n}.jsonc`), "utf8"))]));
+// The schema files are found from this file's own location (src/lib/janus → the app root), not from the working
+// directory, so this module needs no Node global and reads the same files wherever the tests are started from.
+const ENTITY_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../base44/entities");
+const SCHEMAS = Object.fromEntries(["Run", "RunStage", "RunAttempt"].map(n => [n, JSON.parse(fs.readFileSync(path.join(ENTITY_DIR, `${n}.jsonc`), "utf8"))]));
 const DECLARED = { Run: ["model_policy_snapshot"], RunStage: ["provenance", "validation"], RunAttempt: ["transport", "model_call"] };
 const conform = (schema, v) => (Array.isArray(v) ? (schema?.items ? v.map(x => conform(schema.items, x)) : v)
-  : v && typeof v === "object" && schema?.properties ? Object.fromEntries(Object.entries(v).filter(([k]) => k in schema.properties).map(([k, x]) => [k, conform(schema.properties[k], x)]))
-  : v);
+  : v && typeof v === "object" && schema?.properties
+    ? Object.fromEntries(Object.entries(schema.properties).map(([k, s]) => [k, v[k] === undefined ? (s.type === "array" ? [] : null) : conform(s, v[k])]))
+    : v);
 const stored = (name, data) => Object.fromEntries(Object.entries(data).map(([k, v]) => [k, DECLARED[name]?.includes(k) ? conform(SCHEMAS[name].properties[k], v) : v]));
 const matches = (rec, query) => Object.entries(query).every(([k, v]) => (v && typeof v === "object" && v.$in ? v.$in.includes(rec[k] ?? null) : rec[k] === v));
 
