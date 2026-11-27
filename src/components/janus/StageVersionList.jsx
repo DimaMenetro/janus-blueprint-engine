@@ -26,7 +26,7 @@ export default function StageVersionList({ view, stageKey, t }) {
             <div style={{ fontSize: 12, color: t.text }}><strong>{revisionLabel(s)}</strong> <span style={{ color: t.subtitle }}>{meta}</span></div>
             {substrate && (
               <div style={{ fontSize: 11, marginTop: 2, color: flagged ? t.text : t.subtitle, fontWeight: flagged ? 600 : 400 }}>
-                {flagged ? "Another model answered: " : gap ? "Model not confirmed: " : "Model: "}{substrateLine(substrate)}
+                {flagged ? "Another model answered: " : gap ? "Model not confirmed: " : "Substrate: "}{substrateLine(substrate)}
                 {callLine(substrate.call) && <span> · {callLine(substrate.call)}</span>}
               </div>
             )}

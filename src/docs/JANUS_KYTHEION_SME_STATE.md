@@ -81,3 +81,9 @@ The five listed causes are accurate. The correction: they are one cause seen fiv
 
 ## 10. Repository facts at instantiation
 HEAD `c1056e4`. `8210e97` is the exact inverse of `594b98b` (the interrupted work was reverted): the tree equals `17c3766` (288/288 in 16 files) plus the directive. The interrupted work is readable with `git show 594b98b:<path>` (`blueprintRefinement.js`, `evidenceRetrieval.js`, `retrieveJanusEvidence/entry.ts`, compiler and spec changes). It is a donor, not a baseline: Daionae found it 278/288, its retrieval query-invariant, its model policy declared but not executed.
+
+## 11. Execution substrate (2026-11-27) — what changed in the constraints
+Decision record: `JANUS_EXECUTION_SUBSTRATE_EVALUATION_2026-11-27.md`.
+- C1 holds for functions and therefore for every Workflow step (documented). Nothing documents it for a page that calls the Gateway directly; that is unmeasured (K5 of the record).
+- C6 holds. Correction: the Gateway is reachable from a page with the signed-in user's token on apps shared with the workspace (SDK user mode); "Gateway = backend only" was wrong for this app.
+- New fact: the depth the allocation produces is what made the calls long (Corpus 19–23k tokens in 4–5 minutes on Sonnet 5 at high effort, while the default model answered the same contracts with 7–9k characters in seconds). Who schedules a stage and where its call runs are separate axes; the ceiling lives on the second.
