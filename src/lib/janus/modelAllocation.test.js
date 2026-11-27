@@ -35,7 +35,6 @@ const refusal = (promise) => promise.then(() => null, e => ({ evidence: e.eviden
 const dated = (id) => `provider/${id.replace(/_/g, "-")}-20261101`;
 /** Another authorized model of the same tier as the reasoning model (another version of it), from the registry. */
 const SAME_TIER = Object.keys(MODELS).find(m => m !== REASONER && MODELS[m].signature === MODELS[REASONER].signature);
-const SAME_TIER_AS_SUBSTRATE = Object.keys(MODELS).find(m => m !== SUBSTRATE && MODELS[m].signature === MODELS[SUBSTRATE].signature);
 
 beforeEach(() => h.reset());
 
@@ -217,14 +216,15 @@ describe("what the provider reports is recorded and judged, never hidden", () =>
   });
 
   it("another version of the same tier blocks completion exactly as another model does; a name with no version is said and never counted as verified", async () => {
-    h.llm.effective.cogito = dated(SAME_TIER_AS_SUBSTRATE || "another-tier");
+    const otherVersion = `${SUBSTRATE}-9-20261101`; // the substrate's own tier, a version it is not
+    h.llm.effective.cogito = otherVersion;
     h.llm.effective.corpus = `${MODELS[SUBSTRATE].signature}-latest`;
     const result = await executeJanus(params("quick"));
     const { blocking, warnings } = substrateFindings(viewOf());
     expect(warnings).toEqual([`The model that answered 1 stage version is not confirmed: the provider's name carries the tier but no version (corpus: "${MODELS[SUBSTRATE].signature}-latest")`]);
-    expect(substrateOf(viewOf(), h.db.RunStage.find(s => s.stage_key === "corpus"))).toMatchObject({ standing: "unconfirmed", requested: SUBSTRATE });
-    expect(blocking).toHaveLength(1);
-    expect(blocking[0]).toMatch(/^cogito: answered by ".+". Re-run the stage\.$|^cogito: answered by ".+", not the model this version was fixed to \(.+\)\. Re-run the stage\.$|^cogito: answered by ".+": the tier this version was fixed to, but version .+ instead of .+ \(.+\)\. Re-run the stage\.$/);
+    expect(substrateOf(viewOf(), h.db.RunStage.find(s => s.stage_key === "corpus"))).toMatchObject({ standing: "unconfirmed", requested: SUBSTRATE, effort: DEFAULT_EFFORT, call: { finish_reason: "stop" } });
+    expect(blocking).toEqual([`cogito: answered by "${otherVersion}": the tier this version was fixed to, but version ${statedVersion(otherVersion).join(".")} instead of ${statedVersion(SUBSTRATE).join(".")} (${MODELS[SUBSTRATE].label}). Re-run the stage.`]);
+    expect(h.db.RunStage.find(s => s.stage_key === "cogito").status).toBe("succeeded"); // the paid output stays inspectable
     expect(result.status).toBe("partial");
     expect(h.db.Run[0].completion_manifest).toMatchObject({ complete: false, blocking: expect.arrayContaining(blocking), warnings: expect.arrayContaining(warnings) });
   });
