@@ -7,7 +7,8 @@ import {
   light, dark,
   glassCard, glassBtn, glassError
 } from "@/components/ui/LiquidGlass";
-import { protocolLabel } from "@/lib/janus/protocolRegistry";
+import { protocolLabel, DEFAULT_PROFILE } from "@/lib/janus/protocolRegistry";
+import ModelAllocationSelector from "@/components/janus/ModelAllocationSelector";
 import { executeJanus } from "@/lib/janus/browserAdapter";
 import { useExecution } from "@/components/janus/ExecutionContext";
 import { useAuth } from "@/lib/AuthContext";
@@ -27,6 +28,8 @@ export default function NewQuery() {
   const [blueprintLevel, setBlueprintLevel] = useState("L2");
   const [noveltyDial, setNoveltyDial] = useState("medium");
   const [refreshEnabled, setRefreshEnabled] = useState(false);
+  // The model allocation of the run about to start: a profile plus the operator's per-role changes.
+  const [modelSelection, setModelSelection] = useState({ profile: DEFAULT_PROFILE, overrides: {} });
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const { drive } = useExecution();
@@ -41,7 +44,7 @@ export default function NewQuery() {
     try {
       // Progress is not tracked here: the execution observer re-reads durable stage state after every change.
       const result = await drive(hooks => executeJanus(
-        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled }, hooks));
+        { queryText, executionMode, outputMode, blueprintLevel, noveltyDial, refreshEnabled, modelSelection }, hooks));
       setStatus(result.status);
       navigate(`/results?id=${result.runId}`);
     } catch (err) {
@@ -86,6 +89,7 @@ export default function NewQuery() {
           showRefresh={executionMode === "full"}
           t={t} isDark={isDark}
         />
+        <ModelAllocationSelector value={modelSelection} onChange={setModelSelection} t={t} isDark={isDark} />
 
         {/* Footer bar */}
         <div style={{
